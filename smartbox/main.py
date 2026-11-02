@@ -29,6 +29,7 @@ import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg
 import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
 import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
+import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
 import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
@@ -104,7 +105,7 @@ solar_driver = house_config.build_solar_driver(house_cfg)
 spa_driver = house_config.build_spa_driver(house_cfg)
 battery_driver = house_config.build_battery_driver(house_cfg)
 battery_cfg = house_config.battery_settings(house_cfg)
-_battery = {"last": None, "at": None, "plan": None, "plan_at": None}
+_battery = {"last": None, "at": None, "plan": None, "plan_at": None, "model": None, "model_at": None}
 
 
 def _battery_to_auto(reason):
@@ -1586,10 +1587,21 @@ while True:
                     _q = now.hour * 4 + now.minute // 15
                     # Dygnsplanen räknas om varje kvart (bara i läget styr, kräver kapacitet)
                     if battery_cfg["control"] == "styr" and battery_cfg.get("plan") and battery_cfg.get("capacity_kwh"):
+                        # Lär om var 6:e timme ur historiken (battery_learning.py) - planen använder bara det som
+                        # klarat rimlighetskontrollerna, annars configens värden.
+                        if _battery["model_at"] is None or (now - _battery["model_at"]) > timedelta(hours=6):
+                            try:
+                                from database_engine import engine as _leng
+                                _battery["model"] = battery_learning.learn_from_db(_leng, battery_cfg)
+                                print(f"🔋 Batteri: {battery_learning.describe(_battery['model'])}")
+                            except Exception as _le:
+                                print(f"⚠️ Batteriinlärningen hoppade över: {_le}")
+                            _battery["model_at"] = now
                         if _battery["plan_at"] is None or now.minute % 15 == 0 or (now - _battery["plan_at"]) > timedelta(minutes=16):
                             try:
                                 from database_engine import engine as _peng
-                                _battery["plan"] = battery_plan.plan_from_db(_peng, now, battery_state.get("soc_pct"), battery_cfg,
+                                _battery["plan"] = battery_plan.plan_from_db(_peng, now, battery_state.get("soc_pct"),
+                                                                             battery_learning.apply(battery_cfg, _battery["model"]),
                                                                              dynamic_base_load_profile, battery_driver.supported_intents())
                                 _battery["plan_at"] = now
                             except Exception as _pe:
@@ -1604,6 +1616,9 @@ while True:
                         "ev_charging_grid": _ev_on and not _ev_sol, "ev_solar_active": _ev_on and _ev_sol,
                         "prices_rest_of_day": (all_prices or [])[_q:],
                         "planned_action": (_bplan or {}).get("action_now"), "plan_saving_kr": (_bplan or {}).get("saving_kr"),
+                        "learned_note": (battery_learning.describe(_battery["model"])
+                                         + (f" Igår sparade batteriet {_battery['model']['saving_yesterday_kr']:.0f} kr (uppmätt)."
+                                            if (_battery["model"] or {}).get("saving_yesterday_kr") is not None else "")) if _battery["model"] else None,
                     }, battery_cfg, battery_driver.supported_intents())
                     gpm_actions["log"].append(f"🔋 (BATTERI): {_bdec['reason']}")
                     if battery_control.should_apply(_bdec, _battery["last"], _battery["at"], now):

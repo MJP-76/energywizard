@@ -72,6 +72,27 @@
     <li>Saknar batteriet ett läge används närmaste säkra i stället (vila → håll → auto).</li>
   </ul>
 
+  <h3>Planen lär sig ditt batteri</h3>
+  <p>Ur historiken lär sig EnergyWizard batteriets <strong>verkliga verkningsgrad</strong>,
+  <strong>användbara kapacitet</strong> och <strong>faktiska maxeffekt</strong>, och hur mycket
+  <strong>solprognosen brukar slå fel</strong> timme för timme hos just dig. Planen använder det
+  inlärda, men bara när det finns tillräckligt med data och värdena är fysiskt rimliga - annars
+  gäller det du skrivit i inställningarna. Varje dag räknas också ut vad batteriet
+  <strong>faktiskt sparade</strong> igår: vad elen hade kostat utan batteriet minus vad den kostade.</p>
+
+  <h3>Solax Modbus (Solax och Growatt)</h3>
+  <p>Kör du <a href="https://github.com/wills106/homeassistant-solax-modbus">Solax Modbus</a> behöver du
+  inte byta integration. Entitetsväljaren känner igen den och fyller i lägena själv:</p>
+  <ul>
+    <li><strong>Solax (Gen4-6):</strong> "Charger Use Mode" + "Manual Mode Select" - Self Use, Back Up,
+      Force Charge, Force Discharge och Stop.</li>
+    <li><strong>Growatt:</strong> "Time 1 Mode" (Load First, Battery First, Grid First) + knappen
+      "Time 1 Update", som trycks efter varje byte. Ställ in Time 1 till 00:00-23:59 och Aktiv en gång i HA.
+      För att ladda från nätet måste AC-laddning vara påslagen i växelriktaren.</li>
+  </ul>
+  <p>Lägesnamnen kommer från integrationens egen källkod. Det är ännu inte kört mot ett riktigt
+  batteri - hör av dig om du testar!</p>
+
   <h3>Så ställer du in det</h3>
   <p>Entitetsväljaren hittar batteriet och skriver <code>control: samarbete</code> som säker start.
   För <code>styr</code> anger du vilket av batteriets egna lägen som motsvarar varje avsikt - exakt

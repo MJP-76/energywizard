@@ -91,7 +91,8 @@ def decide(s, cfg, supported=frozenset({"auto"})):
         detail = f" ({price:.2f} kr/kWh)" if price is not None else ""
         saving = s.get("plan_saving_kr")
         extra = f" Planen sparar ≈ {saving:.0f} kr mot ren självförbrukning." if saving and saving >= 1 else ""
-        return out(planned, "plan", f"{REASON.get(planned, 'Planen')}{detail}.{extra}", pmax_plan)
+        note = f" {s['learned_note']}" if s.get("learned_note") else ""
+        return out(planned, "plan", f"{REASON.get(planned, 'Planen')}{detail}.{extra}{note}", pmax_plan)
     remaining = s.get("prices_rest_of_day") or []
     p33, p67 = _percentile(remaining, 33), _percentile(remaining, 67)
     if price is not None and p33 is not None and p67 is not None and price <= p33 and p67 > price * 1.2 + 0.05:

@@ -148,6 +148,37 @@ def _check_configured_heat_pump() -> dict | None:
     }
 
 
+def _find(ents, domain, rx):
+    return next((x for x in ents if x["e"].startswith(domain + ".") and _has(x.get("n") or x["e"], rx)), None)
+
+
+def _battery_control_preset(ents):
+    """Känner igen batteristyrning från wills106/homeassistant-solax-modbus och föreslår hela
+    lägesmappningen (drivers/battery_generic.py). Lägesnamnen är integrationens egna (plugin_solax.py /
+    plugin_growatt.py), inte gissade."""
+    # Solax Gen4-6: "Charger Use Mode" + "Manual Mode Select"
+    use = _find(ents, "select", re.compile(r"charger use mode$", re.I))
+    manual = _find(ents, "select", re.compile(r"manual mode select$", re.I))
+    if use and manual:
+        u, m = use["e"], manual["e"]
+        return {"name": "solax_modbus_solax", "entities": {}, "modes": {
+            "auto": {u: "Self Use Mode"}, "hold": {u: "Back Up Mode"},
+            "idle": {u: "Manual Mode", m: "Stop Charge and Discharge"},
+            "charge": {u: "Manual Mode", m: "Force Charge"}, "discharge": {u: "Manual Mode", m: "Force Discharge"}}}
+    # Growatt via Solax Modbus: "Time 1 Mode" (sparas lokalt) + knappen "Time 1 Update"
+    tmode = _find(ents, "select", re.compile(r"time 1 mode$", re.I))
+    tbtn = _find(ents, "button", re.compile(r"time 1 update$", re.I))
+    if tmode and tbtn:
+        out = {"name": "solax_modbus_growatt", "entities": {"mode_select": tmode["e"], "mode_apply_button": tbtn["e"]},
+               "modes": {"auto": "Load First", "hold": "Battery First", "charge": "Battery First", "discharge": "Grid First"}}
+        chg = _find(ents, "sensor", re.compile(r"battery charge power$", re.I))
+        dis = _find(ents, "sensor", re.compile(r"battery discharge power$", re.I))
+        if chg and dis:
+            out["entities"].update(power_charge=chg["e"], power_discharge=dis["e"])
+        return out
+    return None
+
+
 def discover_house(entities: list[dict] | None = None) -> dict:
     """Returnerar kandidater per EnergyWizard-kategori. `entities` kan skickas
     in (t.ex. i tester mot ett syntetiskt svar) - annars hämtas de live."""
@@ -345,7 +376,9 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         is_known_brand = _has(_candidate(head), BATTERY_MAKERS)
         soc_e = next((x for x in ents if x["e"].startswith("sensor.") and x.get("u") == "%"
                       and (x.get("dc") == "battery" or _has(x.get("n"), re.compile(r"battery|batteri|state of charge|soc\b", re.I)))), None)
-        power_e = next((x for x in ents if x["e"].startswith("sensor.") and x.get("dc") == "power"), None)
+        power_e = next((x for x in ents if x["e"].startswith("sensor.") and x.get("dc") == "power"
+                        and _has(x.get("n"), re.compile(r"battery|batteri", re.I))), None) \
+            or next((x for x in ents if x["e"].startswith("sensor.") and x.get("dc") == "power"), None)
         # Ett eget batteri-%-värde räcker INTE ensamt (bekräftat live: en vanlig
         # temperatur-/fuktgivare med eget myntcellsbatteri gav en falsk träff) - kräver
         # också en effektsensor, om inget känt husbatterimärke redan matchat.
@@ -369,6 +402,14 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             if power_e:
                 suggested["power"] = power_e["e"]
             battery["generic_suggestion"] = {"driver": "generic", "entities": suggested}
+            preset = _battery_control_preset(ents)
+            if preset:
+                if "power_charge" in preset["entities"]:
+                    battery["generic_suggestion"]["entities"].pop("power", None)
+                battery["generic_suggestion"]["entities"].update(preset["entities"])
+                battery["generic_suggestion"]["modes"] = preset["modes"]
+                battery["generic_suggestion"]["preset"] = preset["name"]
+                battery["control_preset"] = preset["name"]
         break
 
     return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "power_meter": power_meter, "battery": battery}

@@ -34,6 +34,13 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   plan, färre skrivningar). Räknas om var 15:e minut i läget styr, sparas i
   `battery_plan_slots` och syns i planvyn, tidslinjen och "Just nu" med beräknad
   besparing mot ren självförbrukning. Säkerhetsreglerna går alltid före.
+  **Planen lär sig** (`smartbox/battery_learning.py`): verklig verkningsgrad och
+  användbar kapacitet (kWh in/ut per procent), faktisk maxeffekt och solprognosens fel
+  per timme - används bara med tillräckligt data och inom rimliga gränser. Uppmätt
+  besparing per dag (nätkostnad utan batteri minus med). **Solax Modbus**
+  (wills106) känns igen av entitetsväljaren med förifyllda lägen för Solax Gen4-6 och
+  Growatt (inkl. "Time 1 Update"-knappen); drivrutinen klarar flera val per läge och
+  separata ladd-/urladdningssensorer.
 
   **Predbat, inte [FTW](https://github.com/srcfl/ftw), är referensen för
   själva batteribeslutslogiken** den dagen det byggs: Predbat kör inuti Home

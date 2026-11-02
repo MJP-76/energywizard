@@ -847,19 +847,31 @@ def _build_house_config_yaml(sel: dict) -> str:
 
     battery = sel.get("battery")
     if battery:
+        gs = battery.get("generic_suggestion") or {}
+        modes = battery.get("modes") or gs.get("modes")
         lines += ["battery:", "  enabled: true", f"  driver: {battery.get('driver') or 'generic'}",
                    "  capacity_kwh: 10  # FYLL I - batteriets kapacitet i kWh",
                    "  control: samarbete   # samarbete = läs bara (ett annat system styr) | styr = EnergyWizard styr | av",
                    "  reserve_soc: 20      # sparas alltid till strömavbrott (%)",
                    "  priority_soc: 50     # över detta får elbilen solöverskottet före batteriet (%)",
-                   "  # modes:              # krävs för 'styr' - exakt de alternativ batteriets select visar i HA",
-                   "  #   auto: \"Maximize self-consumption\"",
-                   "  #   hold: \"...\"", "  #   idle: \"...\"", "  #   charge: \"...\"", "  #   discharge: \"...\"",
-                   "  entities:"]
-        battery_entities = (battery.get("entities") or {}).copy()
+                   "  max_power_w: 5000    # FYLL I - batteriets max ladd-/urladdningseffekt (W)"]
+        if modes:
+            lines.append(f"  modes:               # förifyllt för {gs.get('preset') or 'din integration'} - kontrollera mot HA")
+            for intent, opt in modes.items():
+                if isinstance(opt, dict):
+                    pairs = ", ".join(f'{k}: "{v}"' for k, v in opt.items())
+                    lines.append(f"    {intent}: {{{pairs}}}")
+                else:
+                    lines.append(f'    {intent}: "{opt}"')
+        else:
+            lines += ["  # modes:              # krävs för 'styr' - exakt de alternativ batteriets select visar i HA",
+                      "  #   auto: \"Maximize self-consumption\"",
+                      "  #   hold: \"...\"", "  #   idle: \"...\"", "  #   charge: \"...\"", "  #   discharge: \"...\""]
+        lines.append("  entities:")
+        battery_entities = (battery.get("entities") or gs.get("entities") or {}).copy()
         if battery.get("soc_entity"):
             battery_entities.setdefault("soc", battery["soc_entity"])
-        if battery.get("power_entity"):
+        if battery.get("power_entity") and "power_charge" not in battery_entities:
             battery_entities.setdefault("power", battery["power_entity"])
         for key, val in battery_entities.items():
             lines.append(f"    {key}: {val}")

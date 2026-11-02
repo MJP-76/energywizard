@@ -218,12 +218,14 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
         quarters[ts] = p
     solar_cache = {}
 
+    factor = settings.get("solar_factor") or {}          # inlärd rättning per timme (battery_learning.py)
+
     def solar_at(ts):
         h = ts.replace(minute=0)
         if h not in solar_cache:
             try:
                 cloud, _, _, _ = weather.get_weather_at(h)
-                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0
+                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0 * factor.get(h.hour, 1.0)
             except Exception:
                 solar_cache[h] = 0.0
         return solar_cache[h]
@@ -242,7 +244,8 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
     if not slots:
         return None
     r = optimize(slots, soc_pct / 100.0 * cap, cap, settings["reserve_soc"] / 100.0 * cap, settings["max_soc"] / 100.0 * cap,
-                 settings["max_power_w"] / 1000.0, settings["max_power_w"] / 1000.0, eff=settings.get("efficiency", 0.9),
+                 settings.get("charge_kw") or settings["max_power_w"] / 1000.0,
+                 settings.get("discharge_kw") or settings["max_power_w"] / 1000.0, eff=settings.get("efficiency", 0.9),
                  allowed=supported)
     try:
         with engine.begin() as c:
