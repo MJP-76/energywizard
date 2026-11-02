@@ -39,6 +39,23 @@
   värme/varmvatten/elbil och Predbat batteriet - olika "hinkar" el för det mesta, så
   konflikten blir sällan stor. Håll ett öga på det själv tills vi vet mer.</p>
 
+  <h3>Låt Predbat se EnergyWizards planerade elbilsladdning</h3>
+  <p>EnergyWizard publicerar sin laddplan för elbilen som sensorn
+  <code>sensor.smartbox_planerad_last</code> i Home Assistant. Attributet
+  <code>predbat</code> har exakt det format Predbats <code>load_forecast</code> läser
+  (tidsstämplar med stigande kWh, kontrollerat mot Predbats källkod). Då planerar Predbat
+  batteriet med vetskap om att bilen ska ladda 11 kW kl 02-05, istället för att bli
+  överraskad. Lägg till i Predbats <code>apps.yaml</code>:</p>
+  <pre><code>  load_forecast:
+    - sensor.smartbox_planerad_last$predbat</code></pre>
+  <p><strong>Undvik dubbelräkning:</strong> Predbats egen prognos bygger på husets
+  historiska last, och den innehåller redan tidigare elbilsladdning. Slå därför på
+  Predbats <code>car_charging_hold</code> och peka <code>car_charging_energy</code> på
+  laddarens energisensor, så att elbilen räknas bort ur historiken och bara kommer
+  tillbaka via EnergyWizards plan. Bara elbilen ingår: värmepumpen och spabadet styrs minut
+  för minut och har ingen plan framåt att publicera. Overifierat mot en riktig
+  Predbat-installation, så hör gärna av dig om du provar.</p>
+
   <h3>Vad som finns redan</h3>
   <p>Ett drivrutinslager för husbatteri finns nu - upptäcks av entitetsväljaren precis
   som bil/laddare/värmepump/sol, läser SOC och effekt, och kan sätta ett läge via en

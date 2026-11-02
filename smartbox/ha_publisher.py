@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 import homeassistant
+import planned_load
 import pump_runtime
 from database_engine import engine
 
@@ -106,6 +107,17 @@ def _collect():
             ent["sensor.smartbox_forbrukning_idag"] = (_num(kwh, 1), {"friendly_name": "Smartbox Köpt el idag", "unit_of_measurement": "kWh", "device_class": "energy", "icon": "mdi:counter"})
             ent["sensor.smartbox_snittpris_idag"] = (_num(wprice, 3), {"friendly_name": "Smartbox Snittpris idag (viktat)", "unit_of_measurement": "kr/kWh", "icon": "mdi:cash", "dygnssnitt": _num(day_avg, 3)})
             ent["sensor.smartbox_besparing_idag"] = (_num((day_avg - wprice) * kwh, 2), {"friendly_name": "Smartbox Besparing idag", "unit_of_measurement": "kr", "icon": "mdi:piggy-bank"})
+    # Planerad last framåt (elbilens laddplan) - läsbar för Predbat via load_forecast:
+    #   load_forecast: [sensor.smartbox_planerad_last$predbat]   (se planned_load.py)
+    try:
+        with engine.connect() as c:
+            rows = c.execute(text("SELECT car_id, t_slot, kw FROM ev_plan_slots")).fetchall()
+        kw_now, pl_attrs = planned_load.build_forecast(rows, datetime.now(SWE))
+        pl_attrs.update({"friendly_name": "Smartbox Planerad last", "unit_of_measurement": "kW",
+                         "device_class": "power", "icon": "mdi:calendar-clock"})
+        ent["sensor.smartbox_planerad_last"] = (kw_now, pl_attrs)
+    except Exception as e:   # tabellen finns inte förrän första laddplanen sparats
+        print(f"⚠️ planerad_last: {e}")
     # Värmepumpens drifttid: dagens värde sparas permanent, och månads-/årssiffror publiceras till HA.
     try:
         pump_runtime.upsert_today(engine)

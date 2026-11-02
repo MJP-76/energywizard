@@ -41,6 +41,20 @@
   the battery - different "buckets" of electricity most of the time, so the conflict
   is rarely significant. Keep an eye on it yourself until we know more.</p>
 
+  <h3>Let Predbat see EnergyWizard's planned EV charging</h3>
+  <p>EnergyWizard publishes its EV charging plan as <code>sensor.smartbox_planerad_last</code>
+  in Home Assistant. Its <code>predbat</code> attribute uses the exact format Predbat's
+  <code>load_forecast</code> reads (timestamps with incrementing kWh, checked against Predbat's
+  source). Add to Predbat's <code>apps.yaml</code>:</p>
+  <pre><code>  load_forecast:
+    - sensor.smartbox_planerad_last$predbat</code></pre>
+  <p><strong>Avoid double counting:</strong> Predbat's own forecast is built from historical
+  house load, which already includes past EV charging. Enable Predbat's
+  <code>car_charging_hold</code> and point <code>car_charging_energy</code> at the charger's
+  energy sensor so the car is removed from history and only comes back via EnergyWizard's plan.
+  Only the EV is included; heat pump and spa are decided minute by minute and have no forward
+  plan. Not yet verified against a real Predbat installation.</p>
+
   <h3>What comes next</h3>
   <p>A real, built-in battery category in EnergyWizard's driver architecture is a
   reasonable next step - but we'll build it once more beta testers actually have a

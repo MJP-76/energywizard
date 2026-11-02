@@ -50,15 +50,19 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
     Enda kvarvarande teoretiska risk: två oberoende system kan reagera på
     samma momentana överskott i samma ögonblick - en generell racing-fråga,
     dämpad redan idag av `gpm.py`:s rullande medelvärde (`avg_net_history`).
-  - **Steg 2, dubbelriktad samplanering (inte byggt, större):** publicera
-    EnergyWizards planerade laster (t.ex. elbilens laddfönster, kommande
-    värmepumpsbeslut) som en HA-sensor Predbat kan läsa in som extra
-    förväntad last i sin egen prognos - den riktiga "pratar med varandra"-
-    biten. Kräver dels en ny, enkel exportsensor i EnergyWizard, dels att
-    Predbat faktiskt stödjer att läsa in externa förväntade laster på ett
-    stabilt sätt mellan versioner - overifierat, ingen betatestare med
-    batteri + Predbat ännu att prova mot. Avsiktligt uppskjutet tills en
-    sådan finns.
+  - **Steg 2, samplanering - exportsensorn byggd, overifierad mot riktig Predbat.**
+    `sensor.smartbox_planerad_last` (`smartbox/planned_load.py`, publiceras av
+    `ha_publisher.py`) har elbilens laddplan i attributet `predbat`, i det format
+    Predbats `load_forecast` läser: `{tidsstämpel med tidszon: stigande kWh}`.
+    Formatet är kontrollerat genom att läsa Predbats källkod
+    (`apps/predbat/fetch.py`: `fetch_extra_load_forecast` + `get_from_incrementing`),
+    inte gissat. Varje 15-minutersslott får en punkt vid start och slut, så att
+    Predbats utjämning inte smetar ut energi över luckorna. Bara elbilen ingår,
+    eftersom värmepump och spabad inte har någon plan framåt. Konfiguration och
+    dubbelräkningsrisken (`car_charging_hold`) står i
+    [kunskapsbanksartikeln](https://murre87.github.io/energywizard/kunskapsbank/husbatteri.html).
+    8 tester (`tests/test_planned_load.py`). Aldrig kört mot en riktig
+    Predbat-installation: ingen betatestare med batteri + Predbat än.
 
 - **OCPP-laddare via Home Assistants egen OCPP-integration - kod+regex klar,
   overifierad mot riktig laddare.** [lbbrhzn/ocpp](https://github.com/lbbrhzn/ocpp)
