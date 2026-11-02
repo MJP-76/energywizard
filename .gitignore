@@ -20,3 +20,6 @@ scripts/data/price_cache/
 # Driftspecifika overrides (t.ex. ha-gateway: certbot-symlänkar som pekar utanför
 # den enkla HA_GATEWAY_CERT_DIR-mounten) - aldrig incheckat, bara lokalt per installation.
 docker-compose.override.yml
+
+# Genereras av ewapp/make_icons.py vid varje Docker-bygge
+ewapp/static/icons/
