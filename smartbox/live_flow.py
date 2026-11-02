@@ -81,7 +81,8 @@ def nodes(row, decision_items=None):
 
     why = {}
     for it in decision_items or []:
-        k = {"elbil": None, "varmepump": "varmepump", "varmvatten": "varmvatten", "spabad": "spabad", "sol": "sol"}.get(it.get("key"))
+        k = {"elbil": None, "varmepump": "varmepump", "varmvatten": "varmvatten", "spabad": "spabad", "sol": "sol",
+             "batteri": "batteri"}.get(it.get("key"))
         if k:
             why[k] = it.get("text")
         elif it.get("key") == "elbil":

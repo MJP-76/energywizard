@@ -1,12 +1,12 @@
 """BatteryDriver: gränssnitt för ett husbatteri, oavsett märke.
 
-VIKTIGT, läs innan du bygger vidare: det här är bara LÄSNING + en enkel, generisk
-lägesstyrning (samma princip Predbat redan bevisat fungerar - via vad batteriets egna
-HA-integration exponerar, ingen egen protokollkod). gpm.py importerar INTE den här
-kategorin alls - batteriet konkurrerar direkt med sol/nät/elbil om samma watt just nu,
-en genuint annan optimeringsfråga än allt annat som redan styrs, och ingen i projektet
-har ett riktigt batteri att verifiera automatiserade laddnings-/urladdningsbeslut mot
-(se ROADMAP.md). Den gränsen är medveten, inte ett förbiseende.
+Läsning + styrning via det batteriets egen HA-integration redan exponerar (samma princip som
+Predbat bevisat fungerar) - ingen egen protokollkod. Besluten fattas i battery_control.py,
+som ser HELA huset (elbil, effekttak, säkring, elpris, sol) - batteriet jobbar inte på egen hand.
+
+Styrningen uttrycks som fem märkesoberoende avsikter (INTENTS). Varje drivrutin mappar dem
+till det batteriets integration kallar sina lägen; en avsikt utan mappning stöds inte och
+används aldrig av battery_control.py.
 """
 from abc import ABC, abstractmethod
 
@@ -29,6 +29,25 @@ class BatteryDriver(ABC):
         enum än (väntar på ett första riktigt batteri att verifiera mappningen mot,
         samma princip som HeatPumpDriver.set_operating_mode)."""
         raise NotImplementedError
+
+
+    def supported_intents(self) -> set:
+        """Vilka av INTENTS drivrutinen kan utföra. Tom mängd = bara läsning."""
+        return set()
+
+    def apply_intent(self, intent: str, power_w: float | None = None) -> bool:
+        """Utför en avsikt (se INTENTS). False om den inte stöds eller inte gick att skicka."""
+        return False
+
+
+# Märkesoberoende avsikter (battery_control.py fattar besluten, drivrutinen översätter):
+INTENTS = {
+    "auto": "Växelriktarens eget läge (självförbrukning) - alltid säkra reservläget",
+    "hold": "Ingen urladdning (får ladda från solen)",
+    "idle": "Varken ladda eller ladda ur (solöverskottet går vidare, t.ex. till elbilen)",
+    "charge": "Ladda, även från nätet",
+    "discharge": "Ladda ur, även när huset inte drar så mycket",
+}
 
 
 class NullBatteryDriver(BatteryDriver):

@@ -842,7 +842,14 @@ def _build_house_config_yaml(sel: dict) -> str:
     battery = sel.get("battery")
     if battery:
         lines += ["battery:", "  enabled: true", f"  driver: {battery.get('driver') or 'generic'}",
-                   "  capacity_kwh: 10  # FYLL I - batteriets kapacitet i kWh", "  entities:"]
+                   "  capacity_kwh: 10  # FYLL I - batteriets kapacitet i kWh",
+                   "  control: samarbete   # samarbete = läs bara (ett annat system styr) | styr = EnergyWizard styr | av",
+                   "  reserve_soc: 20      # sparas alltid till strömavbrott (%)",
+                   "  priority_soc: 50     # över detta får elbilen solöverskottet före batteriet (%)",
+                   "  # modes:              # krävs för 'styr' - exakt de alternativ batteriets select visar i HA",
+                   "  #   auto: \"Maximize self-consumption\"",
+                   "  #   hold: \"...\"", "  #   idle: \"...\"", "  #   charge: \"...\"", "  #   discharge: \"...\"",
+                   "  entities:"]
         battery_entities = (battery.get("entities") or {}).copy()
         if battery.get("soc_entity"):
             battery_entities.setdefault("soc", battery["soc_entity"])

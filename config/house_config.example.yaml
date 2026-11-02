@@ -101,6 +101,24 @@ spa:
 #     target_temp: sensor.mitt_spa_maltemp         # valfri
 #     power_w: sensor.mitt_spa_effekt              # valfri - utelämna om du saknar en effektsensor
 
+# --- Husbatteri (valfri) ---
+# battery:
+#   enabled: true
+#   driver: generic
+#   capacity_kwh: 10
+#   control: samarbete             # samarbete = läs bara (BESS/Predbat styr) | styr | av
+#   reserve_soc: 20                # sparas alltid till strömavbrott (%)
+#   priority_soc: 50               # över detta får elbilen solöverskottet före batteriet (%)
+#   entities:
+#     soc: sensor.batteri_soc
+#     power: sensor.batteri_effekt               # + = laddar
+#     mode_select: select.batteriets_lage        # krävs för 'styr'
+#   modes:                         # krävs för 'styr' - exakt batteriets egna alternativ i HA
+#     auto: "Self-use"
+#     hold: "..."
+#     charge: "..."
+#     discharge: "..."
+
 # --- Elmätare (rekommenderas) ---
 # Behövs för effektvakten, säkringsskyddet och solladdningen. Utan den här sektionen letar
 # EnergyWizard upp en Tibber Pulse automatiskt. Välj EN av formerna:

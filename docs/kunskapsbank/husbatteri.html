@@ -18,26 +18,69 @@
   <h1>Har du ett husbatteri?</h1>
   <div class="meta">Husbatteri</div>
 
-  <p>Rakt på sak: EnergyWizard styr idag inte ett riktigt elektriskt husbatteri
-  (Powerwall, GivEnergy, Huawei Luna och liknande). Huset självt (golv, väggar) och
-  varmvattenberedaren används som ett <em>termiskt</em> batteri - se
-  <a href="huset-som-varmebatteri.html">artikeln om det</a> - men det är långsamt och
-  läcker värme. Ett riktigt elbatteri är snabbt, i princip förlustfritt på kort sikt,
-  och konkurrerar direkt med sol/nät/elbilsladdning om samma watt just nu. Det är en
-  genuint annan optimeringsfråga, inte bara "lägg till en drivrutin till".</p>
+  <p>EnergyWizard kan styra ett husbatteri som en del av <strong>hela</strong> huset, inte som en egen
+  ö. Batteriet konkurrerar med elbilen, värmepumpen, spabadet och exporten om samma watt.
+  Därför fattas besluten i samma motor som styr allt annat: hur elbilen laddar, effekttaket,
+  huvudsäkringen, elpriset och solöverskottet. Allt styrs via batteriets egen Home
+  Assistant-integration, utan egen protokollkod.</p>
 
-  <h3>Vad du kan göra redan idag</h3>
-  <p>Kör <a href="https://github.com/springfall2008/batpred">Predbat</a> parallellt med
-  EnergyWizard. Predbat är ett moget, väletablerat projekt specifikt för
-  batteriladdning/urladdning mot elpris och solprognos, med stöd för många
-  batterimärken (GivEnergy, Solis, Huawei, Tesla Powerwall med flera). Det körs som en
-  egen app i Home Assistant (AppDaemon) - helt separat installation, ingen koppling
-  till EnergyWizard behövs.</p>
+  <p><strong>Status:</strong> byggt och testat med simulerade anrop, men ännu aldrig kört mot ett
+  riktigt batteri. Har du ett? Hör av dig - det är precis det vi behöver.</p>
 
-  <p>Eftersom de två systemen inte pratar med varandra kan de i teorin dra åt olika
-  håll (t.ex. om båda vill prioritera samma soleffekt). I praktiken styr EnergyWizard
-  värme/varmvatten/elbil och Predbat batteriet - olika "hinkar" el för det mesta, så
-  konflikten blir sällan stor. Håll ett öga på det själv tills vi vet mer.</p>
+  <h3>Tre lägen</h3>
+  <table>
+    <tr><th>Läge</th><th>Vad händer</th></tr>
+    <tr><td><code>samarbete</code> (standard)</td><td>Ett annat system styr batteriet, till exempel växelriktarens egen
+      BESS eller Predbat. EnergyWizard läser batteriet, visar det och räknar med det, men skriver aldrig dit.</td></tr>
+    <tr><td><code>styr</code></td><td>EnergyWizard väljer batteriets läge enligt reglerna nedan.</td></tr>
+    <tr><td><code>av</code></td><td>Batteriet ignoreras.</td></tr>
+  </table>
+
+  <h3>Reglerna (i prioritetsordning)</h3>
+  <ol>
+    <li><strong>Gammal data:</strong> svarar inte batteriet eller elmätaren tar växelriktaren över (auto).</li>
+    <li><strong>Säkringen överbelastas:</strong> batteriet laddar ur för att avlasta huvudsäkringen.</li>
+    <li><strong>Effekttaket är nått:</strong> batteriet täcker toppen.</li>
+    <li><strong>Minuspris:</strong> batteriet laddar från nätet.</li>
+    <li><strong>Elbilen laddar från nätet:</strong> batteriet håller - det töms inte i bilen.</li>
+    <li><strong>Elbilen solladdar:</strong> över din prioritetsnivå får bilen solöverskottet före batteriet.</li>
+    <li><strong>Reservnivå:</strong> under den sparas batteriet till strömavbrott.</li>
+    <li><strong>Billig timme med dyrare timmar kvar:</strong> batteriet sparas till de dyra timmarna.</li>
+    <li><strong>Annars:</strong> växelriktarens självförbrukning.</li>
+  </ol>
+  <p>Varje beslut syns med sin förklaring i "Just nu" på översikten och i appen.</p>
+
+  <h3>Säkerhet</h3>
+  <ul>
+    <li>Batteriet återgår till växelriktarens eget läge när EnergyWizard startar och när det stängs av
+      (till exempel vid en uppdatering), så det aldrig blir kvar i "ladda ur" utan att någon styr det.</li>
+    <li>Lägesbyten sker högst var femte minut (säkerhetsreglerna undantagna), eftersom växelriktare
+      sparar läget i flashminne.</li>
+    <li>Saknar batteriet ett läge används närmaste säkra i stället (vila → håll → auto).</li>
+  </ul>
+
+  <h3>Så ställer du in det</h3>
+  <p>Entitetsväljaren hittar batteriet och skriver <code>control: samarbete</code> som säker start.
+  För <code>styr</code> anger du vilket av batteriets egna lägen som motsvarar varje avsikt - exakt
+  de alternativ din select-entitet visar i Home Assistant:</p>
+  <pre><code>battery:
+  enabled: true
+  driver: generic
+  capacity_kwh: 10
+  control: styr          # samarbete | styr | av
+  reserve_soc: 20        # sparas alltid till strömavbrott
+  priority_soc: 50       # över detta får elbilen solen först
+  entities:
+    soc: sensor.batteri_soc
+    power: sensor.batteri_effekt            # + = laddar
+    mode_select: select.batteriets_lage
+    discharge_power: number.urladdningseffekt   # valfri
+  modes:
+    auto: "Self-use"
+    hold: "..."
+    idle: "..."
+    charge: "..."
+    discharge: "..."</code></pre>
 
   <h3>Låt Predbat se EnergyWizards planerade elbilsladdning</h3>
   <p>EnergyWizard publicerar sin laddplan för elbilen som sensorn
@@ -56,20 +99,6 @@
   för minut och har ingen plan framåt att publicera. Overifierat mot en riktig
   Predbat-installation, så hör gärna av dig om du provar.</p>
 
-  <h3>Vad som finns redan</h3>
-  <p>Ett drivrutinslager för husbatteri finns nu - upptäcks av entitetsväljaren precis
-  som bil/laddare/värmepump/sol, läser SOC och effekt, och kan sätta ett läge via en
-  valfri <code>select</code>-entitet om batteriets integration exponerar en. Samma
-  generiska princip Predbat själv bygger på: ingen egen protokollkod, bara det batteriets
-  egen HA-integration redan ger dig.</p>
-
-  <h3>Vad som INTE finns än, medvetet</h3>
-  <p>EnergyWizards egen prioritetsmotor (<code>gpm.py</code>) fattar inga automatiska
-  laddnings-/urladdningsbeslut om batteriet - det är en genuint annan optimeringsfråga
-  (batteriet konkurrerar direkt med sol/nät/elbil om samma watt just nu) som vi inte
-  bygger på gissningar utan en riktig installation att verifiera mot. Har du ett
-  batteri? Hör av dig - det är precis den sortens verkliga hus vi behöver för att göra
-  det rätt.</p>
 </article>
 </div>
 </body>

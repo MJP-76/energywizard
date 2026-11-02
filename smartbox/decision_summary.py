@@ -26,6 +26,7 @@ DEVICES = [
     ("varmvatten", "💧", "Varmvatten", ("VV-FAILSAFE", "TERMISKT BATTERI", "LEGIONELLA", "AI DUSCH")),
     ("spabad", "🛁", "Spabad", ("SPA", "TVÅNGSVÄRME", "MANUELL ECO")),
     ("sol", "☀️", "Solceller", ("SOL-PI", "EKONOMISKT OPTIMUM")),
+    ("batteri", "🔋", "Batteri", ("BATTERI",)),
 ]
 _TAG_TO_KEY = {tag: key for key, _, _, tags in DEVICES for tag in tags}
 

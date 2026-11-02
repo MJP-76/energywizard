@@ -18,17 +18,17 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 ## Övervägs, väntar på fler verkliga hus att verifiera mot
 
-- **Automatiserade laddnings-/urladdningsbeslut för husbatteri.** Ett riktigt
-  elbatteri är snabbt och konkurrerar direkt med sol/nät/elbilsladdning om
-  samma watt - en genuint annan optimeringsfråga än husets termiska tröghet
-  som redan styrs idag, och ingen betatestare har ännu ett riktigt batteri
-  att verifiera besluten mot. `gpm.py` fattar därför medvetet INGA beslut om
-  batteriet än. **Drivrutinslagret finns dock redan** (`drivers/battery.py`/
-  `battery_generic.py`, upptäcks av entitetsväljaren) - läser SOC/effekt och
-  kan sätta ett läge via valfri `select`-entitet, samma generiska
-  entitetsstyrning som [Predbat](https://github.com/springfall2008/batpred)
-  själv bygger på. Kör gärna Predbat parallellt tills vidare - se
-  [kunskapsbanksartikeln](https://murre87.github.io/energywizard/kunskapsbank/husbatteri.html).
+- **Husbatteri: steg 1-2 byggda (läsa, visa, regler i motorn) + samarbetsläge -
+  overifierat mot riktigt batteri.** `smartbox/battery_control.py` fattar besluten med
+  hela husets läge som indata: gammal data -> växelriktaren tar över; säkring/effekttak
+  -> ladda ur; minuspris -> ladda; elbilen laddar från nätet -> håll (töm inte batteriet i
+  bilen); elbilen solladdar över prioritetsnivån -> vila; reservnivå -> håll; billig timme
+  med dyrare kvar -> håll; annars självförbrukning. Tre lägen: `samarbete` (standard -
+  läser bara, för BESS/Predbat), `styr`, `av`. Avsikterna mappas till batteriets egna
+  lägen i configen (`modes:`). Skyddsnät från FTW: auto vid start och SIGTERM, lägesbyten
+  högst var 5:e minut. Inspiration: evcc (batteri+elbil), FTW (säkerhet), Predbat
+  (märkesmappning). **Steg 3, planering/prisarbitrage över dygnet, väntar** tills någon
+  med batteri kört steg 2 ett tag.
 
   **Predbat, inte [FTW](https://github.com/srcfl/ftw), är referensen för
   själva batteribeslutslogiken** den dagen det byggs: Predbat kör inuti Home

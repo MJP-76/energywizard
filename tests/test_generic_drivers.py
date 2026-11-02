@@ -149,8 +149,11 @@ def test_battery_read_state_lasar_generiska_sensorer():
     assert state == {"soc_pct": 72.0, "power_w": -850.0, "capacity_kwh": 10.0, "mode": None}
 
 
-def test_battery_supports_control_bara_om_mode_select_konfigurerad():
-    assert GenericBatteryDriver(entities={"mode_select": "select.mode"}).supports_control() is True
+def test_battery_supports_control_kraver_select_och_lagesmappning():
+    """Styrning kräver både batteriets select-entitet OCH en mappning från EnergyWizards avsikter
+    till batteriets egna lägen - annars vet motorn inte vilket läge den ska välja."""
+    assert GenericBatteryDriver(entities={"mode_select": "select.mode"}, modes={"auto": "Self-use"}).supports_control() is True
+    assert GenericBatteryDriver(entities={"mode_select": "select.mode"}).supports_control() is False
     assert GenericBatteryDriver(entities={}).supports_control() is False
 
 

@@ -177,6 +177,20 @@ def power_meter_entities(cfg: dict) -> dict:
     return ents
 
 
+def battery_settings(cfg: dict) -> dict:
+    """Hur EnergyWizard förhåller sig till batteriet (battery: i house_config.yaml):
+      control: samarbete (standard - läs bara, ett annat system styr), styr, eller av
+      reserve_soc / priority_soc / max_soc: procent (se battery_control.py)."""
+    bat = (cfg or {}).get("battery") or {}
+    control = str(bat.get("control", "samarbete")).strip().lower()
+    if control not in ("styr", "samarbete", "av"):
+        control = "samarbete"
+    f = lambda k, d: float(bat.get(k, d)) if bat.get(k) is not None else d
+    return {"control": control if bat.get("enabled") else "av", "reserve_soc": f("reserve_soc", 20.0),
+            "priority_soc": f("priority_soc", 50.0), "max_soc": f("max_soc", 100.0),
+            "max_power_w": f("max_power_w", 5000.0)}
+
+
 def build_solar_driver(cfg: dict) -> SolarDriver:
     sol = cfg.get("solar", {})
     if not sol.get("enabled"):
@@ -202,12 +216,12 @@ def build_spa_driver(cfg: dict) -> SpaDriver:
 
 
 def build_battery_driver(cfg: dict) -> BatteryDriver:
-    """OBS: bara läsning + enkel lägesstyrning - gpm.py importerar INTE detta för
-    automatiserade beslut (se drivers/battery.py:s modulkommentar för varför)."""
+    """Batteriets drivrutin. Besluten fattas i battery_control.py (se battery_settings)."""
     bat = cfg.get("battery", {})
     if not bat.get("enabled"):
         return NullBatteryDriver()
     driver_cls = BATTERY_DRIVER_REGISTRY.get(bat.get("driver"), NullBatteryDriver)
     if driver_cls is GenericBatteryDriver:
-        return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=bat.get("entities", {}))
+        return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=bat.get("entities", {}),
+                                    modes=bat.get("modes", {}))
     return driver_cls()

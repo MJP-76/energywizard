@@ -27,6 +27,8 @@ import house_config      # EnergyWizard Open: drivrutinsarkitektur (bil/laddare/
 import ev_handshake      # Generisk laddar-handskakning (vilken fysisk laddare hör till vilken bil)
 import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg)
 import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
+import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
+import signal
 import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
 
@@ -99,6 +101,31 @@ default_car_per_charger = house_config.build_default_car_per_charger(house_cfg)
 heat_pump_driver = house_config.build_heat_pump_driver(house_cfg)
 solar_driver = house_config.build_solar_driver(house_cfg)
 spa_driver = house_config.build_spa_driver(house_cfg)
+battery_driver = house_config.build_battery_driver(house_cfg)
+battery_cfg = house_config.battery_settings(house_cfg)
+_battery = {"last": None, "at": None}
+
+
+def _battery_to_auto(reason):
+    """Lämna tillbaka batteriet till växelriktarens eget läge (uppstart, avstängning)."""
+    if battery_cfg["control"] == "styr" and "auto" in battery_driver.supported_intents():
+        try:
+            if battery_driver.apply_intent("auto"):
+                print(f"🔋 Batteri: tillbaka till växelriktarens eget läge ({reason}).")
+        except Exception as _be:
+            print(f"⚠️ Batteri: kunde inte återställa läget ({reason}): {_be}")
+
+
+def _on_sigterm(signum, frame):
+    # docker stop / Watchtower-uppdatering: släpp batteriet innan vi går ner, så det aldrig
+    # blir kvar i "ladda ur" eller "håll" utan att någon styr det (FTW:s dead-man-princip).
+    _battery_to_auto("motorn stängs av")
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGTERM, _on_sigterm)
+_battery_to_auto("uppstart")
+print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(battery_driver.supported_intents()) or '-'}")
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
 car_ids = [c.id for c in car_drivers] or ['nissan', 'tesla']  # tomt hus (inga bilar i configen än) faller tillbaka på dagens två, matchar gpm.py:s egen default
 ev_allocations = {physical_id: None for physical_id in physical_charger_drivers}
@@ -559,7 +586,8 @@ fast_hl1, fast_hl2, fast_hl3 = [], [], []
 fuse_model = fuse_guard.FuseThermalModel()
 _fuse_cfg = {"fuse_a": decisions.MAX_FUSE_A, "margin_a": 0.0}
 _fuse_charger_ids = {}
-_hour_import = {"h": None, "wh": 0.0, "t": None}   # köpt energi denna timme (reserv när mätaren saknar timsensor)
+_hour_import = {"h": None, "wh": 0.0, "t": None}
+_meter_ok_at = {"t": None}                           # senaste lyckade avläsning av elmätaren   # köpt energi denna timme (reserv när mätaren saknar timsensor)
 
 def get_last_legionella(target_temp):
     try:
@@ -586,6 +614,7 @@ while True:
 
         tibber = homeassistant.read_power_meter()
         if tibber is not None:
+            _meter_ok_at["t"] = time.time()
             fast_net.append(tibber["net_power_w"])
             # Fasströmmar är valfria (en mätare med bara nettoeffekt har inga) - då får säkrings-
             # modellen ingen data och gpm.py använder den gamla formeln.
@@ -1543,6 +1572,32 @@ while True:
                 _persist_solar_state(getattr(gpm_engine, 'ev_solar_charge_active', False), getattr(gpm_engine, 'ev_solar_target_amps', 0), getattr(gpm_engine, 'ev_solar_target_phases', 0), now)
             except Exception as _e:
                 print(f"⚠️ Kunde inte spara sol-laddningsläge: {_e}")
+            # --- Husbatteriet: beslut med hela husets läge som indata (battery_control.py) ---
+            battery_state = {}
+            try:
+                battery_state = battery_driver.read_state() or {}
+                if solar_data is not None:
+                    solar_data["battery_soc"] = battery_state.get("soc_pct")
+                    solar_data["battery_power_w"] = battery_state.get("power_w")
+                if battery_cfg["control"] != "av" and battery_state.get("soc_pct") is not None:
+                    _ev_on = any((v or {}).get("limit_a", 0) >= EV_MIN_CHARGE_AMPS for v in (gpm_actions.get("ev") or {}).values())
+                    _ev_sol = bool(getattr(gpm_engine, "ev_solar_charge_active", False))
+                    _q = now.hour * 4 + now.minute // 15
+                    _bdec = battery_control.decide({
+                        "soc": battery_state.get("soc_pct"), "price": current_price, "avg_net_w": avg_net,
+                        "meter_fresh": _meter_ok_at["t"] is not None and time.time() - _meter_ok_at["t"] < 120,
+                        "fuse_state": fuse_model.check(_fuse_cfg["fuse_a"], _fuse_cfg["margin_a"])[0] if fuse_model.is_fresh() else "ok",
+                        "peak_reached": bool(cfg.get("peak_shaving_enabled", True)) and float(consumed_kwh_this_hour) >= float(allowed_kwh_now),
+                        "ev_charging_grid": _ev_on and not _ev_sol, "ev_solar_active": _ev_on and _ev_sol,
+                        "prices_rest_of_day": (all_prices or [])[_q:],
+                    }, battery_cfg, battery_driver.supported_intents())
+                    gpm_actions["log"].append(f"🔋 (BATTERI): {_bdec['reason']}")
+                    if battery_control.should_apply(_bdec, _battery["last"], _battery["at"], now):
+                        if battery_driver.apply_intent(_bdec["intent"], _bdec.get("power_w")):
+                            _battery.update(last=_bdec, at=now)
+                            print(f"🔋 Batteri: {_bdec['intent']} - {_bdec['reason']}")
+            except Exception as _be:
+                print(f"⚠️ Batteribeslutet hoppade över: {_be}")
             ai_thoughts_list = gpm_actions["log"].copy()
             # Förut: loggens SISTA rad - nästan alltid effektvaktens "Peak Shaving är inaktiverat". Nu en
             # rubrik + en mening per enhet om vad som görs och varför (decision_summary.py).
