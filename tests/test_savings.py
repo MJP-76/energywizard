@@ -1,0 +1,45 @@
+"""Besparingskortet (smartbox/savings.py): samma formel som den publika sidan,
+(dygnssnitt - betalt snittpris) × köpt kWh, summerat över Idag / 7 dagar / Månad."""
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "smartbox")))
+
+from savings import build_day, summarize_periods
+
+
+def test_en_dag_samma_formel_som_publika_sidan():
+    r = build_day("2026-11-02", kwh=20.0, day_avg=1.00, paid_avg=0.70)
+    assert r["saved_kr"] == 6.0            # (1.00 - 0.70) × 20
+    assert r["would_cost_kr"] == 20.0
+
+
+def test_dag_som_kopte_dyrare_an_snittet_blir_negativ():
+    assert build_day("2026-11-02", 10.0, 0.50, 0.60)["saved_kr"] == -1.0
+
+
+def test_saknade_varden_ger_ingen_rad():
+    assert build_day("2026-11-02", None, 1.0, 0.5) is None
+    assert build_day("2026-11-02", 10.0, 1.0, None) is None
+
+
+def test_perioder_idag_vecka_manad():
+    rows = [build_day(d, 10.0, 1.0, 0.8) for d in
+            ("2026-10-25", "2026-10-31", "2026-11-01", "2026-11-02")]   # 2 kr/dag
+    p = summarize_periods(rows, "2026-11-02")
+    assert p["today"]["saved_kr"] == 2.0 and p["today"]["days"] == 1
+    assert p["week"]["days"] == 3 and p["week"]["saved_kr"] == 6.0      # 27 okt-2 nov, inte 25 okt
+    assert p["month"]["days"] == 2 and p["month"]["saved_kr"] == 4.0    # bara november
+    assert p["today"]["pct"] == 20.0                                    # 2 kr av 10 kr
+    assert p["today"]["paid_kr"] == 8.0
+
+
+def test_tom_historik_ger_noll_och_ingen_procent():
+    p = summarize_periods([], "2026-11-02")
+    assert p["today"] == {"saved_kr": 0, "kwh": 0, "paid_kr": 0, "pct": None, "days": 0}
+
+
+def test_procent_doljs_nar_jamforelsekostnaden_ar_nara_noll():
+    """Minuspris-dag: vad elen 'hade kostat' kan vara ~0 eller negativt - procent blir då meningslöst."""
+    p = summarize_periods([build_day("2026-11-02", 10.0, -0.02, -0.10)], "2026-11-02")
+    assert p["today"]["pct"] is None and p["today"]["saved_kr"] == 0.8

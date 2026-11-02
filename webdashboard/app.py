@@ -391,6 +391,47 @@ async def api_economy():
             "accumulated_consumption_kwh": consumption, "est_cost_today": est_cost, "price_24h": price_24h}
 
 
+@app.get("/api/savings")
+async def api_savings():
+    """Besparingskortet: per dag de senaste ~40 dygnen + Idag / 7 dagar / Månad. Samma formel
+    som den publika sidan och HA-sensorn - se smartbox/savings.py."""
+    import savings
+    from datetime import datetime
+    import zoneinfo
+    today = datetime.now(zoneinfo.ZoneInfo("Europe/Stockholm")).date().isoformat()
+    with ENGINE.connect() as c:
+        rows = savings.daily_rows(c, days=40)
+    return {"ok": True, "today": today, "days": rows[-31:], "periods": savings.summarize_periods(rows, today)}
+
+
+@app.get("/api/plan")
+async def api_plan():
+    """Planen framåt i klartext: elbilens laddpass + värmepumpens grundläge enligt elpriset.
+    Bygger ingen ny plan, beskriver bara motorns - se smartbox/plan_brief.py."""
+    import nordpool
+    import plan_brief
+    from datetime import datetime
+    import zoneinfo
+    now = datetime.now(zoneinfo.ZoneInfo("Europe/Stockholm"))
+    with ENGINE.connect() as c:
+        prices = c.execute(text(
+            "SELECT time_start, sek_per_kwh FROM elpriser "
+            "WHERE time_start >= date_trunc('day', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm' "
+            "ORDER BY time_start")).fetchall()
+        try:
+            ev_rows = c.execute(text("SELECT car_id, t_slot, kw FROM ev_plan_slots")).fetchall()
+        except Exception:      # tabellen skapas först när en laddplan sparats
+            c.rollback()
+            ev_rows = []
+        cheap_hours = _settings_row(c, ["cheap_hours_count"]).get("cheap_hours_count") or 8
+        mode_row = c.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL "
+                                  "ORDER BY timestamp DESC LIMIT 1")).fetchone()
+    brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
+                                   [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
+                                   int(cheap_hours), mode_row[0] if mode_row else None)
+    return {"ok": True, **brief}
+
+
 @app.get("/api/consumption")
 async def api_consumption():
     """Elförbrukning-sidan: fasströmmar/effekt just nu + senaste förklarade uppdelningen

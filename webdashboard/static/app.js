@@ -39,6 +39,99 @@ function heatBatteryHtml(hb, compact) {
     </div>`;
 }
 
+// ---------- Besparing (inspirerat av FTW:s savings-kort, egen implementation) ----------
+// Samma siffra som den publika sidan: vad tajmningen sparade mot om samma el köpts till
+// dygnets snittpris (smartbox/savings.py). Negativa dagar visas som de är.
+const SAVINGS_PERIODS = [["today", "Idag"], ["week", "7 dagar"], ["month", "Månad"]];
+let savingsPeriod = "week";
+try { savingsPeriod = localStorage.getItem("ew_savings_period") || "week"; } catch (e) { /* privat läge */ }
+
+function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
+
+function savingsCardHtml(d) {
+  const p = d.periods[savingsPeriod] || d.periods.week;
+  const pos = p.saved_kr >= 0;
+  const sign = p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : "";
+  const kr = `${sign}${Math.abs(p.saved_kr).toFixed(0)} kr`;
+  const pct = p.pct != null ? ` <span style="font-size:1rem;font-weight:700;opacity:.8">(${p.pct > 0 ? "+" : ""}${p.pct.toFixed(0)} %)</span>` : "";
+  const sub = p.days
+    ? `${p.kwh.toFixed(0)} kWh köpt för ${p.paid_kr.toFixed(0)} kr, mot ${(p.paid_kr + p.saved_kr).toFixed(0)} kr till dygnets snittpris${p.days > 1 ? ` · ${p.days} dagar med data` : ""}`
+    : "Ingen mätdata för perioden än.";
+  return `
+    <div class="card" id="savingscard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <h2 style="margin:0">💰 Sparat genom smart tajmning</h2>
+        <div class="seg" id="savingsseg">${SAVINGS_PERIODS.map(([k, l]) => `<button data-p="${k}" class="${k === savingsPeriod ? "on" : ""}">${l}</button>`).join("")}</div>
+      </div>
+      <div style="font-size:2.1rem;font-weight:800;margin-top:10px;color:${pos ? "var(--acc)" : "var(--bad)"};font-variant-numeric:tabular-nums">${kr}${pct}</div>
+      <div class="note">${sub}</div>
+      <div id="savingsbars" style="height:90px;margin-top:8px"></div>
+    </div>`;
+}
+
+function savingsBars(elId, days, height) {
+  const el = document.getElementById(elId);
+  if (!el || !days || !days.length) return;
+  const chart = echarts.init(el, null, { renderer: "svg" });
+  const css = getComputedStyle(document.documentElement);
+  const good = css.getPropertyValue("--acc").trim() || "#22d3a0", bad = css.getPropertyValue("--bad").trim() || "#f87171";
+  chart.setOption({
+    grid: { left: height ? 40 : 4, right: 4, top: 6, bottom: height ? 30 : 4 },
+    tooltip: { trigger: "axis", formatter: (ps) => `${ps[0].name}: ${ps[0].value >= 0 ? "+" : ""}${ps[0].value.toFixed(2)} kr` },
+    xAxis: { type: "category", data: days.map((r) => r.day.slice(5)), show: !!height, axisLabel: { color: "#93a0b8" } },
+    yAxis: { type: "value", show: !!height, splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } }, axisLabel: { color: "#93a0b8" } },
+    series: [{ type: "bar", data: days.map((r) => ({ value: r.saved_kr, itemStyle: { color: r.saved_kr >= 0 ? good : bad, borderRadius: r.saved_kr >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] } })), barMaxWidth: 14 }],
+  });
+  new ResizeObserver(() => chart.resize()).observe(el);
+}
+
+async function mountSavings(slotId) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  let d;
+  try { d = await api("api/savings"); } catch (e) { slot.innerHTML = ""; return; }
+  if (!d.ok) { slot.innerHTML = ""; return; }
+  const draw = () => {
+    slot.innerHTML = savingsCardHtml(d);
+    const n = savingsPeriod === "today" ? 1 : savingsPeriod === "week" ? 7 : d.days.filter((r) => r.day.startsWith(d.today.slice(0, 7))).length;
+    savingsBars("savingsbars", d.days.slice(-Math.max(n, 7)));
+    slot.querySelectorAll("#savingsseg button").forEach((b) => b.onclick = () => {
+      savingsPeriod = b.dataset.p;
+      try { localStorage.setItem("ew_savings_period", savingsPeriod); } catch (e) { /* privat läge */ }
+      draw();
+    });
+  };
+  draw();
+  return d;
+}
+
+// ---------- Planen framåt i klartext (inspirerat av FTW:s plan brief) ----------
+// Beskriver motorns egen plan - elbilens laddpass och värmepumpens grundläge enligt
+// elpriset (smartbox/plan_brief.py). Inga nya beslut fattas här.
+function planCardHtml(d) {
+  const rows = d.items.slice(0, 8).map((i) => `
+    <div style="display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line)${i.active ? ";font-weight:600" : ""}">
+      <div style="flex:0 0 158px;white-space:nowrap;font-variant-numeric:tabular-nums">${i.active ? `<span class="badge on" style="margin-right:6px">Nu</span>` : ""}${esc(i.when)}</div>
+      <div><div>${esc(i.title)}</div><div class="note">${esc(i.detail)}</div></div>
+    </div>`).join("");
+  return `
+    <div class="card">
+      <h2>🗓️ Planen framåt</h2>
+      <div style="font-size:1.02rem;margin:4px 0 10px">${esc(d.headline)}</div>
+      ${rows || ""}
+      ${d.items.length ? `<div class="note" style="margin-top:8px">${esc(d.note)}</div>` : ""}
+    </div>`;
+}
+
+async function mountPlan(slotId) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  try {
+    const d = await api("api/plan");
+    slot.innerHTML = d.ok ? planCardHtml(d) : "";
+  } catch (e) { slot.innerHTML = ""; }
+}
+
 async function renderOversikt() {
   const main = document.getElementById("main");
   main.innerHTML = `<div class="placeholder">Laddar…</div>`;
@@ -64,6 +157,7 @@ async function renderOversikt() {
       <div style="font-size:1.15rem;font-weight:700">${emoji} ${d.decision}</div>
       <div class="note" style="margin-top:4px">💸 ${fmtKrOre(d.price)}/kWh · 🌡️ Inne ${fmt(d.indoor_temp, 1, "°C")} (mål ${d.indoor_target.toFixed(0)}) · 🌳 Ute ${fmt(d.outdoor_temp, 1, "°C")}</div>
     </div>
+    <div class="grid" style="margin-bottom:16px"><div id="savingsslot"></div><div id="planslot"></div></div>
     <div class="card" style="margin-bottom:16px"><span class="note">⚡ Aktuell effekttariff: ${tariff}</span></div>
     <div class="grid" style="margin-bottom:16px">
       ${metricCard("⚡", "Elpris just nu", fmtKrOre(d.price) + "/kWh")}
@@ -77,6 +171,8 @@ async function renderOversikt() {
     </div>
     <div class="card"><h2>Elpris</h2><div class="note">Senaste dygnet + kommande priser</div><div id="pricechart" style="height:240px;margin-top:10px"></div></div>
     <div class="note" style="margin-top:10px">Senast mätt: ${d.sthlm_time}</div>`;
+  mountSavings("savingsslot");
+  mountPlan("planslot");
   if (d.price_24h && d.price_24h.length) {
     const chart = echarts.init(document.getElementById("pricechart"), null, { renderer: "svg" });
     chart.setOption({
@@ -252,8 +348,10 @@ async function renderEkonomi() {
       <div class="v" style="font-size:1.8rem">${d.est_cost_today != null ? d.est_cost_today.toFixed(2) + " kr" : "–"}</div>
       <div class="note" style="margin-top:4px">${fmt(d.accumulated_consumption_kwh, 1, " kWh")} förbrukat × dagens snittpris - en grov uppskattning, inte en exakt timme-för-timme-kostnad.</div>
     </div>
+    <div class="card" style="margin-bottom:16px"><h2>📊 Sparat per dag</h2><div class="note">Grönt = billigare än dygnets snittpris, rött = dyrare. Senaste 31 dagarna.</div><div id="econsavingsbars" style="height:220px;margin-top:10px"></div></div>
     <div class="card"><h2>Elpris senaste dygnet</h2><div id="econpricechart" style="height:240px;margin-top:10px"></div></div>`);
   if (d && d.price_24h) lineChart("econpricechart", d.price_24h, { step: "end" });
+  if (d) api("api/savings").then((sv) => { if (sv.ok) savingsBars("econsavingsbars", sv.days, 220); }).catch(() => {});
 }
 
 async function renderElforbrukning() {

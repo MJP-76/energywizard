@@ -213,6 +213,14 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   för att stoppa all laddning. 17 tester (`tests/test_fuse_guard.py`), både
   aktivering och icke-aktivering.
 
+- **Besparingskort och planen i klartext (webdashboard, Översikt + Ekonomi).**
+  Idéerna från [FTW](https://github.com/srcfl/ftw):s savings-kort och plan brief,
+  egen implementation (ingen kod kopierad - FTW är AGPL). Besparingen är samma
+  formel som den publika sidan, med dygn i svensk tid (`smartbox/savings.py`).
+  Planen beskriver motorns egen plan: elbilens laddpass ur `ev_plan_slots` och
+  värmepumpens grundläge per period enligt exakt samma prisregel som `gpm.py`
+  (`smartbox/plan_brief.py`). 25 tester.
+
 - Drivrutinsarkitektur kopplad till huvudstyrloopen (bil/laddare/värmepump/sol/spa)
   - genuint insticksbart, inte bara ett löfte.
 - Entitetsväljare med auto-discovery (`webdashboard`, Inställningar-sidan).

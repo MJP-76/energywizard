@@ -54,6 +54,17 @@
   då tjänsterna till EMMA:n. Huawei Fusion Hub fungerar bra som källa för
   effektsensorn.</p>
 
+  <h3>Growatt: använd den lokala integrationen, inte molnet</h3>
+  <p>Home Assistants inbyggda Growatt-integration (<code>growatt_server</code>) hämtar data
+  från Growatts moln. Ägare har rapporterat att kontot då kan låsas i ungefär ett dygn vid
+  för många anrop. EnergyWizard skickar inga egna anrop till Growatts moln, eftersom vi bara
+  läser det Home Assistant redan har. Molnintegrationen har ändå ingen exportgräns att styra.
+  Använd den lokala
+  <a href="https://github.com/0xAHA/Growatt_ModbusTCP">Growatt_ModbusTCP</a> via Modbus
+  TCP eller RS485. Den går inte via molnet. Vissa modeller (WIT) tar bara emot en
+  skrivning var 30:e sekund. EnergyWizard skriver exportgränsen högst en gång i minuten,
+  och bara när den ändras.</p>
+
   <h3>Sungrow</h3>
   <p>Med mkaisers Modbus-paket är gränsen i watt. EnergyWizard räknar om procent till
   watt mot gränsens eget maxvärde, eller mot <code>export_limit_max_w</code> om du
