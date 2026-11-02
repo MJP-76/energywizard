@@ -219,7 +219,7 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   formel som den publika sidan, med dygn i svensk tid (`smartbox/savings.py`).
   Planen beskriver motorns egen plan: elbilens laddpass ur `ev_plan_slots` och
   värmepumpens grundläge per period enligt exakt samma prisregel som `gpm.py`
-  (`smartbox/plan_brief.py`). 25 tester.
+  (`smartbox/plan_brief.py`). 17 tester.
 
 - Drivrutinsarkitektur kopplad till huvudstyrloopen (bil/laddare/värmepump/sol/spa)
   - genuint insticksbart, inte bara ett löfte.
