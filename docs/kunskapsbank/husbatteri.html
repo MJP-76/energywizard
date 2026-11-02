@@ -45,9 +45,22 @@
     <li><strong>Elbilen laddar från nätet:</strong> batteriet håller - det töms inte i bilen.</li>
     <li><strong>Elbilen solladdar:</strong> över din prioritetsnivå får bilen solöverskottet före batteriet.</li>
     <li><strong>Reservnivå:</strong> under den sparas batteriet till strömavbrott.</li>
-    <li><strong>Billig timme med dyrare timmar kvar:</strong> batteriet sparas till de dyra timmarna.</li>
+    <li><strong>Dygnsplanen:</strong> när den räknats fram bestämmer den resten (se nedan).</li>
+    <li><strong>Utan plan - billig timme med dyrare kvar:</strong> batteriet sparas till de dyra timmarna.</li>
     <li><strong>Annars:</strong> växelriktarens självförbrukning.</li>
   </ol>
+
+  <h3>Dygnsplanen</h3>
+  <p>Var femtonde minut räknar EnergyWizard fram den billigaste planen för resten av dygnet och
+  morgondagen - kvart för kvart: när batteriet ska ladda, sparas, laddas ur eller bara täcka
+  huset. Planen tar hänsyn till elpriset (fullt köppris och vad du får för såld el), husets
+  förväntade förbrukning, solprognosen, elbilens laddplan (batteriet töms aldrig i bilen),
+  batteriets verkningsgrad, reservnivån och hur snabbt det kan ladda. Den undviker att byta
+  läge i onödan, och energi som blir kvar vid planens slut räknas försiktigt så att batteriet
+  används när det lönar sig i stället för att hamstras.</p>
+  <p>Planen syns i <em>Planen framåt</em> ("Batteriet laddar 01:00-03:45"), som ett eget band i
+  tidslinjen och i "Just nu" med hur mycket den beräknas spara mot ren självförbrukning.
+  Säkerhetsreglerna ovan går alltid före planen.</p>
   <p>Varje beslut syns med sin förklaring i "Just nu" på översikten och i appen.</p>
 
   <h3>Säkerhet</h3>
@@ -70,6 +83,8 @@
   control: styr          # samarbete | styr | av
   reserve_soc: 20        # sparas alltid till strömavbrott
   priority_soc: 50       # över detta får elbilen solen först
+  max_power_w: 5000      # batteriets max laddeffekt (för planen)
+  plan: true             # dygnsplan (false = bara reglerna)
   entities:
     soc: sensor.batteri_soc
     power: sensor.batteri_effekt            # + = laddar

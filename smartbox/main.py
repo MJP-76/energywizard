@@ -28,6 +28,7 @@ import ev_handshake      # Generisk laddar-handskakning (vilken fysisk laddare h
 import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg)
 import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
 import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
+import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import signal
 import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
@@ -103,7 +104,7 @@ solar_driver = house_config.build_solar_driver(house_cfg)
 spa_driver = house_config.build_spa_driver(house_cfg)
 battery_driver = house_config.build_battery_driver(house_cfg)
 battery_cfg = house_config.battery_settings(house_cfg)
-_battery = {"last": None, "at": None}
+_battery = {"last": None, "at": None, "plan": None, "plan_at": None}
 
 
 def _battery_to_auto(reason):
@@ -1583,6 +1584,18 @@ while True:
                     _ev_on = any((v or {}).get("limit_a", 0) >= EV_MIN_CHARGE_AMPS for v in (gpm_actions.get("ev") or {}).values())
                     _ev_sol = bool(getattr(gpm_engine, "ev_solar_charge_active", False))
                     _q = now.hour * 4 + now.minute // 15
+                    # Dygnsplanen räknas om varje kvart (bara i läget styr, kräver kapacitet)
+                    if battery_cfg["control"] == "styr" and battery_cfg.get("plan") and battery_cfg.get("capacity_kwh"):
+                        if _battery["plan_at"] is None or now.minute % 15 == 0 or (now - _battery["plan_at"]) > timedelta(minutes=16):
+                            try:
+                                from database_engine import engine as _peng
+                                _battery["plan"] = battery_plan.plan_from_db(_peng, now, battery_state.get("soc_pct"), battery_cfg,
+                                                                             dynamic_base_load_profile, battery_driver.supported_intents())
+                                _battery["plan_at"] = now
+                            except Exception as _pe:
+                                print(f"⚠️ Batteriplanen hoppade över: {_pe}")
+                                _battery["plan"] = None
+                    _bplan = _battery["plan"] if battery_cfg["control"] == "styr" else None
                     _bdec = battery_control.decide({
                         "soc": battery_state.get("soc_pct"), "price": current_price, "avg_net_w": avg_net,
                         "meter_fresh": _meter_ok_at["t"] is not None and time.time() - _meter_ok_at["t"] < 120,
@@ -1590,6 +1603,7 @@ while True:
                         "peak_reached": bool(cfg.get("peak_shaving_enabled", True)) and float(consumed_kwh_this_hour) >= float(allowed_kwh_now),
                         "ev_charging_grid": _ev_on and not _ev_sol, "ev_solar_active": _ev_on and _ev_sol,
                         "prices_rest_of_day": (all_prices or [])[_q:],
+                        "planned_action": (_bplan or {}).get("action_now"), "plan_saving_kr": (_bplan or {}).get("saving_kr"),
                     }, battery_cfg, battery_driver.supported_intents())
                     gpm_actions["log"].append(f"🔋 (BATTERI): {_bdec['reason']}")
                     if battery_control.should_apply(_bdec, _battery["last"], _battery["at"], now):

@@ -188,7 +188,10 @@ def battery_settings(cfg: dict) -> dict:
     f = lambda k, d: float(bat.get(k, d)) if bat.get(k) is not None else d
     return {"control": control if bat.get("enabled") else "av", "reserve_soc": f("reserve_soc", 20.0),
             "priority_soc": f("priority_soc", 50.0), "max_soc": f("max_soc", 100.0),
-            "max_power_w": f("max_power_w", 5000.0)}
+            "max_power_w": f("max_power_w", 5000.0), "capacity_kwh": f("capacity_kwh", None),
+            "efficiency": f("efficiency", 0.9),
+            # Dygnsplan (battery_plan.py) - bara i läget styr; plan: false = bara reglerna
+            "plan": str(bat.get("plan", True)).lower() not in ("false", "0", "nej", "no")}
 
 
 def build_solar_driver(cfg: dict) -> SolarDriver:

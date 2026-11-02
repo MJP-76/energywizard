@@ -192,11 +192,44 @@ def heat_items(prices, now, strategy_fn, cheap_hours_count=8, current_mode=None)
     return items
 
 
-def build_brief(now, prices, ev_rows, strategy_fn, cheap_hours_count=8, current_mode=None):
+_BAT = {"charge": "🔋 Batteriet laddar", "discharge": "🔋 Batteriet laddar ur", "hold": "🔋 Batteriet sparas",
+        "idle": "🔋 Batteriet vilar"}
+
+
+def battery_items(rows, now):
+    """rows = [(t_slot, action, soc_pct, spot)] ur battery_plan_slots. Sammanhängande pass utom auto."""
+    now = _local(now)
+    blocks = []
+    for t, action, soc, spot in sorted(rows or [], key=lambda r: r[0]):
+        t = _local(t)
+        if blocks and blocks[-1]["action"] == action and blocks[-1]["end"] == t:
+            b = blocks[-1]
+            b["end"] = t + SLOT
+            b["soc"] = soc
+            b["spots"].append(spot)
+        else:
+            blocks.append({"action": action, "start": t, "end": t + SLOT, "soc": soc, "spots": [spot]})
+    out = []
+    for b in blocks:
+        if b["action"] not in _BAT or b["end"] <= now:
+            continue
+        sp = [float(x) for x in b["spots"] if x is not None]
+        avg = sum(sp) / len(sp) if sp else None
+        parts = [f"till {float(b['soc']):.0f} %" if b["soc"] is not None else ""]
+        if avg is not None:
+            parts.append(f"spotpris {_kr(avg)}/kWh")
+        out.append({"kind": "battery", "start": b["start"].isoformat(), "end": b["end"].isoformat(),
+                    "when": _span(max(b["start"], now), b["end"], now), "title": _BAT[b["action"]],
+                    "detail": " · ".join(x for x in parts if x), "active": b["start"] <= now < b["end"]})
+    return out
+
+
+def build_brief(now, prices, ev_rows, strategy_fn, cheap_hours_count=8, current_mode=None, battery_rows=None):
     """{'headline': str, 'items': [...], 'note': str}. items sorterade på starttid, de som
     pågår nu markerade active=True."""
     now = _local(now)
-    items = ev_items(ev_rows, prices, now) + heat_items(prices, now, strategy_fn, cheap_hours_count, current_mode)
+    items = ev_items(ev_rows, prices, now) + heat_items(prices, now, strategy_fn, cheap_hours_count, current_mode) \
+        + battery_items(battery_rows, now)
     items = [i for i in items if datetime.fromisoformat(i["start"]) < now + HORIZON]
     items.sort(key=lambda i: (i["start"], i["kind"] != "ev"))
 

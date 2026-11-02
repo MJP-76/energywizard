@@ -21,8 +21,9 @@ Reglerna, i prioritetsordning (första som gäller vinner):
   5. Elbilen laddar från nätet                             -> håll (töm inte batteriet i bilen)
   6. Elbilen solladdar och batteriet är över prioritetsnivån -> vila (överskottet till bilen)
   7. Batteriet vid/under reservnivån                       -> håll (sparas till strömavbrott)
-  8. Billig timme och dyrare timmar kvar idag              -> håll (spara till de dyra timmarna)
-  9. Annars                                                -> auto (självförbrukning)
+  8. Dygnsplanen (battery_plan.py) för pågående kvart     -> ladda / ladda ur / håll / auto
+  9. (utan plan) Billig timme och dyrare timmar kvar       -> håll (spara till de dyra timmarna)
+ 10. Annars                                                -> auto (självförbrukning)
 
 En avsikt som drivrutinen inte stöder ersätts av närmaste säkra (vila -> håll -> auto).
 Ren funktion; testas i tests/test_battery_control.py.
@@ -83,6 +84,14 @@ def decide(s, cfg, supported=frozenset({"auto"})):
         return out("idle", "ev_solar", f"Elbilen solladdar och batteriet har {soc:.0f} % (över {prio:.0f} %) - solöverskottet går till bilen.")
     if soc <= reserve:
         return out("hold", "reserve", f"Batteriet är på reservnivån ({soc:.0f} % ≤ {reserve:.0f} %) - sparas till strömavbrott.")
+    planned = s.get("planned_action")
+    if planned:
+        from battery_plan import REASON
+        pmax_plan = pmax if planned in ("charge", "discharge") else None
+        detail = f" ({price:.2f} kr/kWh)" if price is not None else ""
+        saving = s.get("plan_saving_kr")
+        extra = f" Planen sparar ≈ {saving:.0f} kr mot ren självförbrukning." if saving and saving >= 1 else ""
+        return out(planned, "plan", f"{REASON.get(planned, 'Planen')}{detail}.{extra}", pmax_plan)
     remaining = s.get("prices_rest_of_day") or []
     p33, p67 = _percentile(remaining, 33), _percentile(remaining, 67)
     if price is not None and p33 is not None and p67 is not None and price <= p33 and p67 > price * 1.2 + 0.05:

@@ -105,3 +105,19 @@ def test_config_standard_ar_samarbete():
 def test_batteriet_syns_i_vad_gors_nu():
     s = summarize(["🔋 (BATTERI): Elbilen laddar från nätet - batteriet töms inte i bilen."])
     assert s["items"] == [{"key": "batteri", "icon": "🔋", "label": "Batteri", "text": "Elbilen laddar från nätet - batteriet töms inte i bilen."}]
+
+
+def test_planen_styr_men_sakerhet_och_elbil_gar_fore():
+    r = d(planned_action="charge", plan_saving_kr=12.0, price=0.3)
+    assert r["intent"] == "charge" and r["rule"] == "plan" and "sparar ≈ 12 kr" in r["reason"]
+    assert d(planned_action="discharge", price=2.5)["intent"] == "discharge"
+    assert d(planned_action="charge", peak_reached=True)["intent"] == "discharge"      # effekttaket först
+    assert d(planned_action="discharge", ev_charging_grid=True)["intent"] == "hold"    # töm inte i bilen
+    assert d(planned_action="discharge", soc=15)["intent"] == "hold"                   # reservnivån först
+    assert d(planned_action=None)["rule"] == "default"                                 # utan plan: reglerna
+
+
+def test_plan_installningar():
+    cfg = battery_settings({"battery": {"enabled": True, "control": "styr", "capacity_kwh": 10, "plan": False}})
+    assert cfg["plan"] is False and cfg["capacity_kwh"] == 10.0 and cfg["efficiency"] == 0.9
+    assert battery_settings({"battery": {"enabled": True}})["plan"] is True

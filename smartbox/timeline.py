@@ -30,7 +30,7 @@ def _hour(ts):
     return ts.replace(minute=0, second=0, microsecond=0)
 
 
-def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_ids=None):
+def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_ids=None, battery_plan=None):
     """now: tz-medveten. past: {timme: {'price','solar_kw','compressor','spa','ev': {car: kW}}}.
     future_prices/future_solar_kw: {timme: värde}. heat_modes: {timme: 'CHEAP'|'EXPENSIVE'|'COMFORT'}.
     ev_plan: {timme: {car: kWh}}. Returnerar en dict för grafen."""
@@ -81,6 +81,22 @@ def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_id
                 ev[c][0].append(kwh)
                 ev[c][1].append(f"Planerat: {kwh:.1f} kWh" if kwh > 0.05 else "Ingen laddning planerad")
 
+    # Husbatteriet: uppmätt effekt bakåt, planerad avsikt framåt (battery_plan.py). Bara om det finns.
+    battery_plan = battery_plan or {}
+    has_bat = any(p.get("battery_kw") is not None for p in past.values()) or bool(battery_plan)
+    bat_v, bat_t = [], []
+    if has_bat:
+        for h, fut in zip(hours, is_future):
+            if not fut:
+                kw = past.get(h, {}).get("battery_kw")
+                bat_v.append(None if kw is None else min(1.0, abs(kw) / 5.0))
+                bat_t.append("Ingen data" if kw is None else f"Laddade {kw:.1f} kW" if kw > 0.05
+                             else f"Laddade ur {-kw:.1f} kW" if kw < -0.05 else "Vilade")
+            else:
+                a = battery_plan.get(h)
+                bat_v.append({"charge": 1.0, "discharge": 1.0, "hold": 0.3, "idle": 0.2, "auto": 0.15}.get(a))
+                bat_t.append({"charge": "Planerat: laddar", "discharge": "Planerat: laddar ur", "hold": "Planerat: sparas",
+                              "idle": "Planerat: vilar", "auto": "Planerat: självförbrukning"}.get(a, "Ingen plan"))
     ev_max = max([v for c in cars for v in ev[c][0] if v] + [1.0])
     lanes = [
         {"key": "varmepump", "label": "Värmepump", "color": "#fb923c", "values": hp, "text": hp_text},
@@ -88,6 +104,8 @@ def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_id
     ] + [{"key": f"ev_{c}", "label": c.capitalize(), "color": CAR_COLORS[i % len(CAR_COLORS)],
           "values": [None if v is None else min(1.0, v / ev_max) for v in ev[c][0]], "text": ev[c][1]}
          for i, c in enumerate(cars)]
+    if has_bat:
+        lanes.append({"key": "batteri", "label": "Batteri", "color": "#0e7490", "values": bat_v, "text": bat_t})
     return {"ok": True, "now": h0.isoformat(), "hours": [h.isoformat() for h in hours],
             "future": is_future, "price": price, "solar_kw": solar, "lanes": lanes}
 
@@ -104,18 +122,19 @@ def load(conn, now=None):
     rows = conn.execute(text("""
         SELECT date_trunc('hour', timestamp AT TIME ZONE 'Europe/Stockholm') AS h,
                avg(price), avg(pv_power_w), avg(compressor_running), avg(spa_heater_running::int),
-               avg(ev_power_kw), avg(ev_carport_power_kw)
+               avg(ev_power_kw), avg(ev_carport_power_kw), avg(battery_power_w)
         FROM sensor_log WHERE timestamp >= :start GROUP BY 1 ORDER BY 1"""),
         {"start": h0 - timedelta(hours=24)}).fetchall()
     f = lambda v: float(v) if v is not None else None
-    for h, pr, pv, comp, spa, ev1, ev2 in rows:
+    for h, pr, pv, comp, spa, ev1, ev2, bat in rows:
         evs = {}
         for col, val in (("ev_power_kw", ev1), ("ev_carport_power_kw", ev2)):
             if val is not None:
                 kw = float(val)
                 evs[CHARGER_CAR[col]] = kw / 1000.0 if kw > 100 else kw        # vissa rader loggade W
         past[h.replace(tzinfo=SWE)] = {"price": f(pr), "solar_kw": f(pv) / 1000.0 if pv is not None else None,
-                                       "compressor": f(comp), "spa": f(spa), "ev": evs}
+                                       "compressor": f(comp), "spa": f(spa), "ev": evs,
+                                       "battery_kw": f(bat) / 1000.0 if bat is not None else None}
 
     prices_q = conn.execute(text("SELECT time_start, sek_per_kwh FROM elpriser WHERE time_start >= :a AND time_start < :b "
                                  "ORDER BY time_start"), {"a": h0 - timedelta(hours=24), "b": h0 + timedelta(hours=25)}).fetchall()
@@ -172,4 +191,17 @@ def load(conn, now=None):
     except Exception:
         conn.rollback()
 
-    return build(now, past, fut_prices, fut_solar, heat_modes, ev_plan, car_ids=list(CHARGER_CAR.values()))
+    bat_plan = {}
+    try:
+        counts = {}
+        for t_slot, action in conn.execute(text("SELECT t_slot, action FROM battery_plan_slots WHERE t_slot >= :a"),
+                                           {"a": h0}).fetchall():
+            hh = _hour(t_slot)
+            counts.setdefault(hh, {}).setdefault(action, 0)
+            counts[hh][action] += 1
+        bat_plan = {hh: max(c, key=c.get) for hh, c in counts.items()}     # timmens vanligaste avsikt
+    except Exception:
+        conn.rollback()
+
+    return build(now, past, fut_prices, fut_solar, heat_modes, ev_plan, car_ids=list(CHARGER_CAR.values()),
+                 battery_plan=bat_plan)

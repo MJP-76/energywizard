@@ -109,6 +109,9 @@ spa:
 #   control: samarbete             # samarbete = läs bara (BESS/Predbat styr) | styr | av
 #   reserve_soc: 20                # sparas alltid till strömavbrott (%)
 #   priority_soc: 50               # över detta får elbilen solöverskottet före batteriet (%)
+#   max_power_w: 5000              # max ladd-/urladdningseffekt (W), för dygnsplanen
+#   efficiency: 0.9                # verkningsgrad tur och retur
+#   plan: true                     # dygnsplan i läget styr (false = bara reglerna)
 #   entities:
 #     soc: sensor.batteri_soc
 #     power: sensor.batteri_effekt               # + = laddar

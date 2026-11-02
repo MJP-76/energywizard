@@ -27,8 +27,13 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   läser bara, för BESS/Predbat), `styr`, `av`. Avsikterna mappas till batteriets egna
   lägen i configen (`modes:`). Skyddsnät från FTW: auto vid start och SIGTERM, lägesbyten
   högst var 5:e minut. Inspiration: evcc (batteri+elbil), FTW (säkerhet), Predbat
-  (märkesmappning). **Steg 3, planering/prisarbitrage över dygnet, väntar** tills någon
-  med batteri kört steg 2 ett tag.
+  (märkesmappning). **Steg 3, dygnsplan (byggd, overifierad mot riktigt batteri):**
+  `smartbox/battery_plan.py` - dynamisk programmering kvart för kvart över resten av
+  dygnet och morgondagen med fullt köp-/säljpris, husets lastprofil, solprognos,
+  elbilens plan, verkningsgrad, reservnivå och en kostnad per lägesbyte (sammanhängande
+  plan, färre skrivningar). Räknas om var 15:e minut i läget styr, sparas i
+  `battery_plan_slots` och syns i planvyn, tidslinjen och "Just nu" med beräknad
+  besparing mot ren självförbrukning. Säkerhetsreglerna går alltid före.
 
   **Predbat, inte [FTW](https://github.com/srcfl/ftw), är referensen för
   själva batteribeslutslogiken** den dagen det byggs: Predbat kör inuti Home

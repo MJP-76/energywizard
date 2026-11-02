@@ -447,15 +447,21 @@ async def api_plan():
             "ORDER BY time_start")).fetchall()
         try:
             ev_rows = c.execute(text("SELECT car_id, t_slot, kw FROM ev_plan_slots")).fetchall()
-        except Exception:      # tabellen skapas först när en laddplan sparats
+        except Exception:
             c.rollback()
             ev_rows = []
+        try:
+            bat_rows = c.execute(text("SELECT t_slot, action, soc_pct, spot FROM battery_plan_slots "
+                                      "WHERE t_slot >= now() - interval '15 minutes' ORDER BY t_slot")).fetchall()
+        except Exception:      # tabellen skapas först när en batteriplan sparats
+            c.rollback()
+            bat_rows = []
         cheap_hours = _settings_row(c, ["cheap_hours_count"]).get("cheap_hours_count") or 8
         mode_row = c.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL "
                                   "ORDER BY timestamp DESC LIMIT 1")).fetchone()
     brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
-                                   int(cheap_hours), mode_row[0] if mode_row else None)
+                                   int(cheap_hours), mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
     return {"ok": True, **brief}
 
 
