@@ -1,59 +1,89 @@
-<svg viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Solceller, värmepump, elbil och batteri kopplade till ett hus som styrs efter elpriset">
-  <defs>
-    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#22d3a0"/>
-      <stop offset="100%" stop-color="#38bdf8"/>
-    </linearGradient>
-  </defs>
+<svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Energiflöde: solceller ger el till huset, som laddar elbilen, driver värmepumpen och säljer överskottet till elnätet - styrt efter elpriset">
+  <style>
+    .t { font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; fill: #93a0b8; }
+    .ink { stroke: #93a0b8; }
+    .house { fill: #111a2e; stroke: #93a0b8; }
+    .panel { fill: #0f2740; stroke: #38bdf8; }
+    .win { fill: #fbbf24; opacity: .25; animation: win 6s ease-in-out infinite; }
+    .track { fill: none; stroke-width: 2; stroke-dasharray: 2 6; opacity: .35; }
+    .rays { transform-origin: 70px 46px; animation: spin 24s linear infinite; }
+    .glow { transform-origin: 70px 46px; animation: pulse 3.2s ease-in-out infinite; }
+    .bolt { animation: blink 1.6s ease-in-out infinite; }
+    .fan { transform-origin: 451px 211px; animation: spin 2.4s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: .18; transform: scale(1); } 50% { opacity: .42; transform: scale(1.18); } }
+    @keyframes blink { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+    @keyframes win { 0%, 100% { opacity: .18; } 50% { opacity: .5; } }
+    @media (prefers-color-scheme: light) {
+      .t { fill: #5b6b85; } .ink { stroke: #5b6b85; }
+      .house { fill: #ffffff; stroke: #5b6b85; } .panel { fill: #e0f2fe; stroke: #0284c7; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .rays, .glow, .bolt, .fan, .win { animation: none; }
+      .dot { display: none; }
+    }
+  </style>
 
-  <!-- flödeslinje -->
-  <path d="M60 170 H700" stroke="url(#flow)" stroke-width="2" stroke-dasharray="2 6" fill="none" opacity=".55"/>
+  <!-- flödesbanor (prickarna rör sig längs dessa) -->
+  <path id="p-sol" class="track" stroke="#fbbf24" d="M98 150 C150 150 170 150 236 150"/>
+  <path id="p-bil" class="track" stroke="#22d3a0" d="M420 168 C490 168 520 214 584 214"/>
+    <path id="p-nat" class="track" stroke="#38bdf8" d="M420 120 C500 120 560 96 640 96"/>
 
   <!-- sol + solceller -->
-  <g transform="translate(40,20)">
-    <circle cx="30" cy="20" r="14" fill="#fbbf24"/>
-    <g stroke="#fbbf24" stroke-width="2" stroke-linecap="round">
-      <path d="M30 0 V-6"/><path d="M52 20 H58"/><path d="M8 20 H2"/>
-      <path d="M45 5 l4 -4"/><path d="M15 5 l-4 -4"/>
-    </g>
-    <rect x="4" y="60" width="52" height="30" rx="3" fill="#0f2740" stroke="#38bdf8" stroke-width="2"/>
-    <path d="M4 68 H56 M4 76 H56 M4 84 H56 M20 60 V90 M38 60 V90" stroke="#38bdf8" stroke-width="1" opacity=".6"/>
-    <path d="M30 90 V150" stroke="#38bdf8" stroke-width="2"/>
-    <circle cx="30" cy="150" r="5" fill="#38bdf8"/>
-    <text x="30" y="172" text-anchor="middle" font-size="12" fill="#93a0b8" font-family="sans-serif">Solceller</text>
+  <circle class="glow" cx="70" cy="46" r="30" fill="#fbbf24"/>
+  <g class="rays" stroke="#fbbf24" stroke-width="3" stroke-linecap="round">
+    <path d="M70 12 V4"/><path d="M70 80 V88"/><path d="M36 46 H28"/><path d="M104 46 H112"/>
+    <path d="M46 22 l-6 -6"/><path d="M94 70 l6 6"/><path d="M94 22 l6 -6"/><path d="M46 70 l-6 6"/>
   </g>
+  <circle cx="70" cy="46" r="16" fill="#fbbf24"/>
+  <g transform="translate(40,120)">
+    <rect class="panel" x="0" y="0" width="58" height="34" rx="4" stroke-width="2"/>
+    <path d="M0 11 H58 M0 22 H58 M19 0 V34 M39 0 V34" stroke="#38bdf8" stroke-width="1" opacity=".6"/>
+  </g>
+  <text class="t" x="69" y="176" text-anchor="middle">Solceller</text>
 
   <!-- hus -->
-  <g transform="translate(220,10)">
-    <path d="M0 70 L70 20 L140 70 V150 H0 Z" fill="#111a2e" stroke="#93a0b8" stroke-width="2"/>
-    <rect x="55" y="95" width="30" height="55" fill="#0b1220" stroke="#93a0b8" stroke-width="1.5"/>
-    <rect x="20" y="95" width="25" height="25" fill="#38bdf822" stroke="#38bdf8" stroke-width="1.5"/>
-    <rect x="95" y="95" width="25" height="25" fill="#22d3a022" stroke="#22d3a0" stroke-width="1.5"/>
-    <circle cx="70" cy="150" r="5" fill="#22d3a0"/>
-    <text x="70" y="172" text-anchor="middle" font-size="12" fill="#93a0b8" font-family="sans-serif">Huset som batteri</text>
+  <g transform="translate(236,70)">
+    <path class="house" d="M0 70 L92 12 L184 70 V160 H0 Z" stroke-width="2"/>
+    <rect class="win" x="24" y="88" width="34" height="26" rx="3"/>
+    <rect class="win" x="126" y="88" width="34" height="26" rx="3" style="animation-delay:-3s"/>
+    <rect x="78" y="110" width="28" height="50" rx="3" fill="none" class="ink" stroke-width="2"/>
   </g>
+  <text class="t" x="318" y="250" text-anchor="middle">Huset – styrs efter elpriset</text>
 
-  <!-- värmepump -->
-  <g transform="translate(420,55)">
-    <rect x="0" y="0" width="50" height="70" rx="6" fill="#0f2740" stroke="#22d3a0" stroke-width="2"/>
-    <path d="M10 15 H40 M10 25 H40 M10 35 H40" stroke="#22d3a0" stroke-width="2" stroke-linecap="round"/>
-    <path d="M25 70 V105" stroke="#22d3a0" stroke-width="2"/>
-    <circle cx="25" cy="105" r="5" fill="#22d3a0"/>
-    <text x="25" y="127" text-anchor="middle" font-size="12" fill="#93a0b8" font-family="sans-serif">Värmepump</text>
+  <!-- värmepump: utedel mot husväggen, fläkten snurrar -->
+  <rect x="428" y="190" width="46" height="42" rx="6" class="house" stroke-width="2"/>
+  <g class="fan" stroke="#fb923c" stroke-width="3" stroke-linecap="round">
+    <path d="M451 200 V222"/><path d="M440 211 H462"/>
   </g>
+  <circle cx="451" cy="211" r="13" fill="none" stroke="#fb923c" stroke-width="2" opacity=".6"/>
+  <text class="t" x="451" y="250" text-anchor="middle">Värmepump</text>
 
-  <!-- elbil -->
-  <g transform="translate(560,70)">
-    <path d="M0 50 q0 -10 10 -10 h10 l12 -22 h46 l12 22 h10 q10 0 10 10 v14 H0 Z" fill="#0f2740" stroke="#38bdf8" stroke-width="2"/>
-    <circle cx="22" cy="64" r="8" fill="#0b1220" stroke="#38bdf8" stroke-width="2"/>
-    <circle cx="78" cy="64" r="8" fill="#0b1220" stroke="#38bdf8" stroke-width="2"/>
-    <path d="M50 20 V-5" stroke="#38bdf8" stroke-width="2"/>
-    <circle cx="50" cy="-5" r="5" fill="#38bdf8"/>
-    <text x="50" y="92" text-anchor="middle" font-size="12" fill="#93a0b8" font-family="sans-serif">Elbil</text>
+  <!-- elnät -->
+  <g transform="translate(640,40)" class="ink" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <path d="M16 4 L30 110 M44 4 L30 110 M12 26 H48 M18 52 H42 M8 14 H52"/>
   </g>
+  <text class="t" x="670" y="176" text-anchor="middle">Elnätet</text>
 
-  <!-- blixt: styrs av elpris -->
-  <g transform="translate(345,160)">
-    <path d="M10 0 L0 16 H8 L2 32 L22 10 H13 L19 0 Z" fill="#fbbf24"/>
+  <!-- elbil + laddblixt -->
+  <g transform="translate(584,190)">
+    <path d="M6 30 L16 10 H66 L80 30 V44 H70 a8 8 0 0 1 -16 0 H32 a8 8 0 0 1 -16 0 H6 Z" class="house" stroke-width="2"/>
+    <path class="bolt" d="M44 -4 L36 12 H46 L40 26" fill="none" stroke="#22d3a0" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+  <text class="t" x="626" y="252" text-anchor="middle">Elbil</text>
+
+  <!-- prickar som flödar (SMIL rör sig även när bilden visas som <img>) -->
+  <g class="dot" fill="#fbbf24">
+    <circle r="4"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#p-sol"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.4s" begin="-0.8s" repeatCount="indefinite"><mpath href="#p-sol"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.4s" begin="-1.6s" repeatCount="indefinite"><mpath href="#p-sol"/></animateMotion></circle>
+  </g>
+  <g class="dot" fill="#22d3a0">
+    <circle r="4"><animateMotion dur="2.8s" repeatCount="indefinite"><mpath href="#p-bil"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="2.8s" begin="-1.4s" repeatCount="indefinite"><mpath href="#p-bil"/></animateMotion></circle>
+  </g>
+  <g class="dot" fill="#38bdf8">
+    <circle r="4"><animateMotion dur="3.2s" repeatCount="indefinite"><mpath href="#p-nat"/></animateMotion></circle>
+    <circle r="4"><animateMotion dur="3.2s" begin="-1.6s" repeatCount="indefinite"><mpath href="#p-nat"/></animateMotion></circle>
   </g>
 </svg>

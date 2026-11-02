@@ -1,5 +1,5 @@
-:root { --bg:#0b1220; --card:rgba(255,255,255,.06); --line:rgba(255,255,255,.10); --txt:#f3f6fb; --mut:#93a0b8; --acc:#22d3a0; --acc2:#38bdf8; --warn:#fbbf24; --r:16px; color-scheme: dark; }
-@media (prefers-color-scheme: light) { :root:not([data-theme]) { --bg:#f2f5fa; --card:rgba(255,255,255,.88); --line:rgba(15,23,42,.10); --txt:#0f172a; --mut:#5b6b85; --acc:#0ea57f; --acc2:#0284c7; color-scheme: light; } }
+:root { --bg:#0b1220; --card:rgba(255,255,255,.06); --line:rgba(255,255,255,.10); --txt:#f3f6fb; --txt2:#dbe3f0; --mut:#93a0b8; --acc:#22d3a0; --acc2:#38bdf8; --warn:#fbbf24; --r:16px; color-scheme: dark; }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) { --bg:#f2f5fa; --card:rgba(255,255,255,.88); --line:rgba(15,23,42,.10); --txt:#0f172a; --txt2:#1e293b; --mut:#5b6b85; --acc:#0ea57f; --acc2:#0284c7; color-scheme: light; } }
 
 * { box-sizing:border-box; }
 html, body { margin:0; min-height:100%; background:var(--bg); color:var(--txt); font:16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, Roboto, sans-serif; }
@@ -29,7 +29,7 @@ nav.top a:hover { color:var(--txt); }
 
 .beta { background:linear-gradient(135deg, rgba(34,211,160,.12), rgba(56,189,248,.08)); border:1px solid var(--line); border-radius:var(--r); padding:26px; margin:28px 0; }
 .beta h2 { margin-top:0; }
-.beta ul { margin:14px 0; padding-left:20px; color:#dbe3f0; }
+.beta ul { margin:14px 0; padding-left:20px; color:var(--txt2); }
 
 .monthtable { width:100%; border-collapse:collapse; margin-top:12px; font-size:.88rem; }
 .monthtable th, .monthtable td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--line); }
@@ -55,7 +55,11 @@ section h2 { font-size:1.4rem; }
 article.post { padding:40px 0 60px; }
 article.post h1 { font-size:1.7rem; }
 article.post .meta { color:var(--mut); font-size:.85rem; margin-bottom:24px; }
-article.post p { color:#dbe3f0; }
+article.post p, article.post li { color:var(--txt2); }
+article.post table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:.92rem; }
+article.post th, article.post td { text-align:left; vertical-align:top; padding:9px 10px; border-bottom:1px solid var(--line); color:var(--txt2); }
+article.post th { color:var(--mut); font-weight:600; font-size:.82rem; text-transform:uppercase; letter-spacing:.03em; }
+@media (max-width:640px) { article.post table { display:block; overflow-x:auto; } }
 article.post code { background:var(--card); padding:2px 6px; border-radius:6px; }
 
 footer { border-top:1px solid var(--line); padding:28px 0 60px; color:var(--mut); font-size:.85rem; }
