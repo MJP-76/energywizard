@@ -27,7 +27,8 @@
   <h3>Märke för märke</h3>
   <table>
     <tr><th>Märke</th><th>Integration</th><th>Exportstyrning</th><th>Status</th></tr>
-    <tr><td>SolarEdge</td><td>egen drivrutin</td><td>ja</td><td>körs i skarp drift</td></tr>
+    <tr><td>SolarEdge</td><td><a href="https://www.home-assistant.io/integrations/solaredge_modbus/">SolarEdge Modbus</a> (officiell, HA 2026.10+)</td>
+        <td>ja, "Active power limit" (%)</td><td>körs i skarp drift (äldre integration)</td></tr>
     <tr><td>Growatt</td><td><a href="https://github.com/0xAHA/Growatt_ModbusTCP">0xAHA/Growatt_ModbusTCP</a></td>
         <td>ja, "Export Limit Power" (%)</td><td>overifierat</td></tr>
     <tr><td>Sungrow SH-RT/RS</td><td><a href="https://github.com/mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant">mkaiser Modbus-paket</a></td>
@@ -43,6 +44,19 @@
   <p>"Overifierat" betyder att drivrutinen är byggd mot integrationens egen källkod
   eller dokumentation och testad med simulerade anrop, men inte körd mot en riktig
   växelriktare än. Har du ett av märkena? Hör av dig, det är precis det vi behöver.</p>
+
+  <h3>SolarEdge</h3>
+  <p>Använd Home Assistants officiella integration
+  <a href="https://www.home-assistant.io/integrations/solaredge_modbus/">SolarEdge Modbus</a>.
+  Den är lokal, ingen molnkoppling behövs, och den finns från HA 2026.10. Entitetsväljaren
+  föreslår dess "Active power limit" (%) med den generiska drivrutinen. Den äldre, handbyggda
+  SolarEdge-drivrutinen används bara om du redan har den äldre HACS-integrationens entiteter.</p>
+
+  <h3>Exportgränsen skrivs sparsamt</h3>
+  <p>Växelriktare sparar sådana inställningar i flashminne, som slits av täta skrivningar.
+  SolarEdge-integrationens dokumentation varnar uttryckligen för det. EnergyWizard skriver
+  därför direkt bara när strypningen börjar, slutar eller går till 0 %. Finjusteringar
+  däremellan skrivs högst var femte minut, och bara när värdet ändras med minst 5 procentenheter.</p>
 
   <h3>Huawei</h3>
   <p><code>huawei_solar</code> styr exportgränsen med tjänsterna

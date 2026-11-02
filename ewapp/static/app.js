@@ -38,8 +38,8 @@ function showLogin(msg) {
   $("#lf").onsubmit = async (e) => { e.preventDefault(); try { await api("login", { user: $("#un").value, password: $("#pw").value }); start(); } catch (er) { showLogin(er.message); } };
 }
 const ER = () => (ROLE === "owner" && VIEWAS) ? VIEWAS : ROLE;                    // effektiv roll: ägaren kan förhandsgranska Elins vy och gästläget
-const CAN = { family: ["theme", "ser", "refreshsoc", "installapp", "tab", "swap", "power", "start", "stop", "auto", "heat_on", "heat_off", "access", "cardata", "lights", "trip", "sch", "schcar", "schtime", "schclock", "rooms", "greet", "log", "health", "settings", "hp", "hr", "planall", "planview", "histview", "solarsheet", "insights", "peaks", "closesheet"],
-              guest: ["theme", "ser", "tab", "health", "settings", "swap", "schcar", "cardata", "rooms", "greet", "log", "report", "hp", "hr", "planall", "planview", "histview", "solarsheet", "insights", "peaks", "closesheet"] };
+const CAN = { family: ["theme", "ser", "refreshsoc", "installapp", "tab", "swap", "power", "start", "stop", "auto", "heat_on", "heat_off", "access", "cardata", "lights", "trip", "sch", "schcar", "schtime", "schclock", "rooms", "greet", "log", "health", "settings", "hp", "hr", "planall", "planview", "histview", "solarsheet", "insights", "peaks", "closesheet", "nowsheet"],
+              guest: ["theme", "ser", "tab", "health", "settings", "swap", "schcar", "cardata", "rooms", "greet", "log", "report", "hp", "hr", "planall", "planview", "histview", "solarsheet", "insights", "peaks", "closesheet", "nowsheet"] };
 const can = (a) => ER() === "owner" || (ROLE === "owner" && a === "viewas") || (CAN[ER()] || []).includes(a);   // ägaren kan alltid byta tillbaka från förhandsvisningen
 const TABS = { owner: ["hem", "bil", "hus", "plan", "historik"], family: ["hem", "bil", "plan"], guest: ["hem", "bil", "hus", "plan", "historik"] };
 const TABNAME = { hem: "Hem", bil: "Bil", hus: "Hus", plan: "Plan", historik: "Historik" };
@@ -190,11 +190,17 @@ function svLine() {                                       // besparingen på en 
   return `<section class="card svline"><div><h4>Sparat genom smart tajmning</h4><div class="v" style="color:${pos ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}<small> kr${p.pct != null ? ` (${p.pct > 0 ? "+" : ""}${f1(p.pct, 0)} %)` : ""}</small></div></div>
     <div class="seg">${SVP.map(([k, l]) => `<button data-a="svp" data-v="${k}" class="${k === svPeriod ? "on" : ""}">${l}</button>`).join("")}</div></section>`;
 }
-function planNow() {
-  if (!PL) return "";
-  const act = (PL.items || []).find((i) => i.active), nxt = (PL.items || []).find((i) => !i.active);
-  const row = (i, lbl) => i ? `<div class="pnrow"><span class="pnl">${lbl}</span><span><b>${esc(i.title)}</b><span class="note"> ${esc(i.when)}</span></span></div>` : "";
-  return `<section class="card plannow" data-a="tab" data-v="plan">${row(act, "Nu")}${row(nxt, "Sen")}${!act && !nxt ? `<div class="note">${esc(PL.headline)}</div>` : ""}</section>`;
+function planNow() {                                   // vad görs nu och varför (per enhet, ur motorns beslut) + nästa steg i planen
+  const now = (EN && EN.now) || [], nxt = PL ? (PL.items || []).find((i) => !i.active) : null;
+  if (!now.length && !nxt) return PL ? `<section class="card plannow" data-a="nowsheet"><div class="note">${esc(PL.headline)}</div></section>` : "";
+  const rows = now.slice(0, 3).map((i) => `<div class="pnrow"><span class="pnl">${esc(i.icon)}</span><span><b>${esc(i.label)}</b><span class="note"> ${esc(i.text)}</span></span></div>`).join("");
+  const later = nxt ? `<div class="pnrow"><span class="pnl">Sen</span><span><b>${esc(nxt.title)}</b><span class="note"> ${esc(nxt.when)}</span></span></div>` : "";
+  return `<section class="card plannow" data-a="nowsheet">${rows}${later}</section>`;
+}
+function nowSheet() {
+  const now = (EN && EN.now) || [];
+  sheet(`<h3>Vad görs nu – och varför</h3>${now.length ? now.map((i) => `<div class="plrow"><div style="flex:none;font-size:1.2rem">${esc(i.icon)}</div><div><b>${esc(i.label)}</b><div class="note">${esc(i.text)}</div></div></div>`).join("") : '<div class="note">Inget beslut loggat de senaste minuterna.</div>'}
+    <div class="crow"><button class="mini" data-a="tab" data-v="plan">Hela planen</button><button class="mini" data-a="closesheet">Stäng</button></div>`);
 }
 function ljusRow() {
   if (!can("lights")) return "";
@@ -490,7 +496,7 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
   const a = b.dataset.a, c = b.dataset.c, v = b.dataset.v;
   if (!can(a)) { toast(ER() === "guest" ? "Gästläge – du kan bara titta" : "Det här kan bara administratören ändra"); return; }
-  if (a === "tab") { if (v !== page) { try { history.pushState({ page: v }, ""); } catch (e) {} } page = v; LS.set("ew_page", v); render(); return load(); }
+  if (a === "tab") { if (!$("#sheet").hidden) $("#sheet").hidden = true; if (v !== page) { try { history.pushState({ page: v }, ""); } catch (e) {} } page = v; LS.set("ew_page", v); render(); return load(); }
   if (a === "planlist") return planSheet(c);
   if (a === "power") return powerSheet(c);
   if (a === "swap") { LS.set("ew_primary", c); return render(); }
@@ -519,6 +525,7 @@ document.addEventListener("click", async (e) => {
   if (a === "trip") return tripSheet(c);
   if (a === "report") return reportSheet();
   if (a === "closesheet") return closeSheet();
+  if (a === "nowsheet") return nowSheet();
   if (a === "solarsheet") { if (EN) solarSheet(); return; }
   if (a === "insights") { if (EN) insightsSheet(); return; }
   if (a === "svp") { svPeriod = v; LS.set("ew_sv_period", v); return render(); }

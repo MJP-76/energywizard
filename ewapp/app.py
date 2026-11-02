@@ -973,9 +973,22 @@ def energy():
     ov = overrides()
     pr = prices()
     raw_lim = val(st, "number.solaredge_modbus_active_power_limit")
-    return {"ok": True,
-            "solar": {"w": num(st, "sensor.solaredge_aktuell_effekt"), "today_kwh": num(st, "sensor.solaredge_el_i_dag"), "forecast_w": num(st, "sensor.smartbox_solprognos"), "status": SE_STATUS.get(val(st, "sensor.solaredge_i1_status"), val(st, "sensor.solaredge_i1_status")),
-                      "limit_pct": None if raw_lim is None else num(st, "number.solaredge_modbus_active_power_limit"), "ai_limit": str(ov.get("ai_solar_limit_active", "false")).lower() == "true",
+    # Motorns egna loggade värden (från vilken soldrivrutin som helst) - reserv när SolarEdge-
+    # entiteterna från det här huset saknas (andra märken, eller SolarEdge via officiella solaredge_modbus).
+    now_items, sl = [], {}
+    try:
+        with ENGINE.connect() as c:
+            r = c.execute(text("SELECT decision_summary, pv_power_w, solar_limit_pct, solar_today_kwh FROM sensor_log "
+                               "WHERE timestamp > now() - interval '10 minutes' ORDER BY timestamp DESC LIMIT 1")).fetchone()
+        if r:
+            now_items = json.loads(r[0]) if r[0] else []
+            sl = {"w": r[1], "limit": r[2], "today": r[3]}
+    except Exception:
+        pass
+    fb = lambda v, k: v if v is not None else (float(sl[k]) if sl.get(k) is not None else None)
+    return {"ok": True, "now": now_items,
+            "solar": {"w": fb(num(st, "sensor.solaredge_aktuell_effekt"), "w"), "today_kwh": fb(num(st, "sensor.solaredge_el_i_dag"), "today"), "forecast_w": num(st, "sensor.smartbox_solprognos"), "status": SE_STATUS.get(val(st, "sensor.solaredge_i1_status"), val(st, "sensor.solaredge_i1_status")),
+                      "limit_pct": fb(None if raw_lim is None else num(st, "number.solaredge_modbus_active_power_limit"), "limit"), "ai_limit": str(ov.get("ai_solar_limit_active", "false")).lower() == "true",
                       "export_price_floor": float(ov.get("solar_export_price_limit", -1.0) or -1.0), "notify": str(ov.get("notify_solar_limit", "true")).lower() == "true"},
             "grid": {"net_w": net_now(), "price": pr.get("now"), "level": pr.get("level")},
             "peaks": month_peaks(), "today_kwh": num(st, "sensor.smartbox_forbrukning_idag"), "saving_today": num(st, "sensor.smartbox_besparing_idag"), "decision": val(st, "sensor.smartbox_beslut"),

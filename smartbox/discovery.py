@@ -55,6 +55,7 @@ GRID = re.compile(r"tibber pulse|p1\b|han\b|power ?meter|elmätare|smart ?meter|
 # drivrutin än" istället för att tyst väljas fel eller gömmas.
 _HEATPUMP_BRAND_TO_DRIVER = {"husdata": "thermia_husdata", "thermia": "thermia_husdata"}
 _SOLAR_BRAND_TO_DRIVER = {"solaredge": "solaredge"}
+_SOLAREDGE_LEGACY_LIMIT = "number.solaredge_modbus_active_power_limit"   # drivers/solar_solaredge.py:s hårdkodade entitet
 _SPA_BRAND_TO_DRIVER = {"gecko": "gecko", "balboa": "balboa"}
 _CHARGER_BRAND_TO_DRIVER = {"easee": "easee"}
 
@@ -194,6 +195,11 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         today_kwh = next((e for e in entities if e["e"].startswith("sensor.") and e.get("u") in ("kWh", "Wh")
                            and e.get("d") == solar_e.get("d") and _has(e.get("n"), re.compile("today|idag|dag", re.I))), None)
         driver = _SOLAR_BRAND_TO_DRIVER.get(brand)
+        if driver == "solaredge" and not any(e["e"] == _SOLAREDGE_LEGACY_LIMIT for e in entities):
+            # Den handbyggda SolarEdge-drivrutinen pekar på entitetsnamn från en äldre HACS-integration.
+            # Utan dem: den officiella solaredge_modbus (HA 2026.10+) har "Active power limit" i % på
+            # växelriktarens enhet - den generiska drivrutinen nedan räcker och följer entiteterna som finns.
+            driver = None
         solar = {
             "pv_power_entity": solar_e["e"], "today_kwh_entity": today_kwh["e"] if today_kwh else None,
             "maker": solar_e.get("m"), "driver": driver, "driver_known": driver in SOLAR_DRIVER_REGISTRY,

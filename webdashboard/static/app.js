@@ -156,6 +156,7 @@ async function renderOversikt() {
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:1.15rem;font-weight:700">${emoji} ${d.decision}</div>
       <div class="note" style="margin-top:4px">💸 ${fmtKrOre(d.price)}/kWh · 🌡️ Inne ${fmt(d.indoor_temp, 1, "°C")} (mål ${d.indoor_target.toFixed(0)}) · 🌳 Ute ${fmt(d.outdoor_temp, 1, "°C")}</div>
+      ${(d.decision_items || []).length ? `<div style="margin-top:12px;display:grid;gap:8px">${d.decision_items.map((i) => `<div style="display:flex;gap:10px;align-items:baseline;padding-top:8px;border-top:1px solid var(--line)"><span>${esc(i.icon)}</span><div><b>${esc(i.label)}</b> <span class="note" style="font-size:.9rem">${esc(i.text)}</span></div></div>`).join("")}</div>` : ""}
     </div>
     <div class="grid" style="margin-bottom:16px"><div id="savingsslot"></div><div id="planslot"></div></div>
     <div class="card" style="margin-bottom:16px"><span class="note">⚡ Aktuell effekttariff: ${tariff}</span></div>

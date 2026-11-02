@@ -226,6 +226,18 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   för att stoppa all laddning. 17 tester (`tests/test_fuse_guard.py`), både
   aktivering och icke-aktivering.
 
+- **"Vad görs nu och varför" per enhet + SolarEdge via officiella integrationen.**
+  Beslutstexten var förut gpm-loggens sista rad - nästan alltid effektvaktens "Peak
+  Shaving är inaktiverat". Nu en mening per enhet (elbil, värmepump, varmvatten,
+  spabad, sol, effekttak) med gpm.py:s egen förklaring, informationsrader bortfiltrerade
+  (`smartbox/decision_summary.py`, sparas som `sensor_log.decision_summary` och som
+  attributet `per_enhet` på `sensor.smartbox_beslut`). Visas överst på webbens Översikt
+  och på appens Hem. SolarEdge: entitetsväljaren föreslår den officiella
+  [SolarEdge Modbus](https://www.home-assistant.io/integrations/solaredge_modbus/)
+  (HA 2026.10) via `generic_number`; den handbyggda drivrutinen bara när den äldre
+  integrationens entitet finns. Exportgränsen skrivs sparsamt för att inte slita
+  växelriktarens flashminne (`smartbox/solar_write_guard.py`).
+
 - **Mobilappen i fem flikar + historik i webben och appen.** `ewapp`: Hem (Just nu /
   Härnäst, sol och nät live, besparing på en rad - bara för ägaren, även i servern -
   och ljusknappar), Bil, Hus, Plan (planen eller laddschemat) och Historik (Energi:

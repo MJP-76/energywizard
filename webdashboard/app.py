@@ -246,6 +246,7 @@ async def overview(request: Request):
         "heat_mode": ov.get("heat", "auto"), "hotwater_mode": ov.get("hotwater", "auto"),
         "temp_cheap": _n(cfg.get("temp_cheap")), "temp_expensive": _n(cfg.get("temp_expensive")),
         "decision": row.get("active_decision") or "Utvärderar…",
+        "decision_items": _json_list(row.get("decision_summary")),     # vad görs nu och varför, per enhet
         "price": _n(row.get("price")),
         "indoor_temp": _n(row.get("indoor_temp")),
         "indoor_target": target_room,
@@ -297,6 +298,15 @@ def _latest_row(c):
         "SELECT *, timestamp AT TIME ZONE 'Europe/Stockholm' AS sthlm_time FROM sensor_log ORDER BY timestamp DESC LIMIT 1"
     )).mappings().first()
     return dict(row) if row else None
+
+
+def _json_list(raw):
+    import json
+    try:
+        v = json.loads(raw) if raw else []
+        return v if isinstance(v, list) else []
+    except (ValueError, TypeError):
+        return []
 
 
 def _overrides(c, keys):

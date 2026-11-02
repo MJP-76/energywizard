@@ -146,6 +146,7 @@ def init_log_db():
                         ADD COLUMN IF NOT EXISTS accumulated_consumption_kwh NUMERIC,
                         ADD COLUMN IF NOT EXISTS active_mode           VARCHAR(50),
                         ADD COLUMN IF NOT EXISTS active_decision       TEXT,
+                        ADD COLUMN IF NOT EXISTS decision_summary      TEXT,
                         ADD COLUMN IF NOT EXISTS price_forecast        NUMERIC,
                         ADD COLUMN IF NOT EXISTS house_consumption_w   NUMERIC,
                         ADD COLUMN IF NOT EXISTS pi_p_term             NUMERIC,
@@ -235,6 +236,7 @@ def log_status(
     ai_action_log: str = None,   # Text som beskriver vad AI:n skulle ha gjort
     active_mode: str = None,     # Det aktiva driftläget (t.ex. EXPENSIVE)
     active_decision: str = None, # Den senaste beslutstexten
+    decision_summary: str = None, # JSON: vad görs nu och varför, per enhet (decision_summary.py)
     price_forecast: float = None,
     house_consumption_w: float = None,
     pi_p_term: float = None,
@@ -378,6 +380,7 @@ def log_status(
             "accumulated_consumption_kwh": p.get("accumulated_consumption_kwh"),
             "active_mode": active_mode,
             "active_decision": active_decision,
+            "decision_summary": decision_summary,
             "price_forecast": price_forecast,
             "house_consumption_w": house_consumption_w,
             "pi_p_term": pi_p_term,

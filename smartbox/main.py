@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 import threading
 import math
@@ -24,6 +25,8 @@ import learning         # AI-modeller för temperatur och avsvalning
 import mpc               # Prediktiv förvärmnings-planerare (skuggläge + veckovis självvalidering)
 import house_config      # EnergyWizard Open: drivrutinsarkitektur (bil/laddare/värmepump/sol/spa)
 import ev_handshake      # Generisk laddar-handskakning (vilken fysisk laddare hör till vilken bil)
+import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg)
+import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
 import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
 
@@ -151,6 +154,7 @@ last_quarter         = None
 last_weather_update  = None
 current_mode         = "EXPENSIVE"
 current_decision     = "Startar..."
+current_decision_items = []
 current_chosen_water = decisions.WATER_OFF
 current_chosen_temp  = 200
 indoor_temp          = None  # FIX: för-initieras så pumpen offline vid uppstart inte ger NameError
@@ -183,7 +187,8 @@ last_washer_running  = True
 # Säkerhetslarm för kallt inne (auto-värme kan vara avstängd i manuellt pumpläge)
 INDOOR_COLD_ALERT_C  = 18.0
 indoor_cold_alerted  = False
-last_sent_solar_limit = None 
+last_sent_solar_limit = None
+last_solar_write_at = None   # när exportgränsen senast skrevs (solar_write_guard.py)
 last_solar_notified_state = False
 solar_limit_debounce_counter = 0 
 last_solar_notify_time = None
@@ -1523,7 +1528,11 @@ while True:
             except Exception as _e:
                 print(f"⚠️ Kunde inte spara sol-laddningsläge: {_e}")
             ai_thoughts_list = gpm_actions["log"].copy()
-            current_decision = gpm_actions["log"][-1] if gpm_actions["log"] else "Utvärderad"
+            # Förut: loggens SISTA rad - nästan alltid effektvaktens "Peak Shaving är inaktiverat". Nu en
+            # rubrik + en mening per enhet om vad som görs och varför (decision_summary.py).
+            _summary = decision_summary.summarize(gpm_actions["log"], gpm_actions)
+            current_decision = _summary["headline"]
+            current_decision_items = _summary["items"]
             
             # EV-laddning: generisk loop över car_ids (Steg 4:4) - ersätter de tidigare
             # duplicerade nissan/tesla-blocken. gpm_actions['ev'][car_id] byggs redan
@@ -1610,9 +1619,13 @@ while True:
 
             # Solar Limit
             new_solar_limit = gpm_actions.get("solar_limit_pct")
-            if new_solar_limit is not None and new_solar_limit != last_sent_solar_limit and isinstance(new_solar_limit, (int, float)):
+            # Flashminnet i växelriktaren tål begränsat antal skrivningar - start/stopp direkt,
+            # finjustering högst var 5:e minut (solar_write_guard.py).
+            if isinstance(new_solar_limit, (int, float)) and solar_write_guard.should_write(
+                    new_solar_limit, last_sent_solar_limit, last_solar_write_at, now):
                 if solar_driver.set_export_limit_pct(int(new_solar_limit)):
                     last_sent_solar_limit = new_solar_limit
+                    last_solar_write_at = now
                     
             if new_solar_limit is not None:
                 is_limiting = new_solar_limit < 100
@@ -1858,6 +1871,7 @@ while True:
                 mower_data=mower_data,
                 ai_action_log="\n\n".join(ai_thoughts_list),
                 active_mode=current_mode, active_decision=current_decision,
+                decision_summary=json.dumps(current_decision_items, ensure_ascii=False),
                 price_forecast=next_price, house_consumption_w=house_consumption_w,
                 pi_p_term=pi_p_term, pi_i_term=pi_i_term,
                 peak_shaving_active=peak_shaving_active, force_heating_active=force_heating_active,
@@ -1881,7 +1895,7 @@ while True:
                     "sensor.smartbox_varmvatten": (_r1(water_temp), {"friendly_name": "Smartbox Varmvatten", "unit_of_measurement": "°C", "device_class": "temperature"}),
                     "sensor.smartbox_cop": (_r1(cop, 2), {"friendly_name": "Smartbox COP", "icon": "mdi:heat-pump"}),
                     "sensor.smartbox_lage": (current_mode, {"friendly_name": "Smartbox Läge", "icon": "mdi:brain"}),
-                    "sensor.smartbox_beslut": ((current_decision or "")[:250] or None, {"friendly_name": "Smartbox Beslut", "icon": "mdi:head-cog", "fullstandigt": (current_decision or "")[:1500]}),
+                    "sensor.smartbox_beslut": ((current_decision or "")[:250] or None, {"friendly_name": "Smartbox Beslut", "icon": "mdi:head-cog", "per_enhet": current_decision_items, "fullstandigt": (current_decision or "")[:1500]}),
                     "sensor.smartbox_tesla_batteri": (_r1(tesla_data.get("soc"), 0) if tesla_data else None, {"friendly_name": "Smartbox Tesla batteri", "unit_of_measurement": "%", "device_class": "battery", "senast_kand": bool(tesla_soc_stale), "alder_min": (round((now - _soc_mem["tesla"][1]).total_seconds() / 60) if tesla_soc_stale and _soc_mem["tesla"][1] else 0)}),
                     "sensor.smartbox_leaf_batteri": (_r1(nissan_data.get("soc"), 0) if nissan_data else None, {"friendly_name": "Smartbox Leaf batteri", "unit_of_measurement": "%", "device_class": "battery", "senast_kand": bool(nissan_soc_stale), "alder_min": (round((now - _soc_mem["nissan"][1]).total_seconds() / 60) if nissan_soc_stale and _soc_mem["nissan"][1] else 0)}),
                     "binary_sensor.smartbox_kompressor": ("on" if (pump_data and pump_data.get("compressor_running") == 1) else "off", {"friendly_name": "Smartbox Kompressor", "device_class": "running"}),

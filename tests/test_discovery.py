@@ -95,7 +95,31 @@ def test_solaredge_hittas_med_bade_effekt_och_dagsenergi():
     assert result["solar"] is not None
     assert result["solar"]["pv_power_entity"] == "sensor.solaredge_power"
     assert result["solar"]["today_kwh_entity"] == "sensor.solaredge_today"
-    assert result["solar"]["driver"] == "solaredge" and result["solar"]["driver_known"] is True
+    # Utan den äldre integrationens exportgräns-entitet: generiska drivrutinen, inte den hårdkodade.
+    assert result["solar"]["driver"] is None and result["solar"]["generic_suggestion"]["driver"] == "generic_number"
+
+
+def test_solaredge_med_aldre_integrationens_entitet_far_egna_drivrutinen():
+    legacy = [e for e in SYNTHETIC_ENTITIES if e["e"].startswith("sensor.solaredge")] + [
+        {"e": "number.solaredge_modbus_active_power_limit", "n": "Active Power Limit", "a": None, "d": "dev_inverter",
+         "dn": "SolarEdge Inverter", "m": "SolarEdge", "mo": "SE10K", "dc": None, "u": "%", "st": "100"}]
+    r = discover_house(legacy)
+    assert r["solar"]["driver"] == "solaredge" and r["solar"]["driver_known"] is True
+
+
+def test_solaredge_via_officiella_solaredge_modbus():
+    """HA 2026.10: solaredge_modbus har 'Active power limit' i % på växelriktaren -> generisk drivrutin."""
+    official = [
+        {"e": "sensor.solaredge_se10k_power", "n": "SolarEdge SE10K Power", "a": None, "d": "dev_se",
+         "dn": "SolarEdge SE10K", "m": "SolarEdge", "mo": "SE10K", "dc": "power", "u": "W", "st": "4100"},
+        {"e": "number.solaredge_se10k_active_power_limit", "n": "SolarEdge SE10K Active power limit", "a": None, "d": "dev_se",
+         "dn": "SolarEdge SE10K", "m": "SolarEdge", "mo": "SE10K", "dc": None, "u": "%", "st": "100"},
+    ]
+    r = discover_house(official)
+    assert r["solar"]["generic_suggestion"] == {
+        "driver": "generic_number",
+        "entities": {"pv_power_w": "sensor.solaredge_se10k_power", "export_limit_pct": "number.solaredge_se10k_active_power_limit"},
+    }
 
 
 def test_gecko_spa_hittas():
