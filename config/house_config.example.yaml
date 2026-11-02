@@ -101,6 +101,33 @@ spa:
 #     target_temp: sensor.mitt_spa_maltemp         # valfri
 #     power_w: sensor.mitt_spa_effekt              # valfri - utelämna om du saknar en effektsensor
 
+# --- Elmätare (rekommenderas) ---
+# Behövs för effektvakten, säkringsskyddet och solladdningen. Utan den här sektionen letar
+# EnergyWizard upp en Tibber Pulse automatiskt. Välj EN av formerna:
+# power_meter:
+#   driver: tibber_pulse            # spänning + ström per fas (bäst: ger säkringsskyddet fasströmmar)
+#   entities:
+#     voltage_l1: sensor.tibber_pulse_hemma_spanning_fas1
+#     voltage_l2: sensor.tibber_pulse_hemma_spanning_fas2
+#     voltage_l3: sensor.tibber_pulse_hemma_spanning_fas3
+#     current_l1: sensor.tibber_pulse_hemma_strom_fas1
+#     current_l2: sensor.tibber_pulse_hemma_strom_fas2
+#     current_l3: sensor.tibber_pulse_hemma_strom_fas3
+#     hour_kwh: sensor.tibber_pulse_hemma_ackumulerad_forbrukning_under_aktuell_timme   # valfri
+#
+# power_meter:
+#   driver: power_w                 # en sensor med nettoeffekt (+ köper, - säljer)
+#   power_w_invert: false           # true om mätaren visar EXPORT som positivt
+#   entities:
+#     power_w: sensor.min_elmatare_effekt
+#     current_l1: sensor.min_elmatare_strom_l1      # valfritt, men ger säkringsskyddet riktiga värden
+#
+# power_meter:
+#   driver: import_export           # P1/HAN-mätare med separata sensorer
+#   entities:
+#     import_w: sensor.p1_power_consumed
+#     export_w: sensor.p1_power_produced
+
 # --- Huvudsäkring ---
 fuse:
   main_fuse_a: 25

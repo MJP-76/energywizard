@@ -45,9 +45,9 @@ OCPP_NUMBER_SUFFIX = re.compile(r"maximum_current$", re.I)
 # uttryckligen i texten för att skiljas från en Tesla-bil).
 BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|solax battery|victron battery", re.I)
 # Nätimport/elmätare: ett hus kan ha Tibber Pulse, en smartmätare (HAN/P1-port) eller
-# båda samtidigt - inte antingen-eller (Emils egen poäng, 2026-10-30). Ingen av dem är
-# idag en pluggbar drivrutin i EnergyWizard (main.py läser Tibber Pulse hårdkodat via
-# TIBBER_ENTITIES i homeassistant.py) - visas här bara informativt tills det blir det.
+# båda samtidigt - inte antingen-eller (Emils egen poäng, 2026-10-30). Förslaget blir en
+# power_meter:-sektion (homeassistant.configure_power_meter): en Tibber Pulse med spänning +
+# ström per fas om en sådan finns, annars första nätmätarens effektsensor (power_w).
 GRID = re.compile(r"tibber pulse|p1\b|han\b|power ?meter|elmätare|smart ?meter|nätimport|grid import|consumption", re.I)
 
 # Märke -> drivrutinsnyckel, bara för märken som FAKTISKT har en registrerad
@@ -243,6 +243,14 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             continue
         kind = "pulse" if _has(_candidate(e), re.compile("tibber", re.I)) else "smartmätare"
         grid_meters.append({"power_entity": e["e"], "maker": e.get("m"), "kind": kind})
+    from homeassistant import detect_tibber_pulse
+    pulse = detect_tibber_pulse([e["e"] for e in entities])
+    if pulse:
+        power_meter = {"driver": "tibber_pulse", "entities": pulse}
+    elif grid_meters:
+        power_meter = {"driver": "power_w", "entities": {"power_w": grid_meters[0]["power_entity"]}}
+    else:
+        power_meter = None
 
     # --- Värmepump: enhet vars tillverkare/modell/namn matchar HEATPUMP ---
     heat_pump = None
@@ -363,4 +371,4 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             battery["generic_suggestion"] = {"driver": "generic", "entities": suggested}
         break
 
-    return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "battery": battery}
+    return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "power_meter": power_meter, "battery": battery}

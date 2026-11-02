@@ -99,6 +99,7 @@ default_car_per_charger = house_config.build_default_car_per_charger(house_cfg)
 heat_pump_driver = house_config.build_heat_pump_driver(house_cfg)
 solar_driver = house_config.build_solar_driver(house_cfg)
 spa_driver = house_config.build_spa_driver(house_cfg)
+homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
 car_ids = [c.id for c in car_drivers] or ['nissan', 'tesla']  # tomt hus (inga bilar i configen än) faller tillbaka på dagens två, matchar gpm.py:s egen default
 ev_allocations = {physical_id: None for physical_id in physical_charger_drivers}
 print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepump={type(heat_pump_driver).__name__}, "
@@ -558,6 +559,7 @@ fast_hl1, fast_hl2, fast_hl3 = [], [], []
 fuse_model = fuse_guard.FuseThermalModel()
 _fuse_cfg = {"fuse_a": decisions.MAX_FUSE_A, "margin_a": 0.0}
 _fuse_charger_ids = {}
+_hour_import = {"h": None, "wh": 0.0, "t": None}   # köpt energi denna timme (reserv när mätaren saknar timsensor)
 
 def get_last_legionella(target_temp):
     try:
@@ -582,13 +584,25 @@ while True:
         # ============================================================
         homeassistant.update_states()
 
-        tibber = homeassistant.read_tibber_data()
+        tibber = homeassistant.read_power_meter()
         if tibber is not None:
             fast_net.append(tibber["net_power_w"])
-            fast_hl1.append(tibber["l1_a"])
-            fast_hl2.append(tibber["l2_a"])
-            fast_hl3.append(tibber["l3_a"])
-            fuse_model.update([tibber["l1_a"], tibber["l2_a"], tibber["l3_a"]])
+            # Fasströmmar är valfria (en mätare med bara nettoeffekt har inga) - då får säkrings-
+            # modellen ingen data och gpm.py använder den gamla formeln.
+            if None not in (tibber["l1_a"], tibber["l2_a"], tibber["l3_a"]):
+                fast_hl1.append(tibber["l1_a"])
+                fast_hl2.append(tibber["l2_a"])
+                fast_hl3.append(tibber["l3_a"])
+                fuse_model.update([tibber["l1_a"], tibber["l2_a"], tibber["l3_a"]])
+            # Reserv för effektvakten när mätaren saknar en timsensor: köpt energi denna timme,
+            # integrerad ur nettoeffekten (10-sekundersloopen).
+            _hk = now.replace(minute=0, second=0, microsecond=0)
+            if _hour_import.get("h") != _hk:
+                _hour_import.update(h=_hk, wh=0.0, t=None)
+            _t = time.time()
+            if _hour_import["t"] is not None:
+                _hour_import["wh"] += max(0.0, tibber["net_power_w"]) * min(60.0, _t - _hour_import["t"]) / 3600.0
+            _hour_import["t"] = _t
             # Nödbroms: en fas över 1,2 × säkringen stryper bilarna direkt, inte först nästa minut.
             try:
                 _trip = fuse_guard.fast_trip_limits(fuse_model, _fuse_cfg["fuse_a"],
@@ -1240,7 +1254,9 @@ while True:
             last_leg = get_last_legionella(leg_temp)
             days_since_leg = (now - last_leg).total_seconds() / 86400.0 if last_leg else 999.0
 
-            consumed_kwh_this_hour = homeassistant._get_numeric_state("sensor.tibber_pulse_malmgatan_34_ackumulerad_forbrukning_under_aktuell_timme") or 0.0
+            consumed_kwh_this_hour = homeassistant.read_hour_kwh()
+            if consumed_kwh_this_hour is None:      # mätaren saknar timsensor: integrerat ur nettoeffekten
+                consumed_kwh_this_hour = _hour_import["wh"] / 1000.0 if _hour_import.get("h") == now.replace(minute=0, second=0, microsecond=0) else 0.0
             if now.minute == 0:
                 consumed_kwh_this_hour = 0.0
 

@@ -852,6 +852,14 @@ def _build_house_config_yaml(sel: dict) -> str:
             lines.append(f"    {key}: {val}")
     else:
         lines += ["battery:", "  enabled: false"]
+    pm = sel.get("power_meter")
+    if pm and pm.get("entities"):
+        lines += ["", "power_meter:   # nätimport/-export och fasströmmar (effektvakt, säkringsskydd, solladdning)",
+                  f"  driver: {pm.get('driver') or 'power_w'}", "  entities:"]
+        for key, val in pm["entities"].items():
+            lines.append(f"    {key}: {val}")
+        if pm.get("driver") == "power_w":
+            lines.append("    # power_w_invert: true   # om mätaren visar EXPORT som positivt")
     lines += ["", "fuse:", "  main_fuse_a: 25  # FYLL I - din huvudsäkring i Ampere"]
 
     return "\n".join(lines) + "\n"

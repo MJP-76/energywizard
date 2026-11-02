@@ -166,6 +166,17 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
     return driver_cls()
 
 
+def power_meter_entities(cfg: dict) -> dict:
+    """Elmätarens entiteter ur power_meter: (se homeassistant.configure_power_meter för formerna).
+    Tom dict = ingen elmätare konfigurerad."""
+    pm = (cfg or {}).get("power_meter") or {}
+    ents = dict(pm.get("entities") or {})
+    for k in ("power_w_invert",):
+        if k in pm and k not in ents:
+            ents[k] = pm[k]
+    return ents
+
+
 def build_solar_driver(cfg: dict) -> SolarDriver:
     sol = cfg.get("solar", {})
     if not sol.get("enabled"):

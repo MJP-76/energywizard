@@ -226,6 +226,17 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   för att stoppa all laddning. 17 tester (`tests/test_fuse_guard.py`), både
   aktivering och icke-aktivering.
 
+- **Elmätaren är konfigurerbar (`power_meter:` i house_config.yaml).** Förut läste
+  motorn en enda hårdkodad Tibber Pulse - alla andra installationer fick ingen
+  nätmätning, alltså varken effektvakt, säkringsskydd eller solladdning. Nu: per fas
+  (spänning + ström, t.ex. Tibber Pulse), en nettoeffekt-sensor, eller import/export
+  (P1/HAN). Utan sektionen letas en Tibber Pulse upp automatiskt efter namnmönster
+  (svenska/engelska namn), så befintliga hus fortsätter fungera. Timförbrukningen till
+  effektvakten tas från mätarens sensor om den finns, annars integreras den ur
+  nettoeffekten. Entitetsväljaren föreslår sektionen. Adressen i entitetsnamnen är
+  borta ur motorns kod; den finns kvar i `config/examples/emil_house.yaml`, i den äldre
+  Gecko-spadrivrutinen, i `ewapp` (spa/väder) och i `smartdashboard` (fasas ut).
+
 - **Översikten lever: "Just nu"-flöde + dygnet timme för timme. Spabad och Elbil utökade.**
   Flödesbilden (`smartbox/live_flow.py`) visar bara det huset har - sol, nät, hus
   alltid, värmepump/varmvatten/spabad/bilar/batteri om de rapporterar - med prickar

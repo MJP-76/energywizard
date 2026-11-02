@@ -1,5 +1,6 @@
 import os
 import time
+import re
 import requests
 import urllib3
 import traceback
@@ -86,14 +87,20 @@ TESLA_ENTITIES = {
 }
 
 # --- TIBBER (Ersätter Shelly för husets total) ---
-TIBBER_ENTITIES = {
-    "v1": "sensor.tibber_pulse_malmgatan_34_spanning_fas1",
-    "v2": "sensor.tibber_pulse_malmgatan_34_spanning_fas2",
-    "v3": "sensor.tibber_pulse_malmgatan_34_spanning_fas3",
-    "i1": "sensor.tibber_pulse_malmgatan_34_strom_fas1",
-    "i2": "sensor.tibber_pulse_malmgatan_34_strom_fas2",
-    "i3": "sensor.tibber_pulse_malmgatan_34_strom_fas3",
-}
+# Elmätaren (nätimport/-export, fasströmmar) kommer från husets config (power_meter: i
+# house_config.yaml), satt av main.py via configure_power_meter() vid start. Förut hårdkodad
+# till ett enda hus Tibber Pulse - då fick alla andra installationer ingen nätmätning alls.
+POWER_METER = {}
+
+
+def configure_power_meter(entities: dict | None):
+    """Sätter elmätarens entiteter. Stödda former (se read_power_meter):
+      per fas:   voltage_l1..3 + current_l1..3            (t.ex. Tibber Pulse)
+      netto:     power_w (+ power_w_invert: true om export är positiv) (+ current_l1..3 valfritt)
+      import/export: import_w + export_w                   (t.ex. P1/HAN-mätare) (+ current_l1..3 valfritt)
+    Valfritt: hour_kwh = förbrukad energi hittills denna timme (effektvakten)."""
+    POWER_METER.clear()
+    POWER_METER.update({k: v for k, v in (entities or {}).items() if v not in (None, "")})
 
 # --- SOLAREDGE (Från HA) ---
 SOLAREDGE_ENTITIES = {
@@ -316,35 +323,78 @@ def read_tesla_data():
         "charging_state": ("charging" if _get_raw_state("binary_sensor.tesla_model_y_charging") == "on" else _get_raw_state(TESLA_ENTITIES["charging_state"]))   # sensor.tesla_model_y_charging_state finns inte längre
     }
 
-def read_tibber_data():
+_PULSE_PATTERNS = {
+    "voltage": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:spanning_fas|voltage_phase|voltage_l)([123])$"),
+    "current": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:strom_fas|current_phase|current_l)([123])$"),
+    "hour": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:ackumulerad_forbrukning_under_aktuell_timme|accumulated_consumption_current_hour)$"),
+}
 
-    """Hämtar spänning och ström från Tibber och beräknar nettoeffekt."""
-    try:
-        v1 = _get_numeric_state(TIBBER_ENTITIES["v1"])
-        v2 = _get_numeric_state(TIBBER_ENTITIES["v2"])
-        v3 = _get_numeric_state(TIBBER_ENTITIES["v3"])
-        i1 = _get_numeric_state(TIBBER_ENTITIES["i1"])
-        i2 = _get_numeric_state(TIBBER_ENTITIES["i2"])
-        i3 = _get_numeric_state(TIBBER_ENTITIES["i3"])
 
-        if None in (v1, v2, v3, i1, i2, i3):
+def detect_tibber_pulse(entity_ids) -> dict:
+    """Hittar en Tibber Pulse bland HA:s entiteter efter namnmönster (svenska eller engelska namn).
+    Kräver spänning + ström på alla tre faser från SAMMA Pulse. {} om ingen hittas."""
+    found = {}
+    for eid in entity_ids:
+        for kind, rx in _PULSE_PATTERNS.items():
+            m = rx.match(eid)
+            if m:
+                key = f"{kind}_l{m.group(2)}" if kind != "hour" else "hour_kwh"
+                found.setdefault(m.group(1), {})[key] = eid
+    for prefix in sorted(found):
+        e = found[prefix]
+        if all(f"{k}_l{n}" in e for k in ("voltage", "current") for n in (1, 2, 3)):
+            return e
+    return {}
+
+
+def read_power_meter():
+    """{'net_power_w': W (+ köper, - säljer), 'l1_a'/'l2_a'/'l3_a': A eller None} - None om mätaren
+    inte är konfigurerad eller inte svarar. Utan power_meter: i configen letas en Tibber Pulse
+    upp automatiskt (en gång), så befintliga installationer fortsätter fungera."""
+    e = POWER_METER
+    if not e:
+        if not _states_cache:
+            update_states()
+        auto = detect_tibber_pulse(_states_cache.keys())
+        if not auto:
             return None
-
-        # P = U * I. Negativ ström i Tibber betyder export.
-        p1 = v1 * i1
-        p2 = v2 * i2
-        p3 = v3 * i3
-        net_power = p1 + p2 + p3
-
-        return {
-            "net_power_w": net_power,
-            "l1_a": i1,
-            "l2_a": i2,
-            "l3_a": i3,
-    }
-    except Exception as e:
-        print(f"❌ Fel vid Tibber-läsning: {e}")
+        POWER_METER.update(auto)
+        print(f"🔌 Elmätare: ingen power_meter i house_config.yaml - hittade en Tibber Pulse automatiskt ({auto['current_l1']}).")
+        e = POWER_METER
+    try:
+        cur = [_get_numeric_state(e[k]) if e.get(k) else None for k in ("current_l1", "current_l2", "current_l3")]
+        if all(e.get(k) for k in ("voltage_l1", "voltage_l2", "voltage_l3", "current_l1", "current_l2", "current_l3")):
+            volt = [_get_numeric_state(e[k]) for k in ("voltage_l1", "voltage_l2", "voltage_l3")]
+            if None in volt or None in cur:
+                return None
+            net = sum(v * i for v, i in zip(volt, cur))          # P = U × I, negativ ström = export
+        elif e.get("power_w"):
+            net = _get_numeric_state(e["power_w"])
+            if net is None:
+                return None
+            if str(e.get("power_w_invert", "")).lower() in ("1", "true", "yes", "ja"):
+                net = -net
+        elif e.get("import_w"):
+            imp = _get_numeric_state(e["import_w"])
+            exp = _get_numeric_state(e["export_w"]) if e.get("export_w") else 0.0
+            if imp is None:
+                return None
+            net = imp - (exp or 0.0)
+        else:
+            return None
+        return {"net_power_w": net, "l1_a": cur[0], "l2_a": cur[1], "l3_a": cur[2]}
+    except Exception as ex:
+        print(f"❌ Fel vid läsning av elmätaren: {ex}")
         return None
+
+
+def read_hour_kwh():
+    """Förbrukad energi denna timme från mätarens egen sensor, None om den inte är konfigurerad."""
+    k = POWER_METER.get("hour_kwh")
+    return _get_numeric_state(k) if k else None
+
+
+read_tibber_data = read_power_meter      # gammalt namn, kvar för bakåtkompatibilitet
 
 
 def read_solaredge():

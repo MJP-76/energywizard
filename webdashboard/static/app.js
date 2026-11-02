@@ -46,7 +46,6 @@ const SAVINGS_PERIODS = [["today", "Idag"], ["week", "7 dagar"], ["month", "Mån
 let savingsPeriod = "week";
 try { savingsPeriod = localStorage.getItem("ew_savings_period") || "week"; } catch (e) { /* privat läge */ }
 
-function esc(t) { return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
 
 function savingsCardHtml(d) {
   const p = d.periods[savingsPeriod] || d.periods.week;
@@ -934,7 +933,8 @@ async function runDiscovery() {
   html += `</div>`;
 
   html += `<div class="card" style="margin-bottom:16px"><h2>⚡ Elmätare / Tibber Pulse</h2>
-    <div class="note">Bara informativt än - EnergyWizard läser idag nätimport hårdkodat (Tibber Pulse), inte via en insticksbar drivrutin. Visas så du vet vilka entiteter som finns, oavsett om du har Pulse, en smartmätare (HAN/P1), eller båda.</div>`;
+    <div class="note">Krävs för effektvakten, säkringsskyddet och solladdningen. Bäst är en mätare med ström per fas (t.ex. Tibber Pulse); en smartmätare (HAN/P1) med bara effekt fungerar också.</div>
+    ${d.power_meter ? `<label style="display:block;margin:8px 0"><input type="checkbox" class="pick" data-cat="Elmätare" checked> Använd ${d.power_meter.driver === "tibber_pulse" ? "Tibber Pulse (spänning + ström per fas)" : "effektsensorn " + esc(d.power_meter.entities.power_w)}</label>` : ""}`;
   (d.grid_meters || []).forEach(g => {
     html += `<div class="note" style="margin-top:6px">• ${g.kind === "pulse" ? "Tibber Pulse" : "Smartmätare"}: ${g.power_entity} (${g.maker || "okänt märke"})</div>`;
   });
@@ -990,6 +990,7 @@ async function generateConfig() {
     if (cat === "Solceller") sel.solar = _discovered.solar;
     if (cat === "Spabad") sel.spa = _discovered.spa;
     if (cat === "Husbatteri") sel.battery = _discovered.battery;
+    if (cat === "Elmätare") sel.power_meter = _discovered.power_meter;
   });
 
   const r = await fetch("api/generate-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });

@@ -68,6 +68,7 @@ power_meter:
     current_l1: sensor.tibber_pulse_malmgatan_34_strom_fas1
     current_l2: sensor.tibber_pulse_malmgatan_34_strom_fas2
     current_l3: sensor.tibber_pulse_malmgatan_34_strom_fas3
+    hour_kwh: sensor.tibber_pulse_malmgatan_34_ackumulerad_forbrukning_under_aktuell_timme
 
 fuse:
   main_fuse_a: 25   # standardvärde (MAX_FUSE_A i decisions.py); överstyrs i drift av fuse_size_a i system_settings
