@@ -201,7 +201,11 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         if driver is None:
             # Känt märke saknas, men finns en number-entitet för exportgräns på samma
             # enhet kan grundläggande strypning ändå fungera via GenericNumberSolarDriver.
+            # Bara en gräns i PROCENT: GenericNumberSolarDriver skriver 0-100 %. En gräns i watt
+            # (t.ex. Sungrow-Modbus "Export power limit", Huawei "maximum feed grid power") skulle
+            # annars få värdet 0-100 och strypa exporten till ~100 W.
             limit_e = next((e for e in entities if e["e"].startswith("number.") and e.get("d") == solar_e.get("d")
+                             and e.get("u") == "%"
                              and _has(e.get("n"), re.compile("export|limit|gräns|power.?limit", re.I))), None)
             suggested = {"pv_power_w": solar_e["e"]}
             if today_kwh:

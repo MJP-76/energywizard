@@ -227,6 +227,20 @@ def test_okant_solcellsmarke_med_exportgrans_foreslar_generisk_drivrutin():
     }
 
 
+def test_exportgrans_i_watt_foreslas_inte_som_procent():
+    """Sungrow-Modbus/Huawei har exportgränsen i W. Den generiska drivrutinen skriver 0-100 %,
+    så en W-gräns får inte föreslås - då skulle 100 % bli 100 W."""
+    sungrow = [
+        {"e": "sensor.total_dc_power", "n": "Total DC power", "a": None, "d": "dev_sg",
+         "dn": "Sungrow SH10RT", "m": "Sungrow", "mo": "SH10RT", "dc": "power", "u": "W", "st": "4100"},
+        {"e": "number.export_power_limit", "n": "Export power limit", "a": None, "d": "dev_sg",
+         "dn": "Sungrow SH10RT", "m": "Sungrow", "mo": "SH10RT", "dc": "power", "u": "W", "st": "10000"},
+    ]
+    result = discover_house(sungrow)
+    assert result["solar"]["pv_power_entity"] == "sensor.total_dc_power"
+    assert "export_limit_pct" not in result["solar"]["generic_suggestion"]["entities"]
+
+
 def test_tomt_hus_ger_inga_fynd_kraschar_inte():
     with patch("discovery._check_configured_heat_pump", return_value=None):
         result = discover_house([])
