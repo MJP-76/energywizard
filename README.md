@@ -1,5 +1,9 @@
 # EnergyWizard Open
 
+[![Sponsra på GitHub](https://img.shields.io/badge/Sponsra-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/murre87)
+[![Tester](https://github.com/murre87/energywizard/actions/workflows/tester.yml/badge.svg)](https://github.com/murre87/energywizard/actions/workflows/tester.yml)
+[![Sajten](https://img.shields.io/badge/sajt-murre87.github.io%2Fenergywizard-22d3a0)](https://murre87.github.io/energywizard/)
+
 **Ett öppet styrsystem som fattar minut-för-minut-beslut för hela huset efter
 elpriset** - inte en punktlösning för en enda sak. Elbilsladdning, värmepump,
 solcellsexport, spabad och huvudsäkringen koordineras tillsammans, byggt
@@ -121,10 +125,31 @@ köra din egen).
 
 Vill du inte skicka något alls, sätt `TELEMETRY_OPT_IN=false` i din `.env`.
 
-## Stöd projektet
+## ❤️ Stöd projektet
 
-EnergyWizard är gratis och utan abonnemang. Vill du bjuda på en kaffe syns de
-senaste hälsningarna här (uppdateras varje natt av
+EnergyWizard är gratis, utan abonnemang och utan reklam - och ska förbli så.
+Det byggs på kvällar och helger, och det dyraste är inte koden utan att
+**verifiera mot riktig hårdvara**: en växelriktare, värmepump eller laddbox
+som ingen i projektet har kan bara stödjas på riktigt om någon testar den.
+
+<p>
+  <a href="https://github.com/sponsors/murre87"><img src="https://img.shields.io/badge/Sponsra_på_GitHub-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsra på GitHub"></a>
+</p>
+
+| Ditt stöd går till | |
+|---|---|
+| 🔌 **Hårdvara att verifiera mot** | drivrutiner för fler märken (NIBE S, Huawei, Sungrow, Fronius, OCPP-laddare) |
+| ☁️ **Drift** | telemetrimottagaren och testmiljön |
+| ⏱️ **Tid** | snabbare svar på ärenden och fler funktioner från [ROADMAP](ROADMAP.md) |
+
+Andra sätt att hjälpa, som är minst lika mycket värda:
+
+- ⭐ **Stjärnmärk repot** - det gör projektet lättare att hitta.
+- 🙋 **Bli betatestare** - hör av dig om du har något av märkena som är
+  markerade "overifierat" i [kunskapsbanken](https://murre87.github.io/energywizard/kunskapsbank/vaxelriktare.html).
+- 🐛 **Rapportera fel** med loggen - [öppna ett ärende](https://github.com/murre87/energywizard/issues).
+
+Senaste hälsningarna från dem som bjudit på en kaffe (uppdateras varje natt av
 `.github/workflows/buy-me-a-coffee.yml`):
 
 <!--START_SECTION:buy-me-a-coffee-->
