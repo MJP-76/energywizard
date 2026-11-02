@@ -16,10 +16,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
         https://github.com/murre87/energywizard /src
 
-WORKDIR /app
-RUN cp -r /src/smartbox/. . && rm -rf /src
+# Samma layout som docker-compose-driften: ewapp och webdashboard gör
+# sys.path.insert(0, "/smartbox") och importerar motorns moduler därifrån
+# (i compose: ./smartbox monterad på /smartbox), så motorn ligger i /smartbox.
+RUN cp -r /src/smartbox /smartbox \
+    && cp -r /src/ewapp /ewapp \
+    && cp -r /src/webdashboard /webdashboard \
+    && rm -rf /src
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Motorns beroenden + det gränssnitten installerar i sina egna Dockerfiles
+# (ewapp/Dockerfile, webdashboard/Dockerfile) - samma paket, en gemensam miljö.
+RUN pip install --no-cache-dir -r /smartbox/requirements.txt \
+    && pip install --no-cache-dir fastapi "uvicorn[standard]" requests sqlalchemy \
+        "psycopg[binary]" psycopg_pool pandas PyYAML pymodbus pillow
+
+# ewapp/Dockerfile genererar PWA-ikonerna vid bygge - samma steg här.
+RUN cd /ewapp && python make_icons.py
+
+WORKDIR /smartbox
 
 COPY rootfs/run.sh /run.sh
 RUN chmod +x /run.sh

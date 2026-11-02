@@ -1,9 +1,29 @@
 #!/bin/bash
 # Enkel startsekvens (inte s6-overlay - se Dockerfile-kommentaren för varför):
-# initiera/starta en lokal Postgres i den här containern, vänta tills den
-# svarar, sätt sedan samma POSTGRES_*-miljövariabler som den vanliga
-# docker-compose-driften redan förväntar sig, och kör huvudloopen oförändrad.
+#   1. läs tilläggets inställningar (/data/options.json, skriven av Supervisor)
+#   2. initiera/starta en lokal Postgres i den här containern
+#   3. starta gränssnitten (ewapp :8502, webdashboard :8503) i bakgrunden, med omstart
+#   4. kör huvudloopen (smartbox) i förgrunden - dör den, dör tillägget och Supervisor
+#      startar om det (boot: auto), precis som restart: unless-stopped i docker-compose.
 set -e
+
+# Supervisor skickar INTE tilläggets inställningar som miljövariabler - de ligger i
+# /data/options.json. Tidigare lästes de aldrig, så telemetri-reglaget i tilläggets
+# UI hade ingen effekt. Python finns redan i bilden (ingen jq/bashio behövs).
+OPTIONS="/data/options.json"
+opt() {
+    python3 -c 'import json,sys
+try:
+    v = json.load(open(sys.argv[1])).get(sys.argv[2])
+except Exception:
+    v = None
+print("" if v is None else (str(v).lower() if isinstance(v, bool) else v))' "$OPTIONS" "$1"
+}
+if [ -f "$OPTIONS" ]; then
+    export TELEMETRY_OPT_IN="$(opt telemetry_opt_in)"
+    export TELEMETRY_ENDPOINT="$(opt telemetry_endpoint)"
+    export DASHBOARD_PASSWORD="$(opt dashboard_password)"
+fi
 
 export PGDATA="/config/pgdata"
 export POSTGRES_HOST="localhost"
@@ -13,6 +33,10 @@ export POSTGRES_DB="${POSTGRES_DB:-smartbox}"
 export HOUSE_CONFIG_PATH="/config/house_config.yaml"
 export TELEMETRY_OPT_IN="${TELEMETRY_OPT_IN:-false}"
 export TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-}"
+export DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-}"
+# webdashboard proxar ewapps styrkommandon internt (i compose: http://ewapp:8502).
+export EWAPP_URL="http://127.0.0.1:8502"
+export PYTHONUNBUFFERED=1
 
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
     echo "🐘 Första start - initierar lokal Postgres i $PGDATA"
@@ -29,5 +53,27 @@ su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${POSTGRES_USE
 su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'\"" | grep -q 1 \
     || su postgres -c "psql -c \"CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER}\""
 
+# Ett gränssnitt som kraschar startas om efter 5 s - det får aldrig ta ner motorn.
+keep_running() {
+    local name="$1" dir="$2" port="$3"
+    ( while true; do
+        echo "🌐 Startar $name på port $port..."
+        (cd "$dir" && python -m uvicorn app:app --host 0.0.0.0 --port "$port") || true
+        echo "⚠️ $name avslutades - startar om om 5 s."
+        sleep 5
+      done ) &
+}
+
+if [ -n "$DASHBOARD_PASSWORD" ]; then
+    keep_running "mobilappen (ewapp)" /ewapp 8502
+    keep_running "webdashboard" /webdashboard 8503
+else
+    # Utan lösenord går det inte att logga in (webauth.py nekar tomt lösenord) - starta
+    # hellre inte gränssnitten alls än att visa en inloggning som aldrig fungerar.
+    echo "⚠️ Inget dashboard_password satt i tilläggets inställningar - webdashboard och mobilappen startas INTE."
+    echo "   Sätt ett lösenord under Konfiguration och starta om tillägget. Motorn kör ändå."
+fi
+
 echo "🔆 Startar EnergyWizard (smartbox)..."
+cd /smartbox
 exec python -u main.py

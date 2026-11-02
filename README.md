@@ -46,8 +46,9 @@ nedan). Fler märken är ett väntat, naturligt sätt att bidra.
 
 [![Open your Home Assistant instance and show the add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fmurre87%2Fenergywizard)
 
-Paketerar idag bara huvudmotorn (`smartbox`) - mobilappen/webdashboarden
-kräver fortfarande docker-compose-vägen nedan. Se
+Innehåller allt: huvudmotorn, webdashboard (port 8503, med entitetsväljaren)
+och mobilappen (port 8502), plus en egen databas. Sätt bara ett
+`dashboard_password` i tilläggets inställningar. Se
 [ha-addon/smartbox/DOCS.md](ha-addon/smartbox/DOCS.md) för vad som är
 verifierat och vad som inte är det (aldrig testat mot en riktig Supervisor-
 installation).

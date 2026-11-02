@@ -34,3 +34,38 @@ jobs:
           # 30 sekunders DNS-timeout per instansiering innan den ger upp (fångas, kraschar
           # inte, men gör körningen onödigt långsam). Postgres-tjänsten ovan nås på localhost.
           POSTGRES_HOST: localhost
+
+  # HA-tillägget (ha-addon/smartbox): bygger bilden från den här grenens kod och röktestar att
+  # motorn, Postgres och båda gränssnitten startar. Supervisor själv testas inte här.
+  # Körs bara på grenar/PR, inte vid push till main: ett fel här ska inte stoppa
+  # bygget av produktionsbilderna (docker.yml anropar den här filen).
+  ha-tillagg:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bygg tillägget
+        run: |
+          docker build \
+            --build-arg ENERGYWIZARD_REF="${{ github.head_ref || github.ref_name }}" \
+            -t ew-addon ha-addon/smartbox
+      - name: Röktest - starta som Supervisor skulle (options.json + /config)
+        run: |
+          mkdir -p addon-data addon-config
+          echo '{"dashboard_password": "ci-test", "telemetry_opt_in": false}' > addon-data/options.json
+          docker run -d --name ew -p 8502:8502 -p 8503:8503 \
+            -v "$PWD/addon-data:/data" -v "$PWD/addon-config:/config" ew-addon
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:8503/ && curl -sf -o /dev/null http://127.0.0.1:8502/; then
+              echo "Båda gränssnitten svarar efter ${i} s"; break
+            fi
+            sleep 1
+          done
+          curl -sf -o /dev/null http://127.0.0.1:8503/
+          curl -sf -o /dev/null http://127.0.0.1:8502/
+          curl -sf -X POST -H 'Content-Type: application/json' \
+            -d '{"user":"admin","password":"ci-test"}' http://127.0.0.1:8503/api/login | grep -q '"ok":true'
+          docker logs ew 2>&1 | grep -q "Startar EnergyWizard (smartbox)"
+      - name: Loggar
+        if: always()
+        run: docker logs ew 2>&1 | tail -80 || true

@@ -168,19 +168,21 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 - **"Lägg till i Home Assistant"-knapp för Supervisor/HAOS-användare**
   (`ha-addon/smartbox/`, `repository.yaml`, samma `my.home-assistant.io`-
-  genväg som [EMHASS](https://github.com/davidusb-geek/emhass)). Paketerar
-  idag BARA huvudmotorn (`smartbox`), inte `webdashboard`/`ewapp` - de kräver
-  fortfarande docker-compose-vägen. Postgres bundlas lokalt i
+  genväg som [EMHASS](https://github.com/davidusb-geek/emhass)). Sedan 1.1.0
+  paketeras även `webdashboard` (port 8503) och `ewapp` (port 8502) i samma
+  container, inloggade med tilläggets `dashboard_password`, så engångs-notisen
+  om tom konfiguration pekar nu på en adress som finns. Tilläggets inställningar
+  läses nu också in från `/data/options.json` (tidigare lästes de aldrig, så
+  telemetrireglaget hade ingen effekt). Postgres bundlas lokalt i
   tilläggscontainern (ett enkelt startskript, inte s6-overlay - dokumenterat
-  avsteg i Dockerfile-kommentaren). **Verifierat:** bygger och startar
-  fristående i Docker, Postgres initieras och databasen skapas, huvudloopen
-  kör utan att krascha, och koden tar rätt väg (`http://supervisor/core/api`)
-  när `SUPERVISOR_TOKEN` finns. **Overifierat:** har aldrig körts mot en
-  riktig HAOS/Supervisor-installation - "Lägg till repository"-flödet,
-  Supervisorns egen validering av `config.yaml`, och den riktiga
-  `homeassistant_api`-proxyn är alla otestade här. Första installationens
-  engångs-notis pekar fortfarande mot en webdashboard-adress som inte finns
-  i den här driftformen - känd brist tills gränssnitten också paketeras.
+  avsteg i Dockerfile-kommentaren). **Verifierat:** startskriptet kört med
+  bildens mapplayout (Postgres, motor, båda gränssnitten, inloggning, intern
+  proxy webdashboard→ewapp, omstart av kraschat gränssnitt), och bilden byggs
+  och röktestas i CI (`tester.yml`, jobbet `ha-tillagg`). **Overifierat:** har
+  aldrig körts mot en riktig HAOS/Supervisor-installation - "Lägg till
+  repository"-flödet, Supervisorns egen validering av `config.yaml`, och den
+  riktiga `homeassistant_api`-proxyn är alla otestade här. Gränssnitten går via
+  egna portar, inte HA:s ingress/sidomeny.
 
 - **Termisk säkringsmodell för effektvakten - byggd, mockat verifierad, inte
   körd i ett riktigt hus än.** `smartbox/fuse_guard.py` följer

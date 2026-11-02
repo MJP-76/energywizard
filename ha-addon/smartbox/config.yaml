@@ -1,5 +1,5 @@
 name: "EnergyWizard"
-version: "1.0.0"
+version: "1.1.0"
 slug: "smartbox"
 description: "Minut-för-minut styrning av elbil, värmepump, solcellsexport, spabad och huvudsäkring efter spotpriset - helt via Home Assistants egna entiteter."
 url: "https://github.com/murre87/energywizard"
@@ -12,9 +12,19 @@ homeassistant_api: true
 map:
   - type: addon_config
     read_only: false
+# Gränssnitten nås direkt på värdens portar, precis som i docker-compose-driften:
+# webdashboard (dator/surfplatta, entitetsväljaren) på 8503 och mobilappen (ewapp) på 8502.
+ports:
+  8503/tcp: 8503
+  8502/tcp: 8502
+ports_description:
+  8503/tcp: "Webdashboard (dator/surfplatta, entitetsväljaren)"
+  8502/tcp: "Mobilappen (ewapp)"
+webui: "http://[HOST]:[PORT:8503]"
 options:
   telemetry_opt_in: false
   telemetry_endpoint: "https://energywizzard.profitalgos.com/telemetry"
 schema:
+  dashboard_password: "password?"
   telemetry_opt_in: bool
   telemetry_endpoint: "str?"
