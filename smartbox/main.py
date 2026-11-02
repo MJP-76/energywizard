@@ -24,6 +24,7 @@ import learning         # AI-modeller för temperatur och avsvalning
 import mpc               # Prediktiv förvärmnings-planerare (skuggläge + veckovis självvalidering)
 import house_config      # EnergyWizard Open: drivrutinsarkitektur (bil/laddare/värmepump/sol/spa)
 import ev_handshake      # Generisk laddar-handskakning (vilken fysisk laddare hör till vilken bil)
+import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
 
 # Tidszon för Sverige
@@ -546,6 +547,13 @@ def update_soc_tracker(car_id, car_data, charger_data, now, schedule):
 fast_net  = []
 fast_hl1, fast_hl2, fast_hl3 = [], [], []
 
+# Termisk säkringsmodell (fuse_guard.py): matas var 10:e sekund med Tibbers fasströmmar.
+# Säkringsstorlek/marginal och laddar-ID:n uppdateras i minutloopen; nödbromsen i 10-sekunders-
+# loopen använder senast kända värden (före första minuten: decisions.MAX_FUSE_A, inga laddare).
+fuse_model = fuse_guard.FuseThermalModel()
+_fuse_cfg = {"fuse_a": decisions.MAX_FUSE_A, "margin_a": 0.0}
+_fuse_charger_ids = {}
+
 def get_last_legionella(target_temp):
     try:
         with logger.get_db() as conn:
@@ -575,6 +583,19 @@ while True:
             fast_hl1.append(tibber["l1_a"])
             fast_hl2.append(tibber["l2_a"])
             fast_hl3.append(tibber["l3_a"])
+            fuse_model.update([tibber["l1_a"], tibber["l2_a"], tibber["l3_a"]])
+            # Nödbroms: en fas över 1,2 × säkringen stryper bilarna direkt, inte först nästa minut.
+            try:
+                _trip = fuse_guard.fast_trip_limits(fuse_model, _fuse_cfg["fuse_a"],
+                                                    {c: v for c, v in last_sent_ev_limit.items() if c in _fuse_charger_ids},
+                                                    margin_a=_fuse_cfg["margin_a"], min_charge_a=EV_MIN_CHARGE_AMPS)
+                for _car, _amps in _trip.items():
+                    _reason = f"Säkringsskydd: fas över {fuse_guard.TRIP_FACTOR} × {_fuse_cfg['fuse_a']} A"
+                    if homeassistant.set_ev_dynamic_limit(_fuse_charger_ids[_car], _amps, reason=_reason):
+                        last_sent_ev_limit[_car] = _amps
+                        print(f"🚨 {_reason} - stryper {_car} till {_amps} A direkt.")
+            except Exception as _fe:
+                print(f"⚠️ Säkringsskyddets nödbroms hoppade över: {_fe}")
 
         # ============================================================
         # 📝 1-MINUTS-TASK – Samla och Spara data
@@ -1379,6 +1400,23 @@ while True:
             hl3_non_ev = max(0, (avg_hl3 or 0) - n3 - t3)
             house_load_excluding_ev_a = max(hl1_non_ev, hl2_non_ev, hl3_non_ev)
 
+            # Termisk säkringsmodell: tak för bilarnas totala ström (None = ingen färsk Tibber-data,
+            # gpm.py använder då den gamla formeln säkring - husets last).
+            _fuse_cfg["fuse_a"] = cfg.get('fuse_size_a', decisions.MAX_FUSE_A)
+            _fuse_cfg["margin_a"] = float(cfg.get('fuse_safety_margin_a', 0.0) or 0.0)
+            _fuse_charger_ids.clear()
+            _fuse_charger_ids.update({c: i for c, i in car_charger_id.items() if i})
+            _ev_phase_a = [0.0, 0.0, 0.0]
+            for _cd in physical_charger_data.values():
+                if _cd:
+                    for _k, _key in enumerate(("current_l1", "current_l2", "current_l3")):
+                        _ev_phase_a[_k] += float(_cd.get(_key) or 0)
+            ev_fuse_cap_a = fuse_model.ev_cap_a(_fuse_cfg["fuse_a"], _ev_phase_a, margin_a=_fuse_cfg["margin_a"])
+            if ev_fuse_cap_a is not None:
+                _filt = fuse_model.filtered_a()
+                ai_thoughts.append(f"⚡ Säkringsmodell: termisk ström {'/'.join(f'{x:.1f}' for x in _filt)} A, bilarna får {ev_fuse_cap_a} A"
+                                   + (" (håller, nyss strypt)" if fuse_model.in_recovery() else "") + ".")
+
             # Dynamisk Peak Shaving
             minutes_left_burn = 60 - now.minute
             historical_base_load_kw = learning.predict_base_load(now, dynamic_base_load_profile)
@@ -1459,6 +1497,7 @@ while True:
                 'heat_stop_outdoor': (pump_data.get('heat_stop_outdoor') if pump_data else None),  # pumpens egen värmestopp-tröskel (reg 19) → GPM samverkar i stället för hårdkodad gräns
                 'hysteresis': strategy.get("hysteresis", 0.10), 'dynamic_limit': dynamic_limit if dynamic_limit else 99.0,
                 'max_fuse_a': cfg.get('fuse_size_a', decisions.MAX_FUSE_A), 'house_load_a': house_load_excluding_ev_a, 'ev_actual_a': 0,
+                'ev_fuse_cap_a': ev_fuse_cap_a,
                 'current_solar_limit_pct': current_solar_limit_pct, 'current_target_limit': current_target_limit,
                 'nissan_soc': nissan_soc, 'tesla_soc': tesla_data.get('soc') if tesla_data else None,
                 'nissan_connected': ev_connection_state['nissan']['connected'] or ev_gps_state['nissan']['approaching'],

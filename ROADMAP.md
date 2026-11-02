@@ -127,18 +127,6 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   /v2/devices/{deviceId}/points`. 9 mockade tester, grönt - **aldrig körd mot
   ett riktigt myUplink-konto**, inget hus i projektet har ett.
 
-- **Termisk säkringsmodell för effektvakten (Prio 10), inte byggd.**
-  [FTW:s `safety.md`](https://github.com/srcfl/ftw/blob/master/docs/safety.md)
-  beskriver en mer nyanserad modell för elbilsladdning än vår nuvarande:
-  kvadrerad fasström lågpassfiltrerad med 60 s tidskonstant, stryper vid
-  verklig överbelastning (eller omedelbart över 1,2× säkringens märkvärde)
-  men tillåter korta toppar, med separat, längre återhämtningsfönster (ingen
-  ökning inom 20 s efter en strypning). Vår nuvarande `gpm.py`-logik (Prio
-  10) bygger på energibudget per timme + direkt tillgängliga-ampere-avdrag -
-  enklare, men stryper troligen onödigt ofta vid korta effekttoppar som en
-  riktig säkring ändå skulle klara. Värt att undersöka, ingen brådska -
-  nuvarande modell är säker, bara möjligen för försiktig.
-
 - **Balboa-spabad: drivrutin byggd, väntar på verifiering mot riktig
   hårdvara.** `drivers/spa_balboa.py` finns nu - byggd mot HA:s officiella
   `balboa`-integrations DOKUMENTERADE entitetsformer (climate/select/switch/
@@ -189,6 +177,21 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   `homeassistant_api`-proxyn är alla otestade här. Första installationens
   engångs-notis pekar fortfarande mot en webdashboard-adress som inte finns
   i den här driftformen - känd brist tills gränssnitten också paketeras.
+
+- **Termisk säkringsmodell för effektvakten - byggd, mockat verifierad, inte
+  körd i ett riktigt hus än.** `smartbox/fuse_guard.py` följer
+  [FTW:s `safety.md`](https://github.com/srcfl/ftw/blob/master/docs/safety.md):
+  varje fas I² lågpassfiltreras med 60 s tidskonstant (Tibbers 10-sekundersprov),
+  bilarna stryps när den filtrerade strömmen går över säkringen - eller direkt i
+  10-sekundersloopen när en avläsning går över 1,2 × säkringen - och en laddande bil
+  får bara öka när ökningen ryms, aldrig inom 20 s efter en strypning. En kort topp
+  (vattenkokare, ugn) stryper alltså inte längre bilen. Ersätter den gamla formeln
+  "säkring - husets minutsnitt" på alla fyra ställen i `gpm.py` (via
+  `_ev_fuse_room`). Exporterande fas stryps aldrig för. Valfri marginal:
+  `fuse_safety_margin_a` (standard 0 A, samma som tidigare). **Medvetet avsteg från
+  FTW:** utan färsk Tibber-data faller den tillbaka på den gamla formeln istället
+  för att stoppa all laddning. 17 tester (`tests/test_fuse_guard.py`), både
+  aktivering och icke-aktivering.
 
 - Drivrutinsarkitektur kopplad till huvudstyrloopen (bil/laddare/värmepump/sol/spa)
   - genuint insticksbart, inte bara ett löfte.

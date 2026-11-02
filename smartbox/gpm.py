@@ -48,6 +48,17 @@ def _is_expensive(price, all_prices):
 
 SPA_EV_PAUSE_MAX_DROP_C = 5.0      # badet pausas under bilens laddfönster så länge det är högst så här många grader under normaltemperaturen
 
+def _ev_fuse_room(state, house_excluding_ev):
+    """Ledig ström för bilarna mot huvudsäkringen. Med färsk mätdata kommer taket från den termiska
+    säkringsmodellen (fuse_guard.py, satt av main.py som 'ev_fuse_cap_a') - den tål korta toppar
+    och stryper på säkringens värme, inte på en enskild minut. Utan den (tester, Tibber nere):
+    den tidigare formeln säkring - husets last (värsta fasen)."""
+    cap = state.get('ev_fuse_cap_a')
+    if cap is not None:
+        return max(0, int(cap))
+    return max(0, state.get('max_fuse_a', 16) - house_excluding_ev)
+
+
 
 class GlobalPriorityManager:
     def __init__(self):
@@ -346,8 +357,9 @@ class GlobalPriorityManager:
                     house_excluding_ev = max(0, int(house_load_a) - int(ev_actual_a))
                     # BUGFIX: Ignorera säkringsbegränsning om vi exporterar mycket solel
                     if avg_net < -500:
-                        house_excluding_ev = 0
-                    available_amps_realtime = max(0, state.get('max_fuse_a', 16) - house_excluding_ev)
+                        available_amps_realtime = max(0, state.get('max_fuse_a', 16))
+                    else:
+                        available_amps_realtime = _ev_fuse_room(state, house_excluding_ev)
                     final_ev_amps = min(self.ev_solar_target_amps, available_amps_realtime)
 
                     if final_ev_amps >= EV_MIN_CHARGE_AMPS:
@@ -490,7 +502,7 @@ class GlobalPriorityManager:
                             # är fasströmmen utgående solel. Elbilen minskar denna, så vi nollar begränsningen.
                             if avg_net < -500:
                                 house_excluding_ev = 0
-                            available_amps_realtime = max(0, state.get('max_fuse_a', 16) - house_excluding_ev)
+                            available_amps_realtime = _ev_fuse_room(state, house_excluding_ev)
                             final_amps = min(planned_amps, available_amps_realtime)
                             if final_amps < 6:
                                 final_amps = 0 
@@ -567,7 +579,7 @@ class GlobalPriorityManager:
                             house_load_a = state.get('house_load_a', 0)
                             ev_actual_a = state.get('ev_actual_a', 0)
                             house_excluding_ev = max(0, int(house_load_a) - int(ev_actual_a))
-                            available_amps_realtime = max(0, state.get('max_fuse_a', 16) - house_excluding_ev)
+                            available_amps_realtime = _ev_fuse_room(state, house_excluding_ev)
                             target_p38_amps = min(10, available_amps_realtime)
                         # Behåll redan beslutad ström om den är minst lika hög (boosta bara uppåt mot 10A).
                         target_p38_amps = max(target_p38_amps, current_limit)
@@ -991,7 +1003,7 @@ class GlobalPriorityManager:
         if paid_to_import:
             actions["solar_limit_pct"] = 0
             _house_a = max(0, int(state.get('house_load_a', 0)) - int(state.get('ev_actual_a', 0)))
-            _avail   = max(0, int(state.get('max_fuse_a', 16)) - _house_a)
+            _avail   = _ev_fuse_room(state, _house_a)
             _n_ok = state.get('nissan_connected', False) and not (nissan_soc is not None and nissan_soc >= 98)
             _t_ok = state.get('tesla_connected', False)  and not (tesla_soc  is not None and tesla_soc  >= 98)
             if _avail >= EV_MIN_CHARGE_AMPS and (_n_ok or _t_ok):
