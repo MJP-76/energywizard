@@ -226,6 +226,15 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   för att stoppa all laddning. 17 tester (`tests/test_fuse_guard.py`), både
   aktivering och icke-aktivering.
 
+- **Mobilappen i fem flikar + historik i webben och appen.** `ewapp`: Hem (Just nu /
+  Härnäst, sol och nät live, besparing på en rad - bara för ägaren, även i servern -
+  och ljusknappar), Bil, Hus, Plan (planen eller laddschemat) och Historik (Energi:
+  summor Idag/7/30 dagar + effekt 24 h/7 d/30 d/1 år; Temperatur; Elpris). Ingen
+  flik scrollar - verifierat på 390x844 och 360x640. Gamla flikval (Ljus, Energi,
+  Schema, Grafer) pekas om. Webbens Historik-sida har samma energivy, loggen ligger
+  kvar under. Data: `smartbox/energy_history.py` (tidsviktad energi ur sensor_log),
+  delad av båda. Idén från FTW:s History-vy, egen implementation.
+
 - **Besparingskort och planen i klartext (webdashboard, Översikt + Ekonomi).**
   Idéerna från [FTW](https://github.com/srcfl/ftw):s savings-kort och plan brief,
   egen implementation (ingen kod kopierad - FTW är AGPL). Besparingen är samma

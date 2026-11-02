@@ -438,14 +438,93 @@ async function renderPrognos() {
   }
 }
 
+// ---------- Historik (inspirerat av FTW:s History-vy, egen implementation) ----------
+// Summor Idag/7 dagar/30 dagar + effekt över tid + senaste värden (smartbox/energy_history.py).
+let histPeriod = "today", histRange = "24h";
+try { histPeriod = localStorage.getItem("ew_hist_period") || "today"; histRange = localStorage.getItem("ew_hist_range") || "24h"; } catch (e) { /* privat läge */ }
+const HIST_COL = { grid: "#e11d74", solar: "#b38b00", battery: "#0e7490", house: "#64748b" };
+
+function kwhTile(label, v, sub, color) {
+  return `<div class="stat" style="border-left-color:${color}"><div class="l" style="text-transform:none;font-size:.85rem">${label}</div><div class="v">${v != null ? (v >= 100 ? v.toFixed(0) : v.toFixed(1)) : "–"} <span style="font-size:.9rem;font-weight:600;color:var(--mut)">kWh</span></div><div class="l" style="text-transform:none">${sub}</div></div>`;
+}
+function fmtW(w) { return w == null ? "–" : Math.abs(w) >= 1000 ? `${(w / 1000).toFixed(1)} kW` : `${Math.round(w)} W`; }
+
+function historyHtml(d) {
+  const t = d.totals[histPeriod];
+  const seg = (id, cur, opts) => `<div class="seg" id="${id}">${opts.map(([k, l]) => `<button data-v="${k}" class="${k === cur ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  const tiles = t ? [
+    kwhTile("Förbrukat hemma", t.used_kwh, "allt huset drog", HIST_COL.house),
+    t.solar_kwh != null ? kwhTile("Solel", t.solar_kwh, "vad panelerna gav", HIST_COL.solar) : "",
+    kwhTile("Köpt", t.bought_kwh, "från elnätet", HIST_COL.grid),
+    kwhTile("Sålt", t.sold_kwh, "ut på elnätet", HIST_COL.grid),
+    t.battery_in_kwh != null ? kwhTile("Batteri", t.battery_in_kwh, `in · ${t.battery_out_kwh.toFixed(1)} kWh ut`, HIST_COL.battery) : "",
+  ].join("") : `<div class="note">Ingen mätdata för perioden än.</div>`;
+  const L = d.latest || {};
+  const latest = [["Nät", HIST_COL.grid, L.grid_w == null ? "–" : fmtW(Math.abs(L.grid_w)), L.grid_w == null ? "" : L.grid_w < -50 ? "säljer" : "köper"],
+    ["Sol", HIST_COL.solar, fmtW(L.solar_w), "producerar"],
+    ...(L.battery_w != null ? [["Batteri", HIST_COL.battery, fmtW(Math.abs(L.battery_w)), Math.abs(L.battery_w) < 30 ? "vilar" : L.battery_w > 0 ? "laddar" : "laddar ur"]] : []),
+    ["Hus", HIST_COL.house, fmtW(L.house_w), "använder"]]
+    .map(([n, c, v, s]) => `<div style="border-left:3px solid ${c};padding-left:10px"><div class="note" style="text-transform:uppercase;letter-spacing:.04em;font-size:.72rem">${n}</div><div style="font-size:1.25rem;font-weight:800">${v}</div><div class="note" style="font-size:.72rem;text-transform:uppercase">${s}</div></div>`).join("");
+  return `
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0">⚡ Energi</h2>${seg("histperiod", histPeriod, [["today", "Idag"], ["7d", "7 dagar"], ["30d", "30 dagar"]])}</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-top:12px">${tiles}</div>
+      ${t && t.summary ? `<div class="note" style="margin-top:10px">${esc(t.summary)}</div>` : ""}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0">📈 Effekt över tid</h2>${seg("histrange", histRange, [["24h", "24 h"], ["7d", "7 d"], ["30d", "30 d"], ["1y", "1 år"]])}</div>
+      <div id="histchart" style="height:300px;margin-top:10px"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-top:12px">${latest}</div>
+      <div class="note" style="margin-top:8px">Uppåt = in i huset (köpt), nedåt = ut (sålt, solproduktion). Senast mätt ${L.ts ? new Date(L.ts).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : "–"}.</div>
+    </div>`;
+}
+
+function historyChart(sr) {
+  const el = document.getElementById("histchart");
+  if (!el || !sr || !sr.t.length) return;
+  const chart = echarts.init(el, null, { renderer: "svg" });
+  const fmtT = sr.range === "24h" ? (x) => x.slice(11, 16) : sr.range === "1y" ? (x) => x.slice(5, 10) : (x) => `${x.slice(8, 10)}/${x.slice(5, 7)} ${x.slice(11, 13)}`;
+  const line = (name, data, color) => ({ name, type: "line", data, symbol: "none", connectNulls: false, lineStyle: { width: 2, color }, itemStyle: { color } });
+  const series = [line("Nät", sr.grid_kw, HIST_COL.grid),
+    line("Sol", sr.solar_kw.map((v) => (v == null ? null : -v)), HIST_COL.solar),
+    line("Hus", sr.house_kw, HIST_COL.house)];
+  if (sr.battery_kw.some((v) => v != null)) series.push(line("Batteri", sr.battery_kw, HIST_COL.battery));
+  chart.setOption({
+    grid: { left: 52, right: 16, top: 30, bottom: 36 },
+    legend: { top: 0, textStyle: { color: "#93a0b8" } },
+    tooltip: { trigger: "axis", valueFormatter: (v) => (v == null ? "–" : `${v.toFixed(2)} kW`) },
+    xAxis: { type: "category", data: sr.t.map(fmtT), axisLabel: { color: "#93a0b8" }, axisLine: { lineStyle: { color: "#93a0b8" } } },
+    yAxis: { type: "value", name: "kW", nameTextStyle: { color: "#93a0b8" }, axisLabel: { color: "#93a0b8" }, splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } } },
+    series,
+  });
+  new ResizeObserver(() => chart.resize()).observe(el);
+}
+
 async function renderHistorik() {
-  await loadPage("api/historylog", (d) => `
+  const main = document.getElementById("main");
+  main.innerHTML = `<div class="placeholder">Laddar…</div>`;
+  let d, log;
+  try { [d, log] = await Promise.all([api("api/energyhistory?range=" + histRange), api("api/historylog").catch(() => null)]); }
+  catch (e) { main.innerHTML = `<div class="placeholder">${esc(e.message)}</div>`; return; }
+  const logHtml = log && log.ok ? `
     <div class="card">
-      <h2>📈 Logg</h2>
+      <h2>📜 Logg</h2>
       <div class="loglist">
-        ${d.entries.length ? d.entries.map(e => `<div class="logrow"><div class="t">${new Date(e.ts).toLocaleString("sv-SE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div><div>${e.user ? `<b>${esc(e.user)}:</b> ` : ""}${esc(e.text || "")}</div></div>`).join("") : `<div class="note">Inget loggat än.</div>`}
+        ${log.entries.length ? log.entries.map(e => `<div class="logrow"><div class="t">${new Date(e.ts).toLocaleString("sv-SE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div><div>${e.user ? `<b>${esc(e.user)}:</b> ` : ""}${esc(e.text || "")}</div></div>`).join("") : `<div class="note">Inget loggat än.</div>`}
       </div>
-    </div>`);
+    </div>` : "";
+  const draw = () => {
+    main.innerHTML = historyHtml(d) + logHtml;
+    historyChart(d.series);
+    main.querySelectorAll("#histperiod button").forEach((b) => b.onclick = () => { histPeriod = b.dataset.v; try { localStorage.setItem("ew_hist_period", histPeriod); } catch (e) {} draw(); });
+    main.querySelectorAll("#histrange button").forEach((b) => b.onclick = async () => {
+      histRange = b.dataset.v; try { localStorage.setItem("ew_hist_range", histRange); } catch (e) {}
+      try { d = await api("api/energyhistory?range=" + histRange); } catch (e) { /* behåll förra */ }
+      draw();
+    });
+  };
+  if (!d.ok) { main.innerHTML = `<div class="placeholder">Ingen data än</div>` + logHtml; return; }
+  draw();
 }
 
 async function renderAviseringar() {

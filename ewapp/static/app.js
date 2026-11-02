@@ -1,7 +1,11 @@
-// EnergyWizard Mobil – fyra sidor (Bil, Hus, Schema, Grafer), ingen scrollning: allt får plats i skärmen. Poll medan sidan syns.
+// EnergyWizard Mobil – fem flikar (Hem, Bil, Hus, Plan, Historik). Bil och Hus får plats utan scroll (fit() gömmer detaljer stegvis);
+// Hem, Plan och Historik får scrolla. Poll medan sidan syns.
 const $ = (s) => document.querySelector(s), app = $("#app");
 const LS = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "nissan", HIST = null, SET = null;
+let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "nissan", HIST = null, SET = null, PL = null, SV = null, HX = null;
+let svPeriod = LS.get("ew_sv_period", "week"), hxPeriod = LS.get("ew_hx_period", "today"), hxRange = LS.get("ew_hx_range", "24h");
+// gamla flikar (före fem-flik-layouten) pekas om så ingen hamnar på en tom sida
+page = ({ ljus: "hem", energi: "hem", schema: "plan", grafer: "historik" })[page] || page;
 const esc = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const buzz = (n = 15) => { try { navigator.vibrate && navigator.vibrate(n); } catch {} };
 // haptik: en liten vibration direkt när fingret nuddar en knapp (Android; iPhone saknar vibrations-API i webbläsaren, där ger tryckeffekten i CSS återkopplingen)
@@ -22,6 +26,9 @@ const ICON = {
   schema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
   ljus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V18h6v-1.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>',
   energi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+  hem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+  plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18M8 14h3M8 17h6"/></svg>',
+  historik: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V11M12 20V5M19 20v-7"/></svg>',
   grafer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4M4 20h16M8 16l4-5 3 3 5-7"/></svg>',
   gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
 };
@@ -31,11 +38,11 @@ function showLogin(msg) {
   $("#lf").onsubmit = async (e) => { e.preventDefault(); try { await api("login", { user: $("#un").value, password: $("#pw").value }); start(); } catch (er) { showLogin(er.message); } };
 }
 const ER = () => (ROLE === "owner" && VIEWAS) ? VIEWAS : ROLE;                    // effektiv roll: ägaren kan förhandsgranska Elins vy och gästläget
-const CAN = { family: ["theme", "ser", "refreshsoc", "installapp", "tab", "swap", "power", "start", "stop", "auto", "heat_on", "heat_off", "access", "cardata", "lights", "trip", "sch", "schcar", "schtime", "schclock", "rooms", "greet", "log", "health", "settings"],
-              guest: ["theme", "ser", "tab", "health", "settings", "swap", "schcar", "cardata", "rooms", "greet", "log", "report"] };
+const CAN = { family: ["theme", "ser", "refreshsoc", "installapp", "tab", "swap", "power", "start", "stop", "auto", "heat_on", "heat_off", "access", "cardata", "lights", "trip", "sch", "schcar", "schtime", "schclock", "rooms", "greet", "log", "health", "settings", "hp", "hr", "planall", "planview", "histview", "solarsheet", "insights", "peaks", "closesheet"],
+              guest: ["theme", "ser", "tab", "health", "settings", "swap", "schcar", "cardata", "rooms", "greet", "log", "report", "hp", "hr", "planall", "planview", "histview", "solarsheet", "insights", "peaks", "closesheet"] };
 const can = (a) => ER() === "owner" || (ROLE === "owner" && a === "viewas") || (CAN[ER()] || []).includes(a);   // ägaren kan alltid byta tillbaka från förhandsvisningen
-const TABS = { owner: ["bil", "ljus", "hus", "energi", "schema", "grafer"], family: ["bil", "ljus", "schema"], guest: ["bil", "ljus", "hus", "energi", "schema", "grafer"] };
-const TABNAME = { bil: "Bil", ljus: "Ljus", hus: "Hus", energi: "Energi", schema: "Schema", grafer: "Grafer" };
+const TABS = { owner: ["hem", "bil", "hus", "plan", "historik"], family: ["hem", "bil", "plan"], guest: ["hem", "bil", "hus", "plan", "historik"] };
+const TABNAME = { hem: "Hem", bil: "Bil", hus: "Hus", plan: "Plan", historik: "Historik" };
 const primary = () => LS.get("ew_primary", "");
 function chooseCar() {
   app.innerHTML = `<div class="card" style="text-align:center;display:grid;gap:14px;margin-top:10dvh"><h2 style="margin:0">Vilken bil kör du mest?</h2><div class="note">Den visas stor överst. Du kan byta senare.</div><button class="big" data-p="tesla">Tesla</button><button class="big" data-p="nissan" style="background:linear-gradient(135deg,#a5b4fc,#38bdf8)">Nissan</button></div>`;
@@ -162,13 +169,6 @@ function pageHus() {
     <div class="meter" ${pw.peak ? "" : 'style="opacity:.35"'}><i class="${pct > 85 ? "hi" : ""}" style="width:${pw.peak ? pct : 0}%"></i></div><div class="chips" style="justify-content:flex-start">${gridChip(pw)}${limitChip(pw)}<span class="chip">Elbil ${pw.ev_w != null ? f1(pw.ev_w / 1000) : "–"} kW</span><span class="chip ${pw.solar_w > 100 ? "ok" : ""}">Sol ${pw.solar_w != null ? f1(pw.solar_w / 1000) : "–"} kW</span><span class="chip ok">Sparat idag ${f1(pw.saving_today, 1)} kr</span></div></section>
   </div></div>`;
 }
-// ---- Ljus ------------------------------------------------------------------------------------------------------------------------
-function pageLjus() {
-  if (!LJ) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
-  const w = LJ.windows, u = LJ.up, off = (x) => (x.offline.length ? ` · offline: ${x.offline.map((n) => esc(n.replace("Fönsterlampa - ", ""))).join(", ")}` : "");
-  return `<div class="page"><section class="card lj"><h4>Fönsterlampor</h4><div class="note">${w.on} av ${w.total} tända${off(w)}</div><div class="ljrow"><button class="lbig on" data-a="lights" data-v="windows_on">Tänd alla</button><button class="lbig" data-a="lights" data-v="windows_off">Släck alla</button></div></section>
-  <section class="card lj"><h4>Uppe (som knappen i sovrummet)</h4><div class="note">Trapp, balkong och Esther · ${u.on} av ${u.total} tända${off(u)}</div><button class="lbig night" data-a="lights" data-v="goodnight">Godnatt – släck uppe</button><button class="mini wideb" data-a="lights" data-v="up_on">Tänd uppe</button></section></div>`;
-}
 // ---- levande bilder i energikorten: styrka avgör storlek, glöd och fart ------------------------------------------------------------------
 function sunViz(w, ref) {
   const kw = (w || 0) / 1000, p = Math.max(0, Math.min(1, kw / Math.max(3, (ref || 0) / 1000, 6))), dim = kw < 0.05;
@@ -182,30 +182,66 @@ function gridViz(net) {
   return `<div class="viz gridv${idle ? " dim" : ""}" aria-hidden="true"><svg viewBox="0 0 120 60" preserveAspectRatio="xMidYMid meet"><g class="pyl" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 8 L22 52 M32 8 L22 52 M14 20 H30 M16 32 H28 M10 14 H34"/></g>
     <g class="house" stroke="currentColor" fill="none" stroke-width="2" stroke-linejoin="round"><path d="M92 30 L106 18 L120 30 M95 28 V50 H117 V28"/></g>${idle ? '<path class="idle" d="M44 30 H84" stroke="currentColor" stroke-dasharray="3 5"/>' : chev}</svg></div>`;
 }
-// ---- Energi ----------------------------------------------------------------------------------------------------------------------
-function pageEnergi() {
+// ---- Hem (Just nu) --------------------------------------------------------------------------------------------------------------
+const SVP = [["today", "Idag"], ["week", "7 d"], ["month", "Månad"]];
+function svLine() {                                       // besparingen på en rad – bara ägaren (servern svarar hidden för andra)
+  if (!SV || !SV.ok) return "";
+  const p = SV.periods[svPeriod] || SV.periods.week, pos = p.saved_kr >= 0;
+  return `<section class="card svline"><div><h4>Sparat genom smart tajmning</h4><div class="v" style="color:${pos ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}<small> kr${p.pct != null ? ` (${p.pct > 0 ? "+" : ""}${f1(p.pct, 0)} %)` : ""}</small></div></div>
+    <div class="seg">${SVP.map(([k, l]) => `<button data-a="svp" data-v="${k}" class="${k === svPeriod ? "on" : ""}">${l}</button>`).join("")}</div></section>`;
+}
+function planNow() {
+  if (!PL) return "";
+  const act = (PL.items || []).find((i) => i.active), nxt = (PL.items || []).find((i) => !i.active);
+  const row = (i, lbl) => i ? `<div class="pnrow"><span class="pnl">${lbl}</span><span><b>${esc(i.title)}</b><span class="note"> ${esc(i.when)}</span></span></div>` : "";
+  return `<section class="card plannow" data-a="tab" data-v="plan">${row(act, "Nu")}${row(nxt, "Sen")}${!act && !nxt ? `<div class="note">${esc(PL.headline)}</div>` : ""}</section>`;
+}
+function ljusRow() {
+  if (!can("lights")) return "";
+  return `<div class="ljquick"><button class="mini" data-a="lights" data-v="windows_on">Tänd fönster</button><button class="mini" data-a="lights" data-v="windows_off">Släck fönster</button><button class="mini" data-a="lights" data-v="up_on">Tänd uppe</button><button class="mini night" data-a="lights" data-v="goodnight">Godnatt</button></div>`;
+}
+function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
-  const s = EN.solar, g = EN.grid, lim = s.limit_pct, net = g.net_w;
-  const limTxt = lim == null ? "offline" : lim >= 99.5 ? "ingen begränsning" : `${Math.round(lim)} %`;
-  return `<div class="page"><div class="grid2">
-  <section class="card tile"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">${esc(s.status || "")} · idag ${f1(s.today_kwh, 0)} kWh · prognos ${s.forecast_w != null ? f1(s.forecast_w / 1000) : "–"} kW</div><div class="note">Elbilar laddade på solel: ${EN.solar_ev_kwh != null ? f1(EN.solar_ev_kwh, 0) : "–"} kWh</div></section>
-  <section class="card tile"><h4>Nät</h4>${gridViz(net)}<div class="v" style="font-size:1.45rem">${net == null ? "–" : net < -50 ? `Säljer ${f1(-net / 1000)} kW` : `Köper ${f1(Math.max(0, net) / 1000)} kW`}</div><div class="note">Spotpris nu ${g.price != null ? f1(g.price, 2) : "–"} kr/kWh${g.level ? " · " + esc(g.level) : ""}</div><div class="note">Sparat idag ${f1(EN.saving_today, 1)} kr · förbrukat ${EN.today_kwh != null ? f1(EN.today_kwh, 0) : "–"} kWh</div></section>
-  <section class="card tile wide"><h4>SolarEdge – exportbegränsning</h4><div style="display:flex;justify-content:space-between;align-items:baseline"><div class="v" style="font-size:1.45rem">${limTxt}</div><span class="chip ${s.ai_limit ? "warn" : "ok"}">${s.ai_limit ? "AI begränsar nu" : "Auto"}</span></div>
-    <div class="tilelink note">${s.ai_limit ? "Spotpriset är under gränsen, så AI:n begränsar exporten själv." : "AI:n sköter detta automatiskt: den begränsar exporten själv när spotpriset går under gränsen nedan. Knapparna är bara till för manuell överstyrning."}</div>
+  const s = EN.solar, g = EN.grid, net = g.net_w;
+  return `<div class="page">${planNow()}<div class="grid2">
+  <section class="card tile" data-a="solarsheet"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">idag ${f1(s.today_kwh, 0)} kWh · ${s.limit_pct == null ? "gräns offline" : s.limit_pct >= 99.5 ? "ingen exportgräns" : `export ${Math.round(s.limit_pct)} %`}</div></section>
+  <section class="card tile" data-a="insights"><h4>Nät</h4>${gridViz(net)}<div class="v" style="font-size:1.45rem">${net == null ? "–" : net < -50 ? `Säljer ${f1(-net / 1000)} kW` : `Köper ${f1(Math.max(0, net) / 1000)} kW`}</div><div class="note">${g.price != null ? f1(g.price, 2) : "–"} kr/kWh${g.level ? " · " + esc(g.level) : ""}</div></section>
+  </div>${svLine()}${ljusRow()}</div>`;
+}
+function solarSheet() {                                    // exportgränsen (förut på Energi-sidan) – nu ett blad från Hem
+  const s = EN.solar, lim = s.limit_pct, limTxt = lim == null ? "offline" : lim >= 99.5 ? "ingen begränsning" : `${Math.round(lim)} %`;
+  sheet(`<h3>Solceller – exportbegränsning</h3><div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:1.4rem;font-weight:700">${limTxt}</div><span class="chip ${s.ai_limit ? "warn" : "ok"}">${s.ai_limit ? "AI begränsar nu" : "Auto"}</span></div>
+    <div class="note">${s.ai_limit ? "Spotpriset är under gränsen, så AI:n begränsar exporten själv." : "AI:n begränsar exporten själv när spotpriset går under gränsen nedan. Knapparna är bara för manuell överstyrning."}</div>
     <div class="seg">${[100, 75, 50, 25, 0].map((p) => `<button data-a="energy" data-k="limit" data-v="${p}" class="${lim != null && Math.round(lim) === p ? "on" : ""}" ${s.ai_limit || lim == null ? "disabled" : ""}>${p} %</button>`).join("")}</div>
-    <div class="setrow" style="border:0"><span class="note">Begränsa export när spotpriset är under</span><div class="step"><button data-a="energy" data-k="floor" data-v="${(s.export_price_floor - 0.05).toFixed(2)}">−</button><span>${f1(s.export_price_floor, 2)}</span><button data-a="energy" data-k="floor" data-v="${(s.export_price_floor + 0.05).toFixed(2)}">+</button></div></div></section>
-  <section class="card tile"><h4>Effekttoppar denna månad</h4>${EN.peaks.length ? EN.peaks.map((p) => `<div style="display:flex;justify-content:space-between"><b>${f1(p.kw)} kW</b><span class="note">${p.t}</span></div>`).join("") : '<div class="note">Ingen data</div>'}</section>
-  <section class="card tile ins"><h4>Just nu <button class="link" data-a="report" style="padding:0 0 0 6px;font-size:.8rem">Veckorapport</button></h4><div class="insl">${(EN.insights || []).map((x) => `<div class="insr"><span>${x.i}</span><span>${esc(x.t)}</span></div>`).join("") || '<div class="note">Inget särskilt just nu.</div>'}</div><button class="link" data-a="aidecisions" style="padding:0;font-size:.8rem;text-align:left">Visa alla AI-beslut</button></section>
-  </div></div>`;
+    <div class="setrow" style="border:0"><span class="note">Begränsa export när spotpriset är under</span><div class="step"><button data-a="energy" data-k="floor" data-v="${(s.export_price_floor - 0.05).toFixed(2)}">−</button><span>${f1(s.export_price_floor, 2)}</span><button data-a="energy" data-k="floor" data-v="${(s.export_price_floor + 0.05).toFixed(2)}">+</button></div></div>
+    <div class="note">${esc(s.status || "")} · prognos ${s.forecast_w != null ? f1(s.forecast_w / 1000) : "–"} kW · elbilar på solel ${EN.solar_ev_kwh != null ? f1(EN.solar_ev_kwh, 0) : "–"} kWh</div>
+    <button class="mini" data-a="closesheet">Stäng</button>`);
+}
+function insightsSheet() {
+  sheet(`<h3>Just nu</h3><div class="insl">${(EN.insights || []).map((x) => `<div class="insr"><span>${x.i}</span><span>${esc(x.t)}</span></div>`).join("") || '<div class="note">Inget särskilt just nu.</div>'}</div>
+    <div class="note">Sparat idag ${f1(EN.saving_today, 1)} kr · förbrukat ${EN.today_kwh != null ? f1(EN.today_kwh, 0) : "–"} kWh</div>
+    <div class="crow"><button class="mini" data-a="report">Veckorapport</button><button class="mini" data-a="aidecisions">Alla AI-beslut</button><button class="mini" data-a="closesheet">Stäng</button></div>`);
+}
+// ---- Plan ------------------------------------------------------------------------------------------------------------------------
+let planView = LS.get("ew_plan_view", "plan");
+function planList() {
+  if (!PL) return `<div class="note" style="text-align:center">Laddar…</div>`;
+  const items = PL.items || [];
+  return `<section class="card planlist"><div class="planhead">${esc(PL.headline)}</div>${items.slice(0, 5).map((i) => `<div class="plrow ${i.active ? "on" : ""}"><div class="plw">${i.active ? '<span class="chip ok">Nu</span> ' : ""}${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}${items.length > 5 ? `<button class="link" data-a="planall" style="padding:0;font-size:.82rem;text-align:left">+${items.length - 5} till</button>` : ""}<div class="note plnote">${esc(PL.note)}</div></section>`;
+}
+function pagePlan() {
+  const seg = `<div class="seg"><button data-a="planview" data-v="plan" class="${planView === "plan" ? "on" : ""}">Planen</button><button data-a="planview" data-v="schema" class="${planView === "schema" ? "on" : ""}">Laddschema</button></div>`;
+  if (planView === "schema") return `<div class="page">${seg}${SCH ? schemaInner() : `<div class="note" style="text-align:center">Laddar…</div>`}</div>`;
+  return `<div class="page">${seg}${planList()}</div>`;
 }
 // ---- Schema ----------------------------------------------------------------------------------------------------------------------
 const DAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
-function pageSchema() {
-  if (!SCH) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
+function schemaInner() {
+  if (!SCH) return "";
   const s = SCH[schCar];
-  return `<div class="page"><div class="seg"><button data-a="schcar" data-v="nissan" class="${schCar === "nissan" ? "on" : ""}">Nissan</button><button data-a="schcar" data-v="tesla" class="${schCar === "tesla" ? "on" : ""}">Tesla</button></div>
+  return `<div class="seg"><button data-a="schcar" data-v="nissan" class="${schCar === "nissan" ? "on" : ""}">Nissan</button><button data-a="schcar" data-v="tesla" class="${schCar === "tesla" ? "on" : ""}">Tesla</button></div>
   <div class="note" style="text-align:center">Klar till vald tid och batterinivå. Av = laddar bara enligt pris/Auto.</div>
-  <div class="sched">${DAYS.map((d, i) => { const x = s[i]; return `<div class="card srow"><b>${d}</b><button class="sw ${x.enabled ? "on" : ""}" data-a="sch" data-d="${i}" data-f="enabled" aria-label="${d} på/av"></button><button class="tm" data-a="schclock" data-d="${i}" aria-label="${d} klar kl"><span>${x.time}</span></button><div class="step"><button data-a="sch" data-d="${i}" data-f="soc-">−</button><span>${x.soc}%</span><button data-a="sch" data-d="${i}" data-f="soc+">+</button></div></div>`; }).join("")}</div></div>`;
+  <div class="sched">${DAYS.map((d, i) => { const x = s[i]; return `<div class="card srow"><b>${d}</b><button class="sw ${x.enabled ? "on" : ""}" data-a="sch" data-d="${i}" data-f="enabled" aria-label="${d} på/av"></button><button class="tm" data-a="schclock" data-d="${i}" aria-label="${d} klar kl"><span>${x.time}</span></button><div class="step"><button data-a="sch" data-d="${i}" data-f="soc-">−</button><span>${x.soc}%</span><button data-a="sch" data-d="${i}" data-f="soc+">+</button></div></div>`; }).join("")}</div>`;
 }
 // ---- Grafer ----------------------------------------------------------------------------------------------------------------------
 const hiddenSer = (key) => String(LS.get("ew_hide_" + key, "")).split(",").filter((x) => x !== "").map(Number);
@@ -220,17 +256,43 @@ function chart(title, unit, series, labels, colors, names, key) {
   const last = series.map((s, k) => vis[k] ? [...s].reverse().find((v) => v != null) : null);
   return `<section class="card chart"><div class="ch"><b style="color:var(--txt)">${title}</b><span>${last.map((v, k) => v == null ? "" : `<span style="color:${colors[k]}">${f1(v, unit === "kr" ? 2 : 1)}</span>`).filter(Boolean).join(" · ")} ${unit}</span></div>${legend}<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${paths}</svg><div class="ch"><span>${labels[0] ?? ""}:00</span><span>min ${f1(mn, 1)} · max ${f1(mx, 1)}</span><span>${labels[n - 1] ?? ""}:00</span></div></section>`;
 }
-function pageGrafer() {
-  if (!HIST) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
-  const h = HIST;
-  return `<div class="page"><div class="charts">${chart("Effekt hus", "kW", [h.total_kw, h.pump_kw, h.spa_kw, h.ev_kw, h.solar_kw], h.t, ["var(--txt)", "#fb923c", "#a78bfa", "var(--acc)", "var(--warn)"], ["Hus totalt", "Värmepump", "Spabad", "Elbilar", "Solproduktion"], "effekt")}${chart("Temperatur inne / ute", "°C", [h.indoor, h.outdoor], h.t, ["var(--warn)", "var(--mut)"], ["Inne", "Ute"], "temp")}${chart("Elpris", "kr", [h.price], h.t, ["var(--acc)"], ["Spotpris kr/kWh"], "pris")}</div></div>`;
+// ---- Historik (inspirerat av FTW:s History-vy, egen implementation) ------------------------------------------------------------
+let histView = LS.get("ew_hist_view", "energi");
+const HC = { grid: "#e11d74", solar: "#d4a72c", battery: "#0e7490", house: "var(--mut)" };
+function kwhCell(l, v, c) { return `<div class="kc" style="border-color:${c}"><span>${l}</span><b>${v == null ? "–" : f1(v, v >= 100 ? 0 : 1)}<small> kWh</small></b></div>`; }
+function powerSvg(sr) {                                   // nät/sol/hus/batteri runt nollan: uppåt = in i huset, nedåt = ut
+  if (!sr || !sr.t.length) return `<div class="note">Ingen data</div>`;
+  const ser = [[sr.grid_kw, HC.grid], [sr.solar_kw.map((v) => (v == null ? null : -v)), HC.solar], [sr.house_kw, HC.house]];
+  if (sr.battery_kw.some((v) => v != null)) ser.push([sr.battery_kw, HC.battery]);
+  const all = ser.flatMap(([s]) => s).filter((v) => v != null), mx = Math.max(0.5, ...all.map(Math.abs)), W = 300, Hh = 100, n = sr.t.length;
+  const X = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), Y = (v) => Hh / 2 - (v / mx) * (Hh / 2 - 4);
+  const paths = ser.map(([s, c]) => { let d = ""; s.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }); return `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round"/>`; }).join("");
+  const lbl = (x) => sr.range === "24h" ? x.slice(11, 16) : `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  return `<div class="ch"><span>${f1(mx, 0)} kW in</span><span></span></div><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><line x1="0" x2="${W}" y1="${Hh / 2}" y2="${Hh / 2}" stroke="var(--line)"/>${paths}</svg><div class="ch"><span>${lbl(sr.t[0])}</span><span>${f1(mx, 0)} kW ut</span><span>nu</span></div>`;
+}
+function pageHistorik() {
+  const seg = `<div class="seg">${[["energi", "Energi"], ["temp", "Temperatur"], ["pris", "Elpris"]].map(([k, l]) => `<button data-a="histview" data-v="${k}" class="${histView === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  if (histView !== "energi") {
+    if (!HIST) return `<div class="page">${seg}<div class="note" style="text-align:center">Laddar…</div></div>`;
+    const h = HIST, c = histView === "temp" ? chart("Temperatur inne / ute", "°C", [h.indoor, h.outdoor], h.t, ["var(--warn)", "var(--mut)"], ["Inne", "Ute"], "temp") : chart("Elpris", "kr", [h.price], h.t, ["var(--acc)"], ["Spotpris kr/kWh"], "pris");
+    return `<div class="page">${seg}<div class="charts one">${c}</div></div>`;
+  }
+  if (!HX) return `<div class="page">${seg}<div class="note" style="text-align:center">Laddar…</div></div>`;
+  const t = HX.totals[hxPeriod], L = HX.latest || {};
+  const w = (x) => (x == null ? "–" : Math.abs(x) >= 1000 ? `${f1(x / 1000)} kW` : `${Math.round(x)} W`);
+  const cells = t ? [kwhCell("Förbrukat", t.used_kwh, HC.house), t.solar_kwh != null ? kwhCell("Solel", t.solar_kwh, HC.solar) : "", kwhCell("Köpt", t.bought_kwh, HC.grid), kwhCell("Sålt", t.sold_kwh, HC.grid)].join("") : `<div class="note">Ingen mätdata</div>`;
+  return `<div class="page">${seg}
+  <section class="card hxtot"><div class="seg">${[["today", "Idag"], ["7d", "7 dagar"], ["30d", "30 dagar"]].map(([k, l]) => `<button data-a="hp" data-v="${k}" class="${hxPeriod === k ? "on" : ""}">${l}</button>`).join("")}</div><div class="kgrid">${cells}</div>${t && t.summary ? `<div class="note hxsum">${esc(t.summary)}</div>` : ""}</section>
+  <section class="card chart hxchart"><div class="seg">${[["24h", "24 h"], ["7d", "7 d"], ["30d", "30 d"], ["1y", "1 år"]].map(([k, l]) => `<button data-a="hr" data-v="${k}" class="${hxRange === k ? "on" : ""}">${l}</button>`).join("")}</div>${powerSvg(HX.series)}
+    <div class="latest"><span style="border-color:${HC.grid}">Nät <b>${L.grid_w == null ? "–" : w(Math.abs(L.grid_w))}</b> ${L.grid_w != null && L.grid_w < -50 ? "säljer" : "köper"}</span><span style="border-color:${HC.solar}">Sol <b>${w(L.solar_w)}</b></span>${L.battery_w != null ? `<span style="border-color:${HC.battery}">Batteri <b>${w(Math.abs(L.battery_w))}</b></span>` : ""}<span style="border-color:${HC.house}">Hus <b>${w(L.house_w)}</b></span></div>
+    <button class="link" data-a="peaks" style="padding:0;font-size:.8rem;text-align:left">Effekttoppar denna månad</button></section></div>`;
 }
 // ---- ram, render, laddning ----------------------------------------------------------------------------------------------------------
 function render() {
   if (page === "bil" && !primary() && S) return chooseCar();
   const warn = S && S.health && S.health.length;
   if (!TABS[ER()].includes(page)) page = "bil";
-  const body = { bil: pageBil, ljus: pageLjus, hus: pageHus, energi: pageEnergi, schema: pageSchema, grafer: pageGrafer }[page]();
+  const body = { hem: pageHem, bil: pageBil, hus: pageHus, plan: pagePlan, historik: pageHistorik }[page]();
   const ok = S ? S.ok : true;
   const tabs = TABS[ER()].map((k) => [k, TABNAME[k]]);
   app.innerHTML = `<div class="top"><div class="greet" data-a="greet"><b><span class="dot ${ok ? "" : "off"}"></span>${esc(GR ? GR.hello : "EnergyWizard")}</b>${GR ? `<span class="gl">${esc([GR.weather, GR.line].filter(Boolean).join(" · "))}</span>` : ""}${S && S.version && S.version !== "dev" && S.version !== "local" ? `<span class="ver" title="Du kör senaste versionen">v${esc(S.version)} ✓ senaste</span>` : ""}</div><div class="tools"><button class="icobtn" data-a="theme" aria-label="Byt tema">${themeIcon()}</button>${warn ? `<button class="icobtn warn" data-a="health">⚠ ${S.health.length}</button>` : ""}<button class="icobtn" data-a="settings" aria-label="Inställningar">${ICON.gear}</button></div></div>${ROLE === "owner" && VIEWAS ? `<button class="vastrip" data-a="viewas" data-v="">Visar som ${VIEWAS === "family" ? "Elin" : "gäst"} · tryck för att avsluta</button>` : ER() === "guest" ? `<div class="vastrip">Gästläge · bara titta</div>` : ""}${needInstall() && page === "bil" ? `<button class="installbar" data-a="installapp"><b>Installera som app</b><span>${installEvt ? "Ett tryck" : "Så gör du"}</span></button>` : ""}${body}`;
@@ -269,10 +331,9 @@ async function load() {
     if (page === "bil") S = await api("state"); else if (!S) S = await api("state");
     ROLE = (S && S.role) || ROLE; ME = (S && S.user) || ME; document.body.classList.toggle("guest", ROLE === "guest");
     if (page === "hus") H = await api("home");
-    if (page === "energi") EN = await api("energy");
-    if (page === "ljus") LJ = await api("lights");
-    if (page === "schema" && !SCH) SCH = await api("schedule");
-    if (page === "grafer" && !HIST) HIST = await api("history?hours=24");
+    if (page === "hem") { [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); }
+    if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); }
+    if (page === "historik") { if (histView === "energi") HX = await api("energyhistory?range=" + hxRange); else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();
     checkVersion(); loadGreeting(); openStream();
     if (!doneShortcut) { doneShortcut = true; runShortcut(); }
@@ -457,6 +518,16 @@ document.addEventListener("click", async (e) => {
   if (a === "viewas") { VIEWAS = v; LS.set("ew_viewas", v); grAt = 0; closeSheet(); loadGreeting(); return; }
   if (a === "trip") return tripSheet(c);
   if (a === "report") return reportSheet();
+  if (a === "closesheet") return closeSheet();
+  if (a === "solarsheet") { if (EN) solarSheet(); return; }
+  if (a === "insights") { if (EN) insightsSheet(); return; }
+  if (a === "svp") { svPeriod = v; LS.set("ew_sv_period", v); return render(); }
+  if (a === "planview") { planView = v; LS.set("ew_plan_view", v); render(); return load(); }
+  if (a === "planall") { sheet(`<h3>Planen framåt</h3>${(PL.items || []).map((i) => `<div class="plrow"><div class="plw">${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}<button class="mini" data-a="closesheet">Stäng</button>`); return; }
+  if (a === "histview") { histView = v; LS.set("ew_hist_view", v); render(); return load(); }
+  if (a === "hp") { hxPeriod = v; LS.set("ew_hx_period", v); return render(); }
+  if (a === "hr") { hxRange = v; LS.set("ew_hx_range", v); try { HX = await api("energyhistory?range=" + v); } catch (er) { toast(er.message); } return render(); }
+  if (a === "peaks") { sheet(`<h3>Effekttoppar denna månad</h3>${EN && EN.peaks.length ? EN.peaks.map((p) => `<div style="display:flex;justify-content:space-between"><b>${f1(p.kw)} kW</b><span class="note">${p.t}</span></div>`).join("") : '<div class="note">Ingen data</div>'}<button class="mini" data-a="closesheet">Stäng</button>`); return; }
   if (a === "spaready") return spaReadySheet();
   if (a === "log") return logSheet();
   if (a === "greet" && GR) return sheet(`<h3>${esc(GR.hello)}</h3><div class="note">${esc(GR.weather)}</div><div style="font-size:1.1rem;font-weight:600">${esc(GR.line)}</div>`);

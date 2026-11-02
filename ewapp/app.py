@@ -757,6 +757,51 @@ async def set_schedule(request: Request):
 
 
 # -- Grafer ----------------------------------------------------------------------------------------------------------------
+@app.get("/api/energyhistory")
+def energyhistory(range: str = "24h"):
+    """Historik-fliken: energisummor + effekt över tid (smartbox/energy_history.py, samma som webben)."""
+    import energy_history
+    with ENGINE.connect() as c:
+        return energy_history.history_payload(c, range)
+
+
+@app.get("/api/savings")
+def savings_api(request: Request):
+    """Hem-fliken: besparing Idag/7 dagar/Månad (smartbox/savings.py, samma formel som webben).
+    Bara för ägaren - familj och gäster ser inga kronor."""
+    if _role(request) != "owner":
+        return {"ok": False, "hidden": True}
+    import savings
+    today = dt.datetime.now(TZ).date().isoformat()
+    with ENGINE.connect() as c:
+        rows = savings.daily_rows(c, days=40)
+    return {"ok": True, "today": today, "periods": savings.summarize_periods(rows, today)}
+
+
+@app.get("/api/plan")
+def plan_api():
+    """Hem- och Plan-fliken: planen framåt i klartext (smartbox/plan_brief.py, samma som webben)."""
+    import nordpool
+    import plan_brief
+    now = dt.datetime.now(TZ)
+    with ENGINE.connect() as c:
+        prices = c.execute(text(
+            "SELECT time_start, sek_per_kwh FROM elpriser "
+            "WHERE time_start >= date_trunc('day', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm' "
+            "ORDER BY time_start")).fetchall()
+        try:
+            ev_rows = c.execute(text("SELECT car_id, t_slot, kw FROM ev_plan_slots")).fetchall()
+        except Exception:
+            c.rollback()
+            ev_rows = []
+        ch = c.execute(text("SELECT cheap_hours_count FROM system_settings WHERE id = 1")).fetchone()
+        mode_row = c.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL ORDER BY timestamp DESC LIMIT 1")).fetchone()
+    brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
+                                   [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
+                                   int(ch[0]) if ch and ch[0] else 8, mode_row[0] if mode_row else None)
+    return {"ok": True, **brief}
+
+
 @app.get("/api/history")
 def history(hours: int = 24):
     hours = max(6, min(hours, 72))

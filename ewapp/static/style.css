@@ -205,3 +205,28 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .pchart .pc-plot > .pc-bars:not(.pc-sun) { position:relative; }
 .page.t2 .pchart .pc-plot, .page.t2 .pchart .pc-hrs { display:none; } #sheet .pchart { margin:4px 0 8px; } #sheet .pchart .pc-plot, #sheet .pchart .pc-hrs { display:block; } #sheet .pchart .pc-hrs { display:grid; }
 .pc-legend { display:flex; flex-wrap:wrap; gap:10px; font-size:.68rem; color:var(--mut); margin-top:6px; } .pc-legend span { display:inline-flex; align-items:center; gap:4px; } .pc-legend i { display:inline-block; width:9px; height:9px; border-radius:2px; }
+/* ---- Hem / Plan / Historik (fem-flik-layouten). Allt ryms utan scroll: fit() gömmer detaljer stegvis (t1-t4). ---- */
+.plannow { flex:none; display:grid; gap:6px; padding:10px 14px; cursor:pointer; }
+.pnrow { display:flex; gap:10px; align-items:baseline; min-width:0; } .pnrow > span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pnl { flex:none; width:34px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--acc); }
+.svline { flex:none; display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; }
+.svline h4 { margin:0; font-size:.8rem; color:var(--mut); font-weight:600; } .svline .v { font-size:1.5rem; font-weight:800; line-height:1.1; } .svline .v small { font-size:.78rem; font-weight:600; }
+.svline .seg button { min-height:34px; font-size:.8rem; padding:0 8px; }
+.ljquick { flex:none; display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; } .ljquick .mini { min-height:42px; font-size:.8rem; padding:0 4px; } .ljquick .night { border-color:#a5b4fc; color:#a5b4fc; }
+.page > .seg { flex:none; }
+.planlist { flex:1; display:flex; flex-direction:column; gap:8px; min-height:0; }
+.planhead { font-weight:700; font-size:1rem; line-height:1.3; }
+.plrow { display:flex; gap:10px; padding-top:8px; border-top:1px solid var(--line); min-width:0; } .plrow.on b { color:var(--acc); }
+.plw { flex:0 0 112px; font-size:.84rem; font-variant-numeric:tabular-nums; } .plrow .note { font-size:.78rem; }
+.plnote { margin-top:auto; font-size:.74rem; }
+.charts.one { grid-template-rows:1fr; }
+.hxtot { flex:none; display:grid; gap:8px; padding:10px 12px; } .hxtot .seg button, .hxchart .seg button { min-height:32px; font-size:.8rem; }
+.kgrid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; }
+.kc { border-left:3px solid; padding-left:7px; display:grid; min-width:0; } .kc span { font-size:.7rem; color:var(--mut); } .kc b { font-size:1.05rem; white-space:nowrap; } .kc small { font-size:.66rem; color:var(--mut); font-weight:500; }
+.hxsum { font-size:.76rem; }
+.hxchart { flex:1; gap:6px; }
+.latest { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:.76rem; color:var(--mut); } .latest span { border-left:3px solid; padding-left:6px; } .latest b { color:var(--txt); }
+.page.t1 .hxsum, .page.t1 .plnote, .page.t1 .tile .note { display:none; }
+.page.t2 .plrow .note, .page.t2 .latest { display:none; } .page.t2 .svline h4 { display:none; }
+.page.t3 .ljquick .mini:nth-child(3) { display:none; } .page.t3 .ljquick { grid-template-columns:repeat(3, minmax(0, 1fr)); } .page.t3 .plrow:nth-of-type(n+5) { display:none; }
+.page.t4 .plannow .pnrow:nth-child(2) { display:none; } .page.t4 .plrow:nth-of-type(n+4) { display:none; }

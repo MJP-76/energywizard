@@ -31,7 +31,7 @@ def _kr(v):
     """Samma stil som webdashboardens fmtKrOre: under 1 kr i öre, annars kronor."""
     if v is None:
         return "–"
-    return f"{round(v * 100)} öre" if abs(v) < 1 and v != 0 else f"{v:.2f} kr"
+    return f"{round(v * 100)} öre" if abs(v) < 1 and v != 0 else f"{_num(v, 2)} kr"
 
 
 def _clock(ts, now):
@@ -41,8 +41,19 @@ def _clock(ts, now):
     return f"{prefix}{ts:%H:%M}"
 
 
+def _num(v, dec=1):
+    """Svenskt decimalkomma, som i appen: 11,0 kW."""
+    return f"{v:.{dec}f}".replace(".", ",")
+
+
 def _span(start, end, now):
-    s = "nu" if _local(start) <= _local(now) else _clock(start, now)
+    if _local(start) <= _local(now):
+        # Pågående: "till 24:00" (en Nu-markering visas bredvid i gränssnittet).
+        e_local = _local(end)
+        if e_local.hour == 0 and e_local.minute == 0 and e_local.date() > _local(now).date():
+            return "till 24:00" if e_local.date() - _local(now).date() == timedelta(days=1) else "till imorgon 24:00"
+        return f"till {_clock(end, now)}"
+    s = _clock(start, now)
     e_local = _local(end)
     if e_local.hour == 0 and e_local.minute == 0 and e_local.date() > _local(start).date():
         # Ett pass som slutar vid midnatt slutar med sin dag: "06:00–24:00", inte "imorgon 00:00".
@@ -113,7 +124,7 @@ def ev_items(ev_rows, prices, now):
                 "kind": "ev", "start": b["start"].isoformat(), "end": b["end"].isoformat(),
                 "when": _span(max(b["start"], now), b["end"], now),
                 "title": f"🚗 {car.capitalize()} laddar",
-                "detail": " · ".join(x for x in (f"{kw_max:.1f} kW", f"{kwh:.1f} kWh", why) if x),
+                "detail": " · ".join(x for x in (f"{_num(kw_max)} kW", f"{_num(kwh)} kWh", why) if x),
                 "active": b["start"] <= now < b["end"],
             })
     return items

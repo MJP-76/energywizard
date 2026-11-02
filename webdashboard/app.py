@@ -432,6 +432,15 @@ async def api_plan():
     return {"ok": True, **brief}
 
 
+@app.get("/api/energyhistory")
+async def api_energyhistory(range: str = "24h"):
+    """Historik-sidan: energisummor Idag/7 dagar/30 dagar + effekt över tid + senaste värden
+    (smartbox/energy_history.py, delad med mobilappen)."""
+    import energy_history
+    with ENGINE.connect() as c:
+        return energy_history.history_payload(c, range)
+
+
 @app.get("/api/consumption")
 async def api_consumption():
     """Elförbrukning-sidan: fasströmmar/effekt just nu + senaste förklarade uppdelningen
