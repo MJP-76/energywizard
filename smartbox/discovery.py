@@ -212,7 +212,22 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                 suggested["today_kwh"] = today_kwh["e"]
             if limit_e:
                 suggested["export_limit_pct"] = limit_e["e"]
-            solar["generic_suggestion"] = {"driver": "generic_number", "entities": suggested}
+            else:
+                # Gräns i WATT (t.ex. Sungrow-Modbus): GenericNumberSolarDriver räknar om procent
+                # mot entitetens 'max'-attribut, eller mot export_limit_max_w i configen.
+                limit_w = next((e for e in entities if e["e"].startswith("number.") and e.get("d") == solar_e.get("d")
+                                and e.get("u") == "W"
+                                and _has(e.get("n"), re.compile("export|feed|gräns|power.?limit", re.I))), None)
+                if limit_w:
+                    suggested["export_limit_w"] = limit_w["e"]
+            if _has(_candidate(solar_e), re.compile("huawei", re.I)) and solar_e.get("d"):
+                # wlcrs/huawei_solar: exportgränsen styrs via integrationens tjänster mot
+                # växelriktarens enhet (drivers/solar_huawei.py), inte via en entitet.
+                suggested = {k: v for k, v in suggested.items() if k in ("pv_power_w", "today_kwh")}
+                suggested["device_id"] = solar_e["d"]
+                solar["generic_suggestion"] = {"driver": "huawei_solar", "entities": suggested}
+            else:
+                solar["generic_suggestion"] = {"driver": "generic_number", "entities": suggested}
 
     # --- Elmätare/nätimport: Pulse, smartmätare, eller BÅDA samtidigt (inte
     # antingen-eller) - alla matchande power-sensorer listas, inte bara den första.

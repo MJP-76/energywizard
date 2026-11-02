@@ -75,6 +75,20 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   (`tests/test_discovery.py`). Mockat/syntetiskt verifierat, ALDRIG kört mot
   en riktig OCPP-laddare.
 
+- **Exportstyrning för fler växelriktare - byggd, overifierad mot riktig hårdvara.**
+  Via redan underhållna HA-integrationer, ingen egen protokollkod (se
+  [kunskapsbanken](https://murre87.github.io/energywizard/kunskapsbank/vaxelriktare.html)):
+  Growatt (0xAHA/Growatt_ModbusTCP, gräns i % - fungerade redan med
+  `generic_number`), Sungrow (mkaiser Modbus-paket, gräns i W + lägesbrytare -
+  `generic_number` räknar nu om % till W), Huawei (wlcrs/huawei_solar:s tjänster,
+  bekräftade mot integrationens `services.yaml`/`services.py` -
+  `drivers/solar_huawei.py`) och Fronius (HA:s inbyggda `modbus.write_register`,
+  WMaxLimPct/WMaxLim_Ena - `drivers/solar_modbus_register.py`; registeradresserna
+  är omdiskuterade i communityn, därför konfigurerbara). Entitetsväljaren föreslår
+  nu bara en %-gräns som %-gräns (tidigare kunde en W-gräns få värdet 0-100 och
+  strypa exporten till ~100 W), en W-gräns som `export_limit_w`, och Huawei-
+  drivrutinen med växelriktarens enhets-ID. 19 mockade tester (17 drivrutin, 2 entitetsväljare).
+
 - **Fler värmepumpsmärken** (IVT, CTC, Mitsubishi, Viessmann m.fl.) -
   arkitekturen (`smartbox/drivers/heatpump.py`) är byggd för det, men varje
   märke kräver en egen, verifierad implementation - bidrag välkomna.

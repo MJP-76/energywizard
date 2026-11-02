@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vilken växelriktare fungerar? - EnergyWizard Open</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><span class="dot"></span> EnergyWizard Open</a>
+    <nav class="top"><a href="./">Kunskapsbank</a></nav>
+  </div>
+</header>
+<div class="wrap">
+<article class="post">
+  <h1>Vilken växelriktare fungerar?</h1>
+  <div class="meta">Solceller</div>
+
+  <p>EnergyWizard skriver ingen egen protokollkod för växelriktare. Vi går via
+  den Home Assistant-integration som redan finns för ditt märke. Produktionen
+  läses alltid in om integrationen har en effektsensor. Det som skiljer märkena
+  åt är om exporten kan <strong>strypas vid minuspris</strong>, och det kräver
+  att integrationen har en skrivbar gräns.</p>
+
+  <h3>Märke för märke</h3>
+  <table>
+    <tr><th>Märke</th><th>Integration</th><th>Exportstyrning</th><th>Status</th></tr>
+    <tr><td>SolarEdge</td><td>egen drivrutin</td><td>ja</td><td>körs i skarp drift</td></tr>
+    <tr><td>Growatt</td><td><a href="https://github.com/0xAHA/Growatt_ModbusTCP">0xAHA/Growatt_ModbusTCP</a></td>
+        <td>ja, "Export Limit Power" (%)</td><td>overifierat</td></tr>
+    <tr><td>Sungrow SH-RT/RS</td><td><a href="https://github.com/mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant">mkaiser Modbus-paket</a></td>
+        <td>ja, "Export power limit" (W) + lägesbrytare</td><td>overifierat</td></tr>
+    <tr><td>Huawei SUN2000</td><td><a href="https://github.com/wlcrs/huawei_solar">wlcrs/huawei_solar</a></td>
+        <td>ja, via integrationens tjänster (gräns mot nätet i %)</td><td>overifierat</td></tr>
+    <tr><td>Fronius GEN24/Symo</td><td>HA:s inbyggda Modbus</td>
+        <td>ja, register WMaxLimPct/WMaxLim_Ena</td><td>overifierat, registren omdiskuterade</td></tr>
+    <tr><td>Övriga (Solis, GoodWe, Deye m.fl.)</td><td>märkets HA-integration</td>
+        <td>om den har en gräns i % eller W</td><td>prova entitetsväljaren</td></tr>
+  </table>
+
+  <p>"Overifierat" betyder att drivrutinen är byggd mot integrationens egen källkod
+  eller dokumentation och testad med simulerade anrop, men inte körd mot en riktig
+  växelriktare än. Har du ett av märkena? Hör av dig, det är precis det vi behöver.</p>
+
+  <h3>Huawei</h3>
+  <p><code>huawei_solar</code> styr exportgränsen med tjänsterna
+  <code>set_maximum_feed_grid_power_percent</code> och
+  <code>reset_maximum_feed_grid_power</code>. Gränsen gäller matningen till nätet,
+  inte produktionen. Vid minuspris håller växelriktaren själv exporten på noll, medan
+  huset fortfarande får solel. Entitetsväljaren fyller i växelriktarens enhets-ID.
+  Har du en EMMA ska du använda <em>dess</em> enhets-ID i stället. Integrationen kopplar
+  då tjänsterna till EMMA:n. Huawei Fusion Hub fungerar bra som källa för
+  effektsensorn.</p>
+
+  <h3>Sungrow</h3>
+  <p>Med mkaisers Modbus-paket är gränsen i watt. EnergyWizard räknar om procent till
+  watt mot gränsens eget maxvärde, eller mot <code>export_limit_max_w</code> om du
+  anger det. Lägesbrytaren "Export power limit" slås på när vi stryper och av igen
+  efteråt. GoSungrow/iSolarCloud går via molnet och har ingen sådan gräns vi kan
+  använda.</p>
+
+  <h3>Fronius</h3>
+  <p>Varken den officiella Fronius-integrationen eller <code>fronius_modbus</code> har
+  en skrivbar produktionsgräns. Därför skriver EnergyWizard registren via HA:s egen
+  tjänst <code>modbus.write_register</code>: gräns av, nytt procentvärde, gräns på.
+  Du behöver en <a href="https://www.home-assistant.io/integrations/modbus/">Modbus-hubb</a>
+  i <code>configuration.yaml</code>, och Modbus TCP påslaget i växelriktaren.
+  Förvalet använder 40232/40236 från HA-communityns tråd. Uppgifterna där går isär
+  för viss firmware, men adresserna går att ändra i <code>house_config.yaml</code>.</p>
+
+  <p>Exempel för varje märke finns i <code>config/house_config.example.yaml</code>.</p>
+</article>
+</div>
+</body>
+</html>

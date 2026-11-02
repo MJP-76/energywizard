@@ -712,6 +712,35 @@ def set_switch(entity_id: str, turn_on: bool) -> bool:
         return False
 
 
+def get_attribute(entity_id: str, attribute: str):
+    """Ett attribut från senast hämtade states (t.ex. en number-entitets 'max'). None om det saknas."""
+    if not entity_id:
+        return None
+    if not _states_cache:
+        update_states()
+    s = _states_cache.get(entity_id)
+    return (s.get("attributes") or {}).get(attribute) if s else None
+
+
+def call_service(domain: str, service: str, data: dict) -> bool:
+    """Genuint generiskt tjänsteanrop (POST /api/services/<domain>/<service>) för drivrutiner som
+    styrs via en integrations egna tjänster istället för en entitet - t.ex. huawei_solar:s
+    exportgräns eller HA:s inbyggda modbus.write_register."""
+    try:
+        r = requests.post(
+            f"{_BASE}/services/{domain}/{service}",
+            headers=_HEADERS,
+            json=data,
+            timeout=10,
+            verify=_VERIFY,
+        )
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        print(f"❌ Fel vid {domain}.{service}: {e}")
+        return False
+
+
 def set_number(entity_id: str, value: float) -> bool:
     """Genuint generisk number.set_value på en valfri entitet - samma mönster som
     set_solaredge_limit redan gör mot en hårdkodad entitet, återanvändbar av generiska

@@ -41,15 +41,54 @@ heat_pump:
 # --- Solceller (valfri) ---
 solar:
   enabled: false
+# Välj EN av varianterna nedan. Entitetsväljaren (webdashboard -> Inställningar) fyller
+# i det mesta själv. Se docs/kunskapsbank/vaxelriktare.html för vilken integration som gäller.
+#
+# SolarEdge (egen drivrutin):
 # solar:
 #   enabled: true
-#   driver: solaredge                # eller sunspec_generic / ha_entity_passthrough
+#   driver: solaredge
+#
+# Växelriktare med en exportgräns i PROCENT som HA-entitet (t.ex. Growatt via
+# 0xAHA/Growatt_ModbusTCP, "Export Limit Power"):
+# solar:
+#   enabled: true
+#   driver: generic_number
 #   entities:
 #     pv_power_w: sensor.min_vaxelriktare_effekt
 #     today_kwh: sensor.min_vaxelriktare_idag
-#   curtailment:
-#     mode: ha_entity                # "ha_entity" om din integration redan har en number/switch
-#     entity: number.min_vaxelriktare_exportgrans
+#     export_limit_pct: number.min_vaxelriktare_export_limit_power
+#
+# Exportgräns i WATT (t.ex. Sungrow via mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant):
+# solar:
+#   enabled: true
+#   driver: generic_number
+#   entities:
+#     pv_power_w: sensor.total_dc_power
+#     today_kwh: sensor.daily_pv_generation
+#     export_limit_w: number.export_power_limit
+#     export_limit_switch: switch.export_power_limit   # gränsläget - slås på/av automatiskt
+#     export_limit_max_w: 10000                        # valfri; annars entitetens eget max
+#
+# Huawei SUN2000 via wlcrs/huawei_solar (styrs via integrationens tjänster):
+# solar:
+#   enabled: true
+#   driver: huawei_solar
+#   entities:
+#     pv_power_w: sensor.inverter_input_power
+#     today_kwh: sensor.inverter_daily_yield
+#     device_id: 0123abcd...      # växelriktarens enhets-ID (eller EMMA:ns om du har en)
+#
+# Fronius (eller annan) via HA:s inbyggda Modbus - kräver en modbus-hubb i configuration.yaml:
+# solar:
+#   enabled: true
+#   driver: modbus_register
+#   entities:
+#     pv_power_w: sensor.solarnet_power_photovoltaics
+#   modbus:
+#     preset: fronius             # WMaxLimPct 40232 / WMaxLim_Ena 40236, OVERIFIERAT - se dokumentationen
+#     hub: fronius                # namnet på din modbus-hubb
+#     slave: 1
 
 # --- Spa (valfri) ---
 spa:

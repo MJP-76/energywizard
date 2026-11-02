@@ -239,6 +239,21 @@ def test_exportgrans_i_watt_foreslas_inte_som_procent():
     result = discover_house(sungrow)
     assert result["solar"]["pv_power_entity"] == "sensor.total_dc_power"
     assert "export_limit_pct" not in result["solar"]["generic_suggestion"]["entities"]
+    assert result["solar"]["generic_suggestion"]["entities"]["export_limit_w"] == "number.export_power_limit"
+
+
+def test_huawei_foreslar_tjanstedrivrutinen_med_enhetens_id():
+    huawei = [
+        {"e": "sensor.inverter_input_power", "n": "Inverter Input power", "a": None, "d": "dev_hw",
+         "dn": "SUN2000-10KTL-M1", "m": "Huawei", "mo": "SUN2000-10KTL-M1", "dc": "power", "u": "W", "st": "5200"},
+        {"e": "sensor.inverter_daily_yield", "n": "Inverter Daily yield", "a": None, "d": "dev_hw",
+         "dn": "SUN2000-10KTL-M1", "m": "Huawei", "mo": "SUN2000-10KTL-M1", "dc": "energy", "u": "kWh", "st": "12.3"},
+    ]
+    result = discover_house(huawei)
+    assert result["solar"]["generic_suggestion"] == {
+        "driver": "huawei_solar",
+        "entities": {"pv_power_w": "sensor.inverter_input_power", "device_id": "dev_hw"},
+    }
 
 
 def test_tomt_hus_ger_inga_fynd_kraschar_inte():

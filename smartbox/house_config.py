@@ -30,6 +30,8 @@ from drivers.heatpump_nibe_local import NibeLocalHeatPumpDriver
 from drivers.heatpump_thermia import ThermiaHusdataHeatPumpDriver
 from drivers.solar import NullSolarDriver, SolarDriver
 from drivers.solar_generic import GenericNumberSolarDriver
+from drivers.solar_huawei import HuaweiSolarServiceDriver
+from drivers.solar_modbus_register import ModbusRegisterSolarDriver
 from drivers.solar_solaredge import SolarEdgeSolarDriver
 from drivers.spa import NullSpaDriver, SpaDriver
 from drivers.spa_balboa import BalboaSpaDriver
@@ -50,7 +52,8 @@ HEAT_PUMP_DRIVER_REGISTRY = {
     # NIBE_LOCAL_* ovan. ALDRIG verifierad mot ett riktigt myUplink-konto.
     "myuplink": MyUplinkHeatPumpDriver,
 }
-SOLAR_DRIVER_REGISTRY = {"solaredge": SolarEdgeSolarDriver, "generic_number": GenericNumberSolarDriver}
+SOLAR_DRIVER_REGISTRY = {"solaredge": SolarEdgeSolarDriver, "generic_number": GenericNumberSolarDriver,
+                         "huawei_solar": HuaweiSolarServiceDriver, "modbus_register": ModbusRegisterSolarDriver}
 SPA_DRIVER_REGISTRY = {"gecko": GeckoSpaDriver, "balboa": BalboaSpaDriver}
 BATTERY_DRIVER_REGISTRY = {"generic": GenericBatteryDriver}
 
@@ -170,6 +173,10 @@ def build_solar_driver(cfg: dict) -> SolarDriver:
     driver_cls = SOLAR_DRIVER_REGISTRY.get(sol.get("driver"), NullSolarDriver)
     if driver_cls is GenericNumberSolarDriver:
         return GenericNumberSolarDriver(entities=sol.get("entities", {}))
+    if driver_cls is HuaweiSolarServiceDriver:
+        return HuaweiSolarServiceDriver(entities=sol.get("entities", {}))
+    if driver_cls is ModbusRegisterSolarDriver:
+        return ModbusRegisterSolarDriver(entities=sol.get("entities", {}), modbus=sol.get("modbus", {}))
     return driver_cls()
 
 
