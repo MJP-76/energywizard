@@ -226,6 +226,21 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   för att stoppa all laddning. 17 tester (`tests/test_fuse_guard.py`), både
   aktivering och icke-aktivering.
 
+- **Översikten lever: "Just nu"-flöde + dygnet timme för timme. Spabad och Elbil utökade.**
+  Flödesbilden (`smartbox/live_flow.py`) visar bara det huset har - sol, nät, hus
+  alltid, värmepump/varmvatten/spabad/bilar/batteri om de rapporterar - med prickar
+  vars fart följer effekten och riktning för köp/sälj, och "varför" per enhet under.
+  Tidslinjen (`smartbox/timeline.py`) visar 24 h uppmätt bakåt och planerat framåt:
+  elpris, sol, värmepumpens kompressor/läge, spabadets värmning och varje bils
+  laddning. Spabad: normal/max/Eco-temperaturer (max 40 °C, motorns säkerhetsgräns),
+  "klart till" och 24 h-diagram. Elbil: laddplanen per kvart mot elpriset med
+  batterinivå. Rättat: Elbil-sidan visade Teslas och Nissans effekt omkastat, "EV
+  Laddning" visade bara den ena laddboxen och "planerat idag" var 4x för högt.
+- **Buy Me a Coffee i README** (`.github/workflows/buy-me-a-coffee.yml`, låst till
+  en exakt commit av akosbalasko/coffee-readme). Väntar på repo-hemligheten
+  `BUY_ME_A_COFFEE_TOKEN`; utan den hoppar jobbet över sig själv. Pushar som bara rör
+  README/ROADMAP/docs bygger inga Docker-bilder längre.
+
 - **"Vad görs nu och varför" per enhet + SolarEdge via officiella integrationen.**
   Beslutstexten var förut gpm-loggens sista rad - nästan alltid effektvaktens "Peak
   Shaving är inaktiverat". Nu en mening per enhet (elbil, värmepump, varmvatten,

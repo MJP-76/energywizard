@@ -1,0 +1,175 @@
+"""
+timeline.py - dygnet timme för timme: vad som hände och vad som är planerat.
+
+En rad per timme, 24 h bakåt och framåt så långt elpriserna räcker (max 24 h):
+
+  BAKÅT (uppmätt, sensor_log):  elpris, solproduktion, hur stor del av timmen värmepumpens
+                                kompressor gick, om spabadet värmde, hur mycket varje laddbox laddade.
+  FRAMÅT (planerat):            elpris, solprognos (weather.py, samma som motorn använder),
+                                värmepumpens grundläge enligt prisregeln (plan_brief.py) och
+                                elbilarnas planerade laddning (ev_plan_slots).
+
+Spabadet har ingen plan framåt (det beslutas minut för minut) - de timmarna lämnas tomma
+hellre än gissade.
+
+Laddboxarna i sensor_log heter ev_power_kw (Lite) och ev_carport_power_kw (Carport); de
+kopplas till bilnamn på samma sätt som resten av gränssnittet (CHARGER_CAR). build() är ren
+och testas i tests/test_timeline.py; load() läser databasen.
+"""
+
+from datetime import datetime, timedelta
+import zoneinfo
+
+SWE = zoneinfo.ZoneInfo("Europe/Stockholm")
+CHARGER_CAR = {"ev_power_kw": "nissan", "ev_carport_power_kw": "tesla"}
+CAR_COLORS = ["#22d3a0", "#38bdf8", "#a78bfa", "#f472b6"]
+
+
+def _hour(ts):
+    ts = ts.astimezone(SWE) if ts.tzinfo else ts.replace(tzinfo=SWE)
+    return ts.replace(minute=0, second=0, microsecond=0)
+
+
+def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_ids=None):
+    """now: tz-medveten. past: {timme: {'price','solar_kw','compressor','spa','ev': {car: kW}}}.
+    future_prices/future_solar_kw: {timme: värde}. heat_modes: {timme: 'CHEAP'|'EXPENSIVE'|'COMFORT'}.
+    ev_plan: {timme: {car: kWh}}. Returnerar en dict för grafen."""
+    h0 = _hour(now)
+    last_future = max(list(future_prices) + [h0])
+    end = min(last_future, h0 + timedelta(hours=24))
+    hours = []
+    t = h0 - timedelta(hours=24)
+    while t <= end:
+        hours.append(t)
+        t += timedelta(hours=1)
+
+    cars = list(dict.fromkeys(list(car_ids or []) +
+                              [c for v in past.values() for c in (v.get("ev") or {})] +
+                              [c for v in ev_plan.values() for c in v]))
+    price, solar, is_future = [], [], []
+    hp, hp_text, spa, spa_text = [], [], [], []
+    ev = {c: ([], []) for c in cars}
+    for h in hours:
+        fut = h > h0 or (h == h0 and h not in past)
+        is_future.append(fut)
+        p = past.get(h, {})
+        if not fut:
+            price.append(p.get("price"))
+            solar.append(p.get("solar_kw"))
+            comp = p.get("compressor")
+            hp.append(comp)
+            hp_text.append(f"Kompressorn gick {round(comp * 60)} min" if comp is not None else "Ingen data")
+            s = p.get("spa")
+            spa.append(s)
+            spa_text.append((f"Värmde {round(s * 60)} min" if s and s > 0.01 else "Värmde inte") if s is not None else "Ingen data")
+            for c in cars:
+                kw = (p.get("ev") or {}).get(c)
+                ev[c][0].append(kw if kw and kw > 0.05 else 0.0 if kw is not None else None)
+                ev[c][1].append(f"Laddade {kw:.1f} kWh" if kw and kw > 0.05 else "Laddade inte")
+        else:
+            price.append(future_prices.get(h))
+            solar.append(future_solar_kw.get(h))
+            m = heat_modes.get(h)
+            hp.append({"CHEAP": 1.0, "COMFORT": 0.6, "EXPENSIVE": 0.15}.get(m))
+            hp_text.append({"CHEAP": "Planerat: billigt – laddar huset med värme",
+                            "COMFORT": "Planerat: jämn komfort",
+                            "EXPENSIVE": "Planerat: sänkt – dyr el"}.get(m, "Ingen plan"))
+            spa.append(None)
+            spa_text.append("Beslutas minut för minut")
+            for c in cars:
+                kwh = (ev_plan.get(h) or {}).get(c, 0.0)
+                ev[c][0].append(kwh)
+                ev[c][1].append(f"Planerat: {kwh:.1f} kWh" if kwh > 0.05 else "Ingen laddning planerad")
+
+    ev_max = max([v for c in cars for v in ev[c][0] if v] + [1.0])
+    lanes = [
+        {"key": "varmepump", "label": "Värmepump", "color": "#fb923c", "values": hp, "text": hp_text},
+        {"key": "spabad", "label": "Spabad", "color": "#a78bfa", "values": spa, "text": spa_text},
+    ] + [{"key": f"ev_{c}", "label": c.capitalize(), "color": CAR_COLORS[i % len(CAR_COLORS)],
+          "values": [None if v is None else min(1.0, v / ev_max) for v in ev[c][0]], "text": ev[c][1]}
+         for i, c in enumerate(cars)]
+    return {"ok": True, "now": h0.isoformat(), "hours": [h.isoformat() for h in hours],
+            "future": is_future, "price": price, "solar_kw": solar, "lanes": lanes}
+
+
+def load(conn, now=None):
+    """Läser databasen och bygger tidslinjen."""
+    from sqlalchemy import text
+    import nordpool
+    import plan_brief
+    now = (now or datetime.now(SWE)).astimezone(SWE)
+    h0 = _hour(now)
+
+    past = {}
+    rows = conn.execute(text("""
+        SELECT date_trunc('hour', timestamp AT TIME ZONE 'Europe/Stockholm') AS h,
+               avg(price), avg(pv_power_w), avg(compressor_running), avg(spa_heater_running::int),
+               avg(ev_power_kw), avg(ev_carport_power_kw)
+        FROM sensor_log WHERE timestamp >= :start GROUP BY 1 ORDER BY 1"""),
+        {"start": h0 - timedelta(hours=24)}).fetchall()
+    f = lambda v: float(v) if v is not None else None
+    for h, pr, pv, comp, spa, ev1, ev2 in rows:
+        evs = {}
+        for col, val in (("ev_power_kw", ev1), ("ev_carport_power_kw", ev2)):
+            if val is not None:
+                kw = float(val)
+                evs[CHARGER_CAR[col]] = kw / 1000.0 if kw > 100 else kw        # vissa rader loggade W
+        past[h.replace(tzinfo=SWE)] = {"price": f(pr), "solar_kw": f(pv) / 1000.0 if pv is not None else None,
+                                       "compressor": f(comp), "spa": f(spa), "ev": evs}
+
+    prices_q = conn.execute(text("SELECT time_start, sek_per_kwh FROM elpriser WHERE time_start >= :a AND time_start < :b "
+                                 "ORDER BY time_start"), {"a": h0 - timedelta(hours=24), "b": h0 + timedelta(hours=25)}).fetchall()
+    fut_prices, by_hour = {}, {}
+    for t, p in prices_q:
+        if p is None:
+            continue
+        hh = _hour(t)
+        by_hour.setdefault(hh, []).append(float(p))
+    for hh, ps in by_hour.items():
+        if hh >= h0:
+            fut_prices[hh] = sum(ps) / len(ps)
+        elif hh in past and past[hh]["price"] is None:
+            past[hh]["price"] = sum(ps) / len(ps)
+
+    fut_solar = {}
+    try:
+        import weather
+        for k in range(0, 25):
+            hh = h0 + timedelta(hours=k)
+            if hh not in fut_prices:
+                continue
+            cloud, _, _, _ = weather.get_weather_at(hh)
+            w = weather.get_smart_solar_w(cloud, hh)
+            fut_solar[hh] = round(float(w) / 1000.0, 2) if w is not None else None
+    except Exception:
+        pass
+
+    heat_modes = {}
+    try:
+        cheap = conn.execute(text("SELECT cheap_hours_count FROM system_settings WHERE id = 1")).scalar() or 8
+        mode_now = conn.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL "
+                                     "ORDER BY timestamp DESC LIMIT 1")).scalar()
+        q_today = conn.execute(text("SELECT time_start, sek_per_kwh FROM elpriser WHERE time_start >= :a ORDER BY time_start"),
+                               {"a": h0.replace(hour=0)}).fetchall()
+        items = plan_brief.heat_items([(t, float(p)) for t, p in q_today if p is not None], now,
+                                      nordpool.calculate_day_strategy, int(cheap), mode_now)
+        for it in items:
+            s, e = _hour(datetime.fromisoformat(it["start"])), datetime.fromisoformat(it["end"])
+            while s < e:
+                heat_modes.setdefault(s, it["mode"])
+                s += timedelta(hours=1)
+    except Exception:
+        pass
+
+    ev_plan = {}
+    try:
+        for car, t_slot, kw in conn.execute(text("SELECT car_id, t_slot, kw FROM ev_plan_slots")).fetchall():
+            if kw is None:
+                continue
+            hh = _hour(t_slot)
+            ev_plan.setdefault(hh, {})
+            ev_plan[hh][str(car)] = ev_plan[hh].get(str(car), 0.0) + float(kw) / 4.0      # 15-minutersslottar
+    except Exception:
+        conn.rollback()
+
+    return build(now, past, fut_prices, fut_solar, heat_modes, ev_plan, car_ids=list(CHARGER_CAR.values()))

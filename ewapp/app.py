@@ -583,7 +583,7 @@ async def tesla_access(request: Request):
 # -- Hus: värme, varmvatten, spabad, gräsklippare, effekt ----------------------------------------------------------------
 SETTING_RULES = {  # kolumn: (typ, min, max, steg)
     "peak_shaving_enabled": ("bool",), "power_limit_kw": ("float", 3.0, 25.0, 0.5), "fuse_size_a": ("float", 16.0, 63.0, 1.0),
-    "temp_cheap": ("float", 17.0, 25.0, 0.5), "temp_expensive": ("float", 15.0, 24.0, 0.5), "spa_normal_temp": ("float", 20.0, 40.0, 0.5), "spa_max_temp": ("float", 30.0, 42.0, 0.5),
+    "temp_cheap": ("float", 17.0, 25.0, 0.5), "temp_expensive": ("float", 15.0, 24.0, 0.5), "spa_normal_temp": ("float", 20.0, 40.0, 0.5), "spa_max_temp": ("float", 30.0, 40.0, 0.5), "spa_low_temp": ("float", 10.0, 30.0, 0.5),
     "notify_spa_ready": ("bool",), "notify_ev_start": ("bool",), "notify_washer_start": ("bool",), "notify_spa_open": ("bool",),
 }
 

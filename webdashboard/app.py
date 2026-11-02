@@ -15,6 +15,7 @@ import math
 import os
 import sys
 import time
+import zoneinfo
 
 import requests
 
@@ -255,7 +256,10 @@ async def overview(request: Request):
         "net_power_w": _n(row.get("net_power")),
         "pv_power_w": _n(row.get("pv_power_w")),
         "water_temp": _n(row.get("water_temp")),
-        "ev_power_kw": _n(row.get("ev_power_kw")),
+        # Båda laddboxarna (ev_* = Nissans, ev_carport_* = Teslas) - förut bara den ena, så rutan visade
+        # 0 kW medan Teslan laddade.
+        "ev_power_kw": (None if row.get("ev_power_kw") is None and row.get("ev_carport_power_kw") is None
+                        else round((_n(row.get("ev_power_kw")) or 0) + (_n(row.get("ev_carport_power_kw")) or 0), 2)),
         "is_high_load": is_high_load,
         "sthlm_time": str(row["sthlm_time"]),
         "price_24h": [{"t": r[0].isoformat(), "p": float(r[1])} for r in price_hist],
@@ -340,15 +344,25 @@ async def api_car():
             "SELECT car_id, target_time, target_soc, enabled FROM ev_charging_schedule WHERE day_of_week = :d"
         ), {"d": today_dow}).mappings().all()
         planned = c.execute(text(
-            "SELECT car_id, SUM(kw) AS kwh FROM ev_plan_slots WHERE t_slot::date = CURRENT_DATE GROUP BY car_id"
+            "SELECT car_id, SUM(kw) / 4.0 AS kwh FROM ev_plan_slots WHERE t_slot::date = CURRENT_DATE GROUP BY car_id"   # 15-min-slottar: kW × 0,25 h
         )).mappings().all()
+        try:
+            slots = c.execute(text("SELECT car_id, t_slot, kw, start_soc, end_soc FROM ev_plan_slots "
+                                   "WHERE t_slot >= (now() AT TIME ZONE 'Europe/Stockholm') - interval '15 minutes' ORDER BY t_slot")).fetchall()
+            plan_prices = c.execute(text("SELECT time_start, sek_per_kwh FROM elpriser WHERE time_start >= now() - interval '1 hour' "
+                                         "AND time_start < now() + interval '36 hours' ORDER BY time_start")).fetchall()
+        except Exception:
+            c.rollback()
+            slots, plan_prices = [], []
     planned_by_car = {p["car_id"]: _n(p["kwh"]) for p in planned}
     cars = [
         {"id": "tesla", "name": "Tesla Model Y", "soc": _n(row.get("tesla_soc")), "stale": bool(row.get("tesla_soc_stale")),
-         "power_kw": _n(row.get("ev_power_kw")), "status": row.get("ev_status"),
+         # sensor_log: ev_* = Nissans laddbox, ev_carport_* = Teslas (logger.log_status får bilens egen box,
+         # även när bilarna bytt plats). Förut var de omkastade här, så Tesla visade Nissans effekt.
+         "power_kw": _n(row.get("ev_carport_power_kw")), "status": row.get("ev_carport_status"),
          "climate_temp": _n(row.get("tesla_climate_temp")), "climate_state": row.get("tesla_climate_state")},
         {"id": "nissan", "name": "Nissan Leaf", "soc": _n(row.get("nissan_soc")), "stale": bool(row.get("nissan_soc_stale")),
-         "power_kw": _n(row.get("ev_carport_power_kw")), "status": row.get("ev_carport_status"),
+         "power_kw": _n(row.get("ev_power_kw")), "status": row.get("ev_status"),
          "climate_temp": _n(row.get("nissan_climate_temp")), "climate_state": row.get("nissan_climate_state")},
     ]
     for car in cars:
@@ -357,7 +371,10 @@ async def api_car():
                  "target_soc": s["target_soc"], "enabled": s["enabled"]} for s in sched]
     return {"ok": True, "cars": cars, "session_kwh": _n(row.get("ev_session_kwh")),
             "current_a": _n(row.get("ev_current_a")), "dynamic_limit_a": _n(row.get("ev_dynamic_limit_a")),
-            "current_target_limit": _n(row.get("current_target_limit")), "schedule_today": schedule}
+            "current_target_limit": _n(row.get("current_target_limit")), "schedule_today": schedule,
+            # Laddplanen per kvart (naiv svensk lokaltid i ev_plan_slots) + elpriset, för grafen
+            "plan": [{"car": r[0], "t": r[1].isoformat(), "kw": _n(r[2]), "soc0": _n(r[3]), "soc1": _n(r[4])} for r in slots],
+            "plan_prices": [{"t": t.astimezone(zoneinfo.ZoneInfo("Europe/Stockholm")).replace(tzinfo=None).isoformat(), "p": float(p)} for t, p in plan_prices if p is not None]}
 
 
 @app.get("/api/solar")
@@ -442,6 +459,26 @@ async def api_plan():
     return {"ok": True, **brief}
 
 
+@app.get("/api/flow")
+async def api_flow():
+    """Översiktens levande bild: vad som drar/ger el just nu, bara det huset har (live_flow.py)."""
+    import live_flow
+    with ENGINE.connect() as c:
+        row = _latest_row(c)
+    if row is None:
+        return {"ok": False, "error": "Ingen data i sensor_log än"}
+    d = live_flow.nodes(row, _json_list(row.get("decision_summary")))
+    return {"ok": True, "ts": str(row.get("sthlm_time"))[:16], **d}
+
+
+@app.get("/api/timeline")
+async def api_timeline():
+    """Dygnet timme för timme: uppmätt 24 h bakåt + planerat framåt (timeline.py)."""
+    import timeline
+    with ENGINE.connect() as c:
+        return timeline.load(c)
+
+
 @app.get("/api/energyhistory")
 async def api_energyhistory(range: str = "24h"):
     """Historik-sidan: energisummor Idag/7 dagar/30 dagar + effekt över tid + senaste värden
@@ -480,12 +517,21 @@ async def api_spa():
         row = _latest_row(c)
         if row is None:
             return {"ok": False, "error": "Ingen data i sensor_log än"}
-        cfg = _settings_row(c, ("spa_force_heat",))
+        cfg = _settings_row(c, ("spa_force_heat", "spa_normal_temp", "spa_max_temp", "spa_low_temp",
+                                "spa_schedule_enabled", "spa_target_datetime", "spa_target_temp"))
         ov = _overrides(c, ("spa_force_eco",))
+        hist = c.execute(text("""SELECT date_trunc('hour', timestamp AT TIME ZONE 'Europe/Stockholm') h, avg(spa_temp), avg(spa_target),
+                                        avg(spa_heater_running::int) FROM sensor_log WHERE timestamp > now() - interval '24 hours'
+                                 GROUP BY 1 ORDER BY 1""")).fetchall()
     return {"ok": True, "temp": _n(row.get("spa_temp")), "target": _n(row.get("spa_target")),
             "heater_running": bool(row.get("spa_heater_running")), "power_w": _n(row.get("spa_power_w")),
             "signal_pct": _n(row.get("spa_signal_pct")), "rf_channel": _n(row.get("spa_rf_channel")),
-            "force_heat": bool(cfg.get("spa_force_heat")), "eco": ov.get("spa_force_eco") == "on"}
+            "force_heat": bool(cfg.get("spa_force_heat")), "eco": ov.get("spa_force_eco") == "on",
+            "normal_temp": _n(cfg.get("spa_normal_temp")), "max_temp": _n(cfg.get("spa_max_temp")), "low_temp": _n(cfg.get("spa_low_temp")),
+            "ready_enabled": bool(cfg.get("spa_schedule_enabled")),
+            "ready_at": cfg["spa_target_datetime"].astimezone(zoneinfo.ZoneInfo("Europe/Stockholm")).strftime("%Y-%m-%dT%H:%M") if cfg.get("spa_target_datetime") else None,
+            "ready_temp": _n(cfg.get("spa_target_temp")),
+            "history": [{"t": h.isoformat(), "temp": _n(a), "target": _n(b), "heating": _n(hr)} for h, a, b, hr in hist]}
 
 
 ROOMS = [("temp_vardagsrum", "Vardagsrum"), ("temp_masterbedroom", "Sovrum"), ("temp_barnrum_nere", "Barnrum nere"),
@@ -594,7 +640,7 @@ async def proxy_home_action(what: str, request: Request):
     """Spabad-sidan: spa_heat/spa_auto/spa_eco, Värmepump-sidan: heat/hotwater - ewapp:s
     /api/home/{what}. Eget pathnamn (inte /api/home/{what}) så det inte krockar med en
     egen framtida webdashboard-endpoint under /api/home."""
-    if what not in ("heat", "hotwater", "spa_heat", "spa_auto", "spa_eco"):
+    if what not in ("heat", "hotwater", "spa_heat", "spa_auto", "spa_eco", "spa_ready"):
         return JSONResponse({"detail": "Okänd åtgärd"}, status_code=404)
     body = await request.json()
     return await _ewapp_proxy(f"/api/home/{what}", body)
@@ -623,7 +669,8 @@ async def proxy_setting(request: Request):
     (billig/dyr måltemperatur) - ewapp:s /api/settings, begränsat till de nycklar
     webdashboards sidor faktiskt visar kontroller för."""
     body = await request.json()
-    if body.get("key") not in ("peak_shaving_enabled", "power_limit_kw", "temp_cheap", "temp_expensive"):
+    if body.get("key") not in ("peak_shaving_enabled", "power_limit_kw", "temp_cheap", "temp_expensive",
+                               "spa_normal_temp", "spa_max_temp", "spa_low_temp"):
         return JSONResponse({"detail": "Okänd inställning"}, status_code=400)
     return await _ewapp_proxy("/api/settings", body)
 

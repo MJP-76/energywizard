@@ -132,6 +132,132 @@ async function mountPlan(slotId) {
   } catch (e) { slot.innerHTML = ""; }
 }
 
+// ---------- Just nu: levande energiflöde (bara det huset har) ----------
+// Huset i mitten, källor till vänster (sol, nät, batteri), förbrukare till höger. Prickarnas fart
+// följer effekten, riktningen visar köp/sälj. Inaktivt tonas ned. Klick öppnar enhetens sida.
+const FLOW_COL = { sol: "#fbbf24", nat: "#38bdf8", natut: "#22d3a0", batteri: "#0e7490", varmepump: "#fb923c", varmvatten: "#60a5fa", spabad: "#a78bfa", ev: "#22d3a0" };
+const reduceMotion = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } };
+let flowTimer = null;
+
+function flowSvg(d) {
+  const W = 960, H = 380, hub = { x: 480, y: 190 };
+  const nodes = d.nodes.filter((n) => n.key !== "hus"), house = d.nodes.find((n) => n.key === "hus");
+  const left = nodes.filter((n) => ["source", "grid", "battery"].includes(n.role)), right = nodes.filter((n) => n.role === "load");
+  const place = (arr, x) => arr.map((n, i) => ({ ...n, x, y: arr.length === 1 ? H / 2 : 50 + i * ((H - 100) / (arr.length - 1)) }));
+  const all = [...place(left, 110), ...place(right, 850)];
+  const col = (n) => n.key === "nat" ? (n.w < -50 ? FLOW_COL.natut : FLOW_COL.nat) : n.key.startsWith("ev_") ? FLOW_COL.ev : (FLOW_COL[n.key] || "#94a3b8");
+  const motion = !reduceMotion();
+  let paths = "", dots = "", cards = "";
+  all.forEach((n, i) => {
+    const sx = n.x < hub.x ? n.x + 92 : n.x - 92, ex = n.x < hub.x ? hub.x - 70 : hub.x + 70;
+    const id = `fp${i}`, c = col(n);
+    // in mot huset: sol, köp från nät, batteri som laddar ur. Ut från huset: förbrukare, sälj, batteri som laddar.
+    const inward = n.role === "source" || (n.role === "grid" && n.w > 50) || (n.role === "battery" && n.w < -30);
+    const d0 = `M${sx} ${n.y} C${(sx + ex) / 2} ${n.y} ${(sx + ex) / 2} ${hub.y} ${ex} ${hub.y}`;
+    paths += `<path id="${id}" d="${d0}" fill="none" stroke="${c}" stroke-width="${n.active ? 2.5 : 1.5}" stroke-dasharray="${n.active ? "0" : "3 6"}" opacity="${n.active ? .55 : .25}"/>`;
+    if (n.active && motion && n.w != null) {
+      const kw = Math.abs(n.w) / 1000, dur = Math.max(0.7, 3.4 - kw * 0.35).toFixed(2), cnt = kw > 4 ? 4 : kw > 1.5 ? 3 : 2;
+      for (let k = 0; k < cnt; k++) {
+        const kp = inward === (n.x < hub.x) ? "0;1" : "1;0";
+        dots += `<circle r="${(3.5 + Math.min(3, kw / 2)).toFixed(1)}" fill="${c}"><animateMotion dur="${dur}s" begin="${(-k * dur / cnt).toFixed(2)}s" repeatCount="indefinite" keyPoints="${kp}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
+      }
+    } else if (n.active && motion && n.w == null) {
+      dots += `<circle r="5" fill="${c}" opacity=".8"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#${id}"/></animateMotion></circle>`;
+    }
+    const why = d.why[n.key] || (n.key === "nat" || n.key === "sol" ? "" : "");
+    cards += `<g class="fnode${n.active ? " on" : ""}" data-page="${n.page}" transform="translate(${n.x - 90},${n.y - 34})" style="cursor:pointer">
+      <rect width="180" height="68" rx="16" fill="var(--card2)" stroke="${n.active ? c : "var(--line)"}" stroke-width="${n.active ? 2 : 1}"/>
+      <text x="16" y="28" font-size="20">${esc(n.icon)}</text>
+      <text x="46" y="27" font-size="14" font-weight="700" fill="var(--txt)">${esc(n.label)}</text>
+      <text x="46" y="47" font-size="12" fill="var(--mut)">${esc(n.detail)}</text>
+      ${why ? `<title>${esc(why)}</title>` : ""}
+    </g>`;
+  });
+  const hk = house && house.w != null ? (house.w / 1000).toFixed(1) : "–";
+  const hubSvg = `<g class="fnode on" data-page="oversikt" transform="translate(${hub.x - 70},${hub.y - 62})">
+      <rect width="140" height="124" rx="28" fill="var(--card2)" stroke="var(--acc)" stroke-width="2"/>
+      <path d="M44 56 L70 34 L96 56 V86 H44 Z" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round"/>
+      <text x="70" y="108" text-anchor="middle" font-size="15" font-weight="800" fill="var(--txt)">${hk} kW</text>
+    </g>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Energiflöde just nu">${paths}${dots}${hubSvg}${cards}</svg>`;
+}
+
+async function mountFlow(slotId) {
+  const draw = async () => {
+    const slot = document.getElementById(slotId);
+    if (!slot) { clearInterval(flowTimer); return; }
+    let d; try { d = await api("api/flow"); } catch (e) { return; }
+    if (!d.ok) { slot.innerHTML = ""; return; }
+    const whyRows = d.nodes.filter((n) => d.why[n.key]).map((n) => `<div style="display:flex;gap:10px;align-items:baseline;padding-top:8px;border-top:1px solid var(--line)"><span>${esc(n.icon)}</span><div><b>${esc(n.label)}</b> <span class="note" style="font-size:.9rem">${esc(d.why[n.key])}</span></div></div>`).join("");
+    slot.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0">⚡ Just nu</h2><span class="note">${esc(d.ts || "")}</span></div>${flowSvg(d)}${whyRows ? `<div style="display:grid;gap:8px;margin-top:6px">${whyRows}</div>` : ""}</div>`;
+    slot.querySelectorAll(".fnode[data-page]").forEach((g) => g.addEventListener("click", () => { const pg = g.dataset.page; if (pg && pg !== "oversikt" && PAGES.some((p) => p.id === pg)) openPage(pg); }));
+  };
+  clearInterval(flowTimer);
+  await draw();
+  flowTimer = setInterval(() => { if (currentPage === "oversikt") draw(); else clearInterval(flowTimer); }, 15000);
+}
+
+// ---------- Dygnet timme för timme: uppmätt bakåt, planerat framåt ----------
+function timelineChart(elId, d) {
+  const el = document.getElementById(elId);
+  if (!el || !d || !d.hours.length) return;
+  const chart = echarts.init(el, null, { renderer: "svg" });
+  const css = getComputedStyle(document.documentElement), mut = "#93a0b8";
+  const labels = d.hours.map((h) => h.slice(11, 13));
+  const nowIdx = d.hours.indexOf(d.now);
+  const lanes = d.lanes, n = labels.length;
+  const laneData = [];
+  lanes.forEach((ln, li) => ln.values.forEach((v, i) => { if (v != null && v > 0.02) laneData.push([i, li, v, d.future[i] ? 1 : 0]); }));
+  const futArea = nowIdx >= 0 ? [[{ xAxis: labels[nowIdx], itemStyle: { color: "rgba(148,163,184,.08)" } }, { xAxis: labels[n - 1] }]] : [];
+  chart.setOption({
+    axisPointer: { link: [{ xAxisIndex: "all" }] },
+    grid: [{ left: 120, right: 52, top: 28, height: "36%" }, { left: 120, right: 52, top: "52%", bottom: 34 }],
+    legend: { data: ["Elpris", "Sol"], top: 0, left: 120, textStyle: { color: mut } },
+    xAxis: [
+      { type: "category", data: labels, gridIndex: 0, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { lineStyle: { color: mut } } },
+      { type: "category", data: labels, gridIndex: 1, axisLabel: { color: mut, interval: 2 }, axisLine: { lineStyle: { color: mut } } },
+    ],
+    yAxis: [
+      { type: "value", gridIndex: 0, name: "kr/kWh", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
+      { type: "value", gridIndex: 0, name: "kW sol", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { show: false } },
+      { type: "category", gridIndex: 1, data: lanes.map((l) => l.label), inverse: true, axisLabel: { color: css.getPropertyValue("--txt").trim() || "#fff", fontWeight: 600 }, axisLine: { show: false }, axisTick: { show: false } },
+    ],
+    tooltip: {
+      trigger: "axis",
+      formatter: (ps) => {
+        const i = ps[0].dataIndex, h = d.hours[i];
+        const head = `<b>${h.slice(11, 16)}${d.future[i] ? " · planerat" : ""}</b>`;
+        const pr = d.price[i] != null ? `Elpris ${d.price[i].toFixed(2)} kr/kWh` : "";
+        const sol = d.solar_kw[i] != null ? `Sol ${d.solar_kw[i].toFixed(1)} kW${d.future[i] ? " (prognos)" : ""}` : "";
+        return [head, pr, sol, ...lanes.map((l) => `${esc(l.label)}: ${esc(l.text[i] || "–")}`)].filter(Boolean).join("<br>");
+      },
+    },
+    series: [
+      { name: "Sol", type: "bar", color: "#fbbf24", xAxisIndex: 0, yAxisIndex: 1, data: d.solar_kw.map((v, i) => ({ value: v, itemStyle: { color: "#fbbf24", opacity: d.future[i] ? 0.35 : 0.75 } })), barWidth: "70%" },
+      { name: "Elpris", type: "line", color: "#38bdf8", step: "middle", xAxisIndex: 0, yAxisIndex: 0, data: d.price, symbol: "none", lineStyle: { color: "#38bdf8", width: 2 },
+        markLine: nowIdx >= 0 ? { symbol: "none", label: { formatter: "nu", color: mut, position: "insideStartTop" }, lineStyle: { color: mut, type: "dashed" }, data: [{ xAxis: labels[nowIdx] }] } : undefined,
+        markArea: { silent: true, data: futArea } },
+      { type: "custom", xAxisIndex: 1, yAxisIndex: 2, data: laneData, renderItem: (params, api) => {
+          const i = api.value(0), li = api.value(1), v = api.value(2), fut = api.value(3);
+          const p0 = api.coord([i, li]), bw = api.size([1, 0])[0], bh = api.size([0, 1])[1] * 0.62;
+          const color = lanes[li].color;
+          return { type: "rect", shape: { x: p0[0] - bw / 2 + 1, y: p0[1] - bh / 2, width: bw - 2, height: bh, r: 4 },
+                   style: { fill: color, opacity: (fut ? 0.12 : 0.2) + v * (fut ? 0.45 : 0.8), stroke: fut ? color : null, lineDash: fut ? [3, 3] : null, lineWidth: fut ? 1 : 0 } };
+        } },
+    ],
+  });
+  new ResizeObserver(() => chart.resize()).observe(el);
+}
+
+async function mountTimeline(slotId) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  let d; try { d = await api("api/timeline"); } catch (e) { slot.innerHTML = ""; return; }
+  if (!d.ok) { slot.innerHTML = ""; return; }
+  slot.innerHTML = `<div class="card"><h2>🕒 Dygnet timme för timme</h2><div class="note">Till vänster om strecket: det som hände (uppmätt). Till höger: det som är planerat. Starkare färg = mer.</div><div id="timelinechart" style="height:${260 + d.lanes.length * 34}px;margin-top:10px"></div></div>`;
+  timelineChart("timelinechart", d);
+}
+
 async function renderOversikt() {
   const main = document.getElementById("main");
   main.innerHTML = `<div class="placeholder">Laddar…</div>`;
@@ -156,8 +282,8 @@ async function renderOversikt() {
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:1.15rem;font-weight:700">${emoji} ${d.decision}</div>
       <div class="note" style="margin-top:4px">💸 ${fmtKrOre(d.price)}/kWh · 🌡️ Inne ${fmt(d.indoor_temp, 1, "°C")} (mål ${d.indoor_target.toFixed(0)}) · 🌳 Ute ${fmt(d.outdoor_temp, 1, "°C")}</div>
-      ${(d.decision_items || []).length ? `<div style="margin-top:12px;display:grid;gap:8px">${d.decision_items.map((i) => `<div style="display:flex;gap:10px;align-items:baseline;padding-top:8px;border-top:1px solid var(--line)"><span>${esc(i.icon)}</span><div><b>${esc(i.label)}</b> <span class="note" style="font-size:.9rem">${esc(i.text)}</span></div></div>`).join("")}</div>` : ""}
     </div>
+    <div id="flowslot" style="margin-bottom:16px"></div>
     <div class="grid" style="margin-bottom:16px"><div id="savingsslot"></div><div id="planslot"></div></div>
     <div class="card" style="margin-bottom:16px"><span class="note">⚡ Aktuell effekttariff: ${tariff}</span></div>
     <div class="grid" style="margin-bottom:16px">
@@ -170,20 +296,12 @@ async function renderOversikt() {
       ${metricCard("🚗", "EV Laddning", d.ev_power_kw != null ? d.ev_power_kw.toFixed(1) + " kW" : "–")}
       <div class="card"><div class="note">🔋 Värmebatteri</div><div style="margin-top:8px">${heatBatteryHtml(d.heat_battery, true)}</div></div>
     </div>
-    <div class="card"><h2>Elpris</h2><div class="note">Senaste dygnet + kommande priser</div><div id="pricechart" style="height:240px;margin-top:10px"></div></div>
+    <div id="timelineslot"></div>
     <div class="note" style="margin-top:10px">Senast mätt: ${d.sthlm_time}</div>`;
+  mountFlow("flowslot");
   mountSavings("savingsslot");
   mountPlan("planslot");
-  if (d.price_24h && d.price_24h.length) {
-    const chart = echarts.init(document.getElementById("pricechart"), null, { renderer: "svg" });
-    chart.setOption({
-      grid: { left: 46, right: 16, top: 16, bottom: 36 },
-      xAxis: { type: "category", data: d.price_24h.map(p => p.t.slice(11, 16)), axisLabel: { interval: 3 }, axisLine: { lineStyle: { color: "#93a0b8" } } },
-      yAxis: { type: "value", axisLine: { lineStyle: { color: "#93a0b8" } }, splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } } },
-      series: [{ type: "line", data: d.price_24h.map(p => p.p), step: "end", lineStyle: { color: "#38bdf8", width: 2 }, areaStyle: { color: "rgba(56,189,248,.15)" }, symbol: "none" }],
-    });
-    new ResizeObserver(() => chart.resize()).observe(document.getElementById("pricechart"));
-  }
+  mountTimeline("timelineslot");
 }
 
 function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; }
@@ -220,6 +338,31 @@ async function loadPage(path, build) {
   return d;
 }
 
+function evPlanChart(elId, d) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const mut = "#93a0b8", colors = { tesla: "#22d3a0", nissan: "#38bdf8" };
+  const times = [...new Set([...d.plan.map((p) => p.t.slice(0, 16)), ...d.plan_prices.map((p) => p.t.slice(0, 16))])].sort();
+  const first = d.plan[0].t.slice(0, 16), last = d.plan[d.plan.length - 1].t.slice(0, 16);
+  const ts = times.filter((t) => t >= first.slice(0, 13) && t <= last);       // planens första timme -> sista slotten
+  const cars = [...new Set(d.plan.map((p) => p.car))];
+  const byKey = {}; d.plan.forEach((p) => { byKey[p.car + p.t.slice(0, 16)] = p; });
+  const priceAt = (t) => { let v = null; d.plan_prices.forEach((p) => { if (p.t.slice(0, 16) <= t) v = p.p; }); return v; };
+  const chart = echarts.init(el, null, { renderer: "svg" });
+  chart.setOption({
+    grid: { left: 46, right: 56, top: 30, bottom: 30 }, legend: { top: 0, textStyle: { color: mut } },
+    tooltip: { trigger: "axis", formatter: (ps) => { const t = ts[ps[0].dataIndex];
+      return [`<b>${t.slice(5, 10).replace("-", "/")} ${t.slice(11, 16)}</b>`, ...cars.map((c) => { const p = byKey[c + t]; return p ? `${c[0].toUpperCase() + c.slice(1)}: ${p.kw.toFixed(1)} kW${p.soc0 != null ? ` · ${Math.round(p.soc0)} → ${Math.round(p.soc1)} %` : ""}` : null; }).filter(Boolean),
+        priceAt(t) != null ? `Elpris ${priceAt(t).toFixed(2)} kr/kWh` : ""].filter(Boolean).join("<br>"); } },
+    xAxis: { type: "category", data: ts.map((t) => t.slice(11, 16)), axisLabel: { color: mut, interval: (i) => ts[i].slice(14, 16) === "00" && Number(ts[i].slice(11, 13)) % 2 === 0 } },
+    yAxis: [{ type: "value", name: "kW", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
+            { type: "value", name: "kr/kWh", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { show: false } }],
+    series: [...cars.map((c) => ({ name: c[0].toUpperCase() + c.slice(1), type: "bar", stack: "ev", color: colors[c] || "#a78bfa", data: ts.map((t) => (byKey[c + t] ? byKey[c + t].kw : 0)), itemStyle: { color: colors[c] || "#a78bfa", borderRadius: 2 } })),
+             { name: "Elpris", type: "line", color: "#fbbf24", step: "end", yAxisIndex: 1, data: ts.map(priceAt), symbol: "none", lineStyle: { color: "#fbbf24", width: 2 } }],
+  });
+  new ResizeObserver(() => chart.resize()).observe(el);
+}
+
 async function renderElbil() {
   const d = await loadPage("api/car", (d) => `
     <div class="grid" style="margin-bottom:16px">
@@ -253,9 +396,11 @@ async function renderElbil() {
       </div>`;
       }).join("")}
     </div>
+    <div class="card" style="margin-bottom:16px"><h2>🔌 Laddplanen</h2><div class="note">Planerad laddeffekt per kvart mot elpriset. Håll muspekaren över en stapel för batterinivån.</div>${d.plan && d.plan.length ? `<div id="evplanchart" style="height:260px;margin-top:10px"></div>` : `<div class="note" style="margin-top:8px">Ingen laddning planerad just nu.</div>`}</div>
     <div class="note">Laddström: ${fmt(d.current_a, 0, " A")} · Dynamisk gräns: ${fmt(d.dynamic_limit_a, 0, " A")} · Målgräns just nu: ${fmt(d.current_target_limit, 0, " A")}</div>
     <div id="tesla-access" style="margin-top:16px"></div>`);
   if (!d) return;
+  if (d.plan && d.plan.length) evPlanChart("evplanchart", d);
   document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => postAction(`api/car/${b.dataset.car}/action`, { kind: b.dataset.kind }).then(renderElbil));
   loadTeslaAccess();
   document.querySelectorAll(".sch-save").forEach(b => b.onclick = () => {
@@ -407,8 +552,59 @@ async function renderSpabad() {
       <div class="togglerow"><span>Eco-läge (håll nere temperaturen)</span><label class="switch"><input type="checkbox" id="spaeco" ${d.eco ? "checked" : ""}><span class="slider"></span></label></div>
       <button class="icobtn" id="spaautobtn" style="margin-top:10px">Auto (följ schemat)</button>
     </div>
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card">
+        <h2>🌡️ Temperaturer</h2>
+        <div class="note">Som värmepumpens: vad motorn håller badet på i de olika lägena.</div>
+        <div class="numfield" style="margin-top:10px;flex-wrap:wrap;gap:10px">
+          <label>Normal <input type="number" id="spanormal" step="0.5" min="20" max="40" value="${d.normal_temp ?? ""}"> °C</label>
+          <label>Max (minuspris/sol) <input type="number" id="spamax" step="0.5" min="30" max="40" value="${d.max_temp ?? ""}"> °C</label>
+          <label>Eco-golv <input type="number" id="spalow" step="0.5" min="10" max="30" value="${d.low_temp ?? ""}"> °C</label>
+        </div>
+        <div class="note" style="margin-top:6px">Max är aldrig över 40 °C - motorns säkerhetsgräns.</div>
+        <button class="icobtn" id="spatempsave" style="margin-top:10px">Spara temperaturer</button>
+      </div>
+      <div class="card">
+        <h2>⏰ Klart till</h2>
+        <div class="note">${d.ready_enabled && d.ready_at ? `Aktivt: ${d.ready_at.replace("T", " ")} · ${fmt(d.ready_temp, 1, "°C")}. Motorn värmer på de billigaste timmarna fram till dess.` : "Av - badet följer sitt vanliga läge."}</div>
+        <div class="numfield" style="margin-top:10px;flex-wrap:wrap;gap:10px">
+          <input type="datetime-local" id="spareadyat" value="${d.ready_at || ""}">
+          <input type="number" id="spareadytemp" step="0.5" min="20" max="40" value="${d.ready_temp ?? 38}"> °C
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="icobtn" id="spareadysave">Spara</button>${d.ready_enabled ? `<button class="icobtn" id="spareadyoff">Stäng av</button>` : ""}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><h2>📈 Senaste dygnet</h2><div class="note">Temperatur mot mål. Skuggat = värmaren gick.</div><div id="spachart" style="height:240px;margin-top:10px"></div></div>
     <div class="card"><h2>📡 Trådlös anslutning</h2><div class="note">Signal: ${fmt(d.signal_pct, 0, "%")} · Kanal: ${d.rf_channel != null ? d.rf_channel : "–"}</div></div>`);
   if (d) {
+    document.getElementById("spatempsave").onclick = async () => {
+      for (const [id, key] of [["spanormal", "spa_normal_temp"], ["spamax", "spa_max_temp"], ["spalow", "spa_low_temp"]]) {
+        const v = parseFloat(document.getElementById(id).value);
+        if (!isNaN(v)) await postAction("api/settings-action", { key, value: v });
+      }
+      renderSpabad();
+    };
+    document.getElementById("spareadysave").onclick = () => {
+      const when = document.getElementById("spareadyat").value;
+      if (!when) return;
+      postAction("api/home-action/spa_ready", { when, temp: parseFloat(document.getElementById("spareadytemp").value) }).then(renderSpabad);
+    };
+    const off = document.getElementById("spareadyoff");
+    if (off) off.onclick = () => postAction("api/home-action/spa_ready", { off: true }).then(renderSpabad);
+    if (d.history && d.history.length) {
+      const el = document.getElementById("spachart"), chart = echarts.init(el, null, { renderer: "svg" }), mut = "#93a0b8";
+      chart.setOption({
+        grid: { left: 46, right: 16, top: 24, bottom: 30 }, legend: { top: 0, textStyle: { color: mut } }, tooltip: { trigger: "axis" },
+        xAxis: { type: "category", data: d.history.map((h) => h.t.slice(11, 16)), axisLabel: { color: mut, interval: 2 } },
+        yAxis: { type: "value", scale: true, name: "°C", axisLabel: { color: mut }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
+        series: [
+          { name: "Temperatur", type: "line", color: "#a78bfa", data: d.history.map((h) => h.temp), symbol: "none", smooth: true, lineStyle: { color: "#a78bfa", width: 2.5 },
+            markArea: { silent: true, itemStyle: { color: "rgba(167,139,250,.12)" }, data: d.history.map((h, i) => h.heating > 0.2 ? [{ xAxis: i }, { xAxis: Math.min(i + 1, d.history.length - 1) }] : null).filter(Boolean) } },
+          { name: "Mål", type: "line", color: "#93a0b8", step: "middle", data: d.history.map((h) => h.target), symbol: "none", lineStyle: { color: mut, type: "dashed" } },
+        ],
+      });
+      new ResizeObserver(() => chart.resize()).observe(el);
+    }
     document.getElementById("spaforce").onchange = (e) => postAction("api/home-action/spa_heat", { value: e.target.checked });
     document.getElementById("spaeco").onchange = (e) => postAction("api/home-action/spa_eco", { value: e.target.checked });
     document.getElementById("spaautobtn").onclick = () => postAction("api/home-action/spa_auto", {}).then(renderSpabad);

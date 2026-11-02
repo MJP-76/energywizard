@@ -121,6 +121,15 @@ köra din egen).
 
 Vill du inte skicka något alls, sätt `TELEMETRY_OPT_IN=false` i din `.env`.
 
+## Stöd projektet
+
+EnergyWizard är gratis och utan abonnemang. Vill du bjuda på en kaffe syns de
+senaste hälsningarna här (uppdateras varje natt av
+`.github/workflows/buy-me-a-coffee.yml`):
+
+<!--START_SECTION:buy-me-a-coffee-->
+<!--END_SECTION:buy-me-a-coffe-->
+
 ## Struktur
 
 - `smartbox/` – styrmotorn (huvudloopen, drivrutinerna, prioritetsmotorn).
