@@ -1204,26 +1204,38 @@ async function renderSystem() {
   await loadUpdates(false);
 }
 
+// Installationer: siffrorna överst, sedan ett kort per användare (anonymt, ditt hus först), totalen hopfälld längst ner.
 async function renderInstalls() {
   const main = document.getElementById("main");
   main.innerHTML = `<div class="placeholder">Laddar…</div>`;
   const d = await api("api/installs").catch(() => null);
   if (!d || !d.configured) { main.innerHTML = `<div class="placeholder">Inte tillgängligt.</div>`; return; }
-  const vers = Object.entries(d.versions || {}).map(([v, n]) => `<div style="display:flex;justify-content:space-between;padding:3px 0"><span>${esc(v)}</span><b>${n}</b></div>`).join("");
-  const catName = Object.fromEntries(INSTALL_CATS.map(([k, ico, n]) => [k, `${ico} ${n}`]));
-  const labelOf = (k) => { const [drv, brand] = k.split("@"); return brand ? `${esc(brand)} <span class="note">(${esc(DRIVER_NAMES[drv] || drv)})</span>` : esc(DRIVER_NAMES[drv] || drv); };
-  const houses = (d.houses || []).map((h) => {
-    const rows = Object.entries(h.devices).map(([cat, list]) => {
+  if (!d.ok) { main.innerHTML = installsCard(d); return; }
+  const labelOf = (k) => { const [drv, brand] = k.split("@"); const dn = DRIVER_NAMES[drv] || drv;
+    return brand && brand.toLowerCase() !== dn.toLowerCase() ? `<b>${esc(brand)}</b> <span class="note">${esc(dn)}</span>` : `<b>${esc(dn)}</b>`; };
+  const big = (n, t) => `<div><div style="font-size:2rem;font-weight:800">${n}</div><div class="note">${t}</div></div>`;
+  const summary = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px">${big(d.active, `aktiva (hörda senaste ${d.active_days} dygnen)`)}${big(d.total_known, "totalt sedan start")}${big(d.new_last_7d, "nya senaste veckan")}</div>
+    <div class="note" style="margin-top:10px">Ett kort per användare, anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte.</div></div>`;
+  const houses = [...(d.houses || [])].sort((x, y) => (y.mine ? 1 : 0) - (x.mine ? 1 : 0));
+  const cards = houses.map((h) => {
+    const n = Object.values(h.devices).reduce((a, l) => a + l.length, 0);
+    const rows = INSTALL_CATS.map(([cat, ico, name]) => {
+      const list = h.devices[cat] || [];
       const counts = {}; list.forEach((x) => counts[x] = (counts[x] || 0) + 1);
-      return `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;padding:3px 0"><span class="note" style="min-width:150px">${catName[cat] || esc(cat)}</span>
-        <span>${Object.entries(counts).map(([k, n]) => labelOf(k) + (n > 1 ? ` × ${n}` : "")).join(", ")}</span></div>`;
+      const val = list.length ? Object.entries(counts).map(([k, c]) => labelOf(k) + (c > 1 ? ` × ${c}` : "")).join(", ") : `<span class="note">–</span>`;
+      return `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${ico}</span>
+        <span class="note" style="flex:0 0 120px">${name}</span><span style="flex:1 1 auto;min-width:0">${val}</span></div>`;
     }).join("");
-    return `<div class="card" style="padding:12px${h.mine ? ";border-color:var(--acc)" : ""}"><div style="font-weight:700;margin-bottom:4px">${h.label}${h.mine ? " · ditt hus" : ""}
-      <span class="note" style="font-weight:400">sedan ${esc(h.since)}</span></div>${rows || `<div class="note">Har inte valt några enheter än.</div>`}</div>`;
+    return `<div class="card" style="padding:14px${h.mine ? ";border-color:var(--acc)" : ""}">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px">
+        <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
+        <div class="note">sedan ${esc(h.since)}</div></div>
+      ${n ? rows : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}</div>`;
   }).join("");
-  main.innerHTML = installsCard(d) + (houses ? `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">🏠 Per installation</div>
-      <div class="note" style="margin-top:4px">Anonymt: numrerade i den ordning de kom, aldrig vem eller var.</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin-top:10px">${houses}</div></div>` : "") + (vers ? `<div class="card"><div style="font-weight:700;margin-bottom:6px">🏷️ Versioner</div>${vers}</div>` : "");
+  main.innerHTML = summary
+    + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-bottom:16px">${cards}</div>`
+    + `<details class="card"><summary style="cursor:pointer;font-weight:700">Totalt per märke</summary><div style="margin-top:10px">${installsCard(d)}</div></details>`;
 }
 
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
