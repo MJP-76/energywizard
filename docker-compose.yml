@@ -61,6 +61,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - HA_IP=${HA_IP}
+      - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN}
       - PUMP_IP=${PUMP_IP}
       - EASEE_CHARGER_ID=${EASEE_CHARGER_ID}
@@ -99,6 +100,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - HA_IP=${HA_IP}
+      - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN}
       - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
 
@@ -129,6 +131,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - HA_IP=${HA_IP}
+      - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN}
       - EASEE_CHARGER_ID=${EASEE_CHARGER_ID}
       - EASEE_CARPORT_ID=${EASEE_CARPORT_ID}
@@ -140,6 +143,7 @@ services:
   # kan utvecklas/testas utan att påverka den körande produktionen.
   ####################################################################
   webdashboard:
+    image: ghcr.io/murre87/energywizard-webdashboard:latest   # byggs av GitHub vid push och hämtas av Watchtower
     build: ./webdashboard
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -152,6 +156,9 @@ services:
       - "8503:8503"
     volumes:
       - ./smartbox:/smartbox:ro
+      # Entitetsväljarens "Spara och starta": skrivbar bara när install.sh satt HOUSE_CONFIG_MODE=rw
+      # och HOUSE_CONFIG_WRITABLE=1. Annars läsbar, och väljaren erbjuder bara nedladdning.
+      - ${HOUSE_CONFIG_HOST_PATH:-./config/examples/emil_house.yaml}:/house_config.yaml:${HOUSE_CONFIG_MODE:-ro}
     depends_on:
       postgres-smartbox:
         condition: service_healthy
@@ -162,11 +169,14 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - HA_IP=${HA_IP}
+      - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN}
       # System-sidan frågar Watchtowers HTTP-API om nya versioner finns för ALLA
       # containrar på NUC:en - watchtower delar docker-nät med den här stacken.
       - WATCHTOWER_API_TOKEN=${WATCHTOWER_API_TOKEN}
       - WATCHTOWER_URL=http://watchtower:8080
+      - HOUSE_CONFIG_PATH=/house_config.yaml
+      - HOUSE_CONFIG_WRITABLE=${HOUSE_CONFIG_WRITABLE:-}
 
   ####################################################################
   # HA-gateway: valfri reverse-proxy som slår ihop EnergyWizard (/energywizard,
@@ -188,7 +198,7 @@ services:
     volumes:
       - ./ha-gateway/nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
       - ./ha-gateway/print-url.sh:/docker-entrypoint.d/99-print-url.sh:ro
-      - ${HA_GATEWAY_CERT_DIR}:/certs:ro
+      - ${HA_GATEWAY_CERT_DIR:-./secrets/ha-gateway-certs}:/certs:ro
     environment:
       - DOMAIN=${HA_GATEWAY_DOMAIN}
       - HA_HOST=${HA_GATEWAY_UPSTREAM_HOST}

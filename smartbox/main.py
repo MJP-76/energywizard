@@ -27,6 +27,7 @@ import house_config      # EnergyWizard Open: drivrutinsarkitektur (bil/laddare/
 import ev_handshake      # Generisk laddar-handskakning (vilken fysisk laddare hör till vilken bil)
 import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg)
 import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
+import config_watch      # Startar om motorn när house_config.yaml ändras
 import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
@@ -62,13 +63,11 @@ def calc_distance(lat1, lon1, lat2, lon2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 def ha_toggle_switch(entity_id, turn_on=True):
-    ha_ip = os.environ.get("HA_IP")
-    ha_token = os.environ.get("HA_TOKEN", "").strip("\"'")
     service = "turn_on" if turn_on else "turn_off"
-    url = f"https://{ha_ip}:8123/api/services/switch/{service}"
-    headers = {"Authorization": f"Bearer {ha_token}", "Content-Type": "application/json"}
+    url = f"{homeassistant._BASE}/services/switch/{service}"
     try:
-        requests.post(url, headers=headers, json={"entity_id": entity_id}, timeout=5, verify=False)
+        requests.post(url, headers=homeassistant._HEADERS, json={"entity_id": entity_id}, timeout=5,
+                      verify=homeassistant._VERIFY)
     except Exception as e:
         print(f"HA Switch Toggle Error: {e}")
 
@@ -143,6 +142,7 @@ def _on_sigterm(signum, frame):
 
 
 signal.signal(signal.SIGTERM, _on_sigterm)
+config_watch.start(HOUSE_CONFIG_PATH)   # ny house_config.yaml -> omstart som läser in den
 _battery_to_auto("uppstart")
 print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(battery_driver.supported_intents()) or '-'}")
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))

@@ -268,7 +268,8 @@ async function renderOversikt() {
       <div style="font-size:1.1rem;font-weight:700">👋 Välkommen till EnergyWizard!</div>
       <div class="note" style="margin-top:6px">${d.error || "Ingen data än"} - troligen en ny installation. Gå till
         <b>Inställningar</b> och kör entitetsväljaren för att hitta din värmepump, bilar, solceller m.m. i Home
-        Assistant, spara den genererade filen som din <code>house_config.yaml</code> och starta om smartbox.</div>
+        Assistant. Kryssa i det du har och tryck <b>Spara och starta</b> (eller ladda ner filen som din
+        <code>house_config.yaml</code> och starta om smartbox, om du skrivit din config själv).</div>
       <button class="icobtn" id="gotosettings" style="margin-top:10px">Gå till Inställningar</button>
     </div>`;
     document.getElementById("gotosettings").onclick = () => openPage("installningar");
@@ -941,9 +942,16 @@ async function runDiscovery() {
   if (!(d.grid_meters || []).length) html += `<div class="note" style="margin-top:6px">Ingen hittades.</div>`;
   html += `</div>`;
 
-  html += `<button class="icobtn" id="genbtn" style="margin-top:6px">Generera house_config.yaml</button>`;
+  html += `<button class="icobtn" id="savebtn" style="margin-top:6px;display:none">Spara och starta</button>
+    <button class="icobtn" id="genbtn" style="margin-top:6px">Ladda ner house_config.yaml</button>
+    <div class="note" id="savemsg" style="margin-top:6px"></div>`;
   results.innerHTML = html;
-  document.getElementById("genbtn").onclick = generateConfig;
+  document.getElementById("genbtn").onclick = () => generateConfig(false);
+  document.getElementById("savebtn").onclick = () => generateConfig(true);
+  // Spara direkt bara i installationer där install.sh gjort filen skrivbar; annars bara nedladdning.
+  fetch("api/house-config-status", { credentials: "same-origin" }).then(r => r.ok ? r.json() : {}).then(st => {
+    if (st && st.writable) document.getElementById("savebtn").style.display = "";
+  }).catch(() => {});
 
   // Kryssar man i "Använd generisk styrning" skrivs fyndets driver/entities om till
   // förslaget (generic_suggestion) - annars tillbaka till det ursprungliga (okänt märke,
@@ -970,7 +978,7 @@ async function runDiscovery() {
   });
 }
 
-async function generateConfig() {
+async function generateConfig(save) {
   const sel = { cars: [], heat_pump: null, solar: null, spa: null, battery: null };
   const pickedChargers = [];
   document.querySelectorAll(".charger-pick:checked").forEach(cb => pickedChargers.push(_discovered.chargers[cb.dataset.i]));
@@ -993,6 +1001,14 @@ async function generateConfig() {
     if (cat === "Elmätare") sel.power_meter = _discovered.power_meter;
   });
 
+  if (save) {
+    const msg = document.getElementById("savemsg");
+    msg.textContent = "Sparar…";
+    const rs = await fetch("api/save-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });
+    const j = await rs.json().catch(() => ({}));
+    msg.textContent = rs.ok ? j.message : ("Kunde inte spara: " + (j.error || rs.status));
+    return;
+  }
   const r = await fetch("api/generate-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });
   if (!r.ok) { alert("Kunde inte generera filen: " + (await r.json().catch(() => ({}))).error); return; }
   const blob = await r.blob();

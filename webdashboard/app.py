@@ -21,7 +21,7 @@ import requests
 
 sys.path.insert(0, "/smartbox")
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
@@ -909,9 +909,42 @@ async def api_generate_house_config(request: Request):
             house_config.build_battery_driver(cfg)
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"Den genererade filen gick inte att läsa in: {e}"}, status_code=500)
-    from fastapi.responses import Response
     return Response(content=yaml_text, media_type="text/yaml",
                      headers={"Content-Disposition": "attachment; filename=house_config.yaml"})
+
+
+HOUSE_CONFIG_FILE = os.environ.get("HOUSE_CONFIG_PATH", "/house_config.yaml")
+
+
+def _config_writable() -> bool:
+    """Bara installationer som install.sh skapat sparar härifrån (HOUSE_CONFIG_WRITABLE=1
+    och filen monterad skrivbar). En handskriven config skrivs aldrig över från webben."""
+    return os.environ.get("HOUSE_CONFIG_WRITABLE") == "1" and os.access(HOUSE_CONFIG_FILE, os.W_OK)
+
+
+@app.get("/api/house-config-status")
+async def api_house_config_status(request: Request):
+    role, _ = AUTH.session(request)
+    return {"writable": role == "owner" and _config_writable()}
+
+
+@app.post("/api/save-house-config")
+async def api_save_house_config(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"ok": False, "error": "Bara ägaren kan spara"}, status_code=403)
+    if not _config_writable():
+        return JSONResponse({"ok": False, "error": "Den här installationen sparar inte från webben. Ladda ner filen i stället."},
+                            status_code=409)
+    resp = await api_generate_house_config(request)
+    if not isinstance(resp, Response):
+        return resp
+    if getattr(resp, "status_code", 200) != 200:
+        return resp
+    # Skrivs på plats (samma fil, inte en ny): Docker monterar filen, och en ny fil syns inte i motorn.
+    with open(HOUSE_CONFIG_FILE, "w", encoding="utf-8") as f:
+        f.write(resp.body.decode("utf-8"))
+    return {"ok": True, "message": "Sparat. Motorn startar om och läser in den nya inställningen inom en minut."}
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

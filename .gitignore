@@ -23,3 +23,7 @@ docker-compose.override.yml
 
 # Genereras av ewapp/make_icons.py vid varje Docker-bygge
 ewapp/static/icons/
+
+# Skapas av install.sh: ditt eget hus, sparas från webbens entitetsväljare
+config/house_config.yaml
+secrets/ha-gateway-certs/

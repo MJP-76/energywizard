@@ -11,6 +11,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 HA_IP    = os.environ.get("HA_IP")
 HA_PORT  = 8123
 HA_TOKEN = os.environ.get("HA_TOKEN", "").strip("\"'")
+# HA_URL (t.ex. http://192.168.1.10:8123) går före HA_IP. Med bara HA_IP gäller det gamla:
+# https på port 8123. En adress utan http:// får http://, och utan port får den :8123.
+HA_URL = os.environ.get("HA_URL", "").strip().strip("\"'").rstrip("/")
 
 # EnergyWizard Open, Spår B: körd som Home Assistant-tillägg (Supervisor) injicerar
 # SUPERVISOR_TOKEN automatiskt - då nås Core API lokalt via Supervisorns egen proxy
@@ -129,12 +132,26 @@ MOWER_ENTITIES = {
     "energy":  "sensor.shellyb1_energi",
 }
 
+def normalize_ha_url(url: str) -> str:
+    """'192.168.1.10' -> 'http://192.168.1.10:8123'. En adress med http:// eller https://
+    lämnas som den är (den kan ligga bakom en proxy på port 443)."""
+    url = (url or "").strip().rstrip("/")
+    if url.endswith("/api"):
+        url = url[:-4].rstrip("/")
+    if "://" in url:
+        return url
+    host = url.split("/", 1)[0]
+    if ":" not in host.rsplit("]", 1)[-1]:
+        url = host + ":8123" + url[len(host):]
+    return "http://" + url
+
+
 if SUPERVISOR_TOKEN:
     _BASE = "http://supervisor/core/api"
     _HEADERS = {"Authorization": f"Bearer {SUPERVISOR_TOKEN}", "Content-Type": "application/json"}
     _VERIFY = True   # intern anslutning inom Supervisorns eget nät, ingen TLS-fråga
 else:
-    _BASE = f"https://{HA_IP}:{HA_PORT}/api"
+    _BASE = f"{normalize_ha_url(HA_URL)}/api" if HA_URL else f"https://{HA_IP}:{HA_PORT}/api"
     _HEADERS = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json",

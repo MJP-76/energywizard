@@ -57,34 +57,43 @@ och mobilappen (port 8502), plus en egen databas. Sätt bara ett
 verifierat och vad som inte är det (aldrig testat mot en riktig Supervisor-
 installation).
 
-## Komma igång (docker-compose, alla gränssnitt)
+## Komma igång (Docker, en rad)
 
-1. Klona repot och kopiera `.env.example` till `.env` - fyll i dina egna värden
-   (Home Assistant-IP/token, Postgres-lösenord osv). `.env` checkas aldrig in.
-2. Kopiera `config/house_config.example.yaml` till en egen fil (t.ex.
-   `config/house_config.yaml`) och fyll i det du faktiskt har - en helt tom fil
-   (bara `house_id`) är ett giltigt, testat utgångsläge där alla delsystem bara
-   blir overksamma istället för att krascha. Varje enskild entitet är också
-   individuellt valfri.
-3. Peka `HOUSE_CONFIG_HOST_PATH` i din `.env` mot den filen (standard är annars
-   `config/examples/emil_house.yaml`, som är mitt eget hus - bra som referens för
-   hur en riktig, ifylld config ser ut).
-4. `docker compose up -d` - `smartbox` är huvudmotorn, syns bara i loggarna
-   (`docker compose logs -f smartbox`), inget gränssnitt. `webdashboard`
-   (dator/surfplatta) och `ewapp` (mobil, PWA) är separata profiler:
-   `docker compose --profile webdashboard up -d webdashboard`.
-5. Besök gränssnitten på din servers IP:
-   - `smartdashboard` (Streamlit-dashboarden): `http://din-server-ip:8501`
-   - `webdashboard` (ny dator/surfplatta-vy, kräver steg 4:s profil):
-     `http://din-server-ip:8503`
-   - `ewapp` (mobil/PWA) publicerar ingen egen port - nås via en reverse
-     proxy du själv sätter upp (t.ex. nginx under ett valfritt prefix), se
-     `docker-compose.yml`:s kommentarer för `ewapp`.
-6. Valfritt, avancerat: kör EnergyWizard under samma adress som din egna Home
-   Assistant (för Container-installationer utan Supervisor) - se
-   [kunskapsbanksartikeln](https://murre87.github.io/energywizard/kunskapsbank/ha-gateway.html).
-   Gatewayn skriver själv ut sin adress i loggarna
-   (`docker compose logs ha-gateway`) efter start.
+Har du Home Assistant OS? Använd tillägget ovan i stället.
+
+Annars, på en Linux-maskin med Docker:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/murre87/energywizard/main/install.sh | bash
+```
+
+Skriptet frågar efter tre saker: Home Assistants adress, en token från Home Assistant
+(ditt namn nere till vänster, fliken Säkerhet, "Skapa token") och ett lösenord till webben.
+Sedan skapar det resten och startar allt.
+
+Öppna sedan `http://din-server:8503`. Under **Inställningar** hittar entitetsväljaren
+dina prylar i Home Assistant. Kryssa i det du har och tryck **Spara och starta**.
+
+Uppdatera genom att köra samma rad igen. Dina inställningar behålls.
+
+<details>
+<summary>För dig som vill göra det för hand</summary>
+
+1. Klona repot. Kopiera `.env.example` till `.env` och fyll i `HA_URL` (t.ex.
+   `http://192.168.1.10:8123`), `HA_TOKEN` och Postgres-uppgifterna. Kopiera
+   `secrets/dashboard.env.example` till `secrets/dashboard.env` och sätt ett lösenord.
+2. Skapa `config/house_config.yaml`. En fil med bara `house_id: "mitt-hus"` räcker för
+   att starta. Se `config/house_config.example.yaml` för allt som går att ställa in, och
+   `config/examples/emil_house.yaml` för ett riktigt, ifyllt hus.
+   Sätt `HOUSE_CONFIG_HOST_PATH=./config/house_config.yaml` i `.env`.
+3. `docker compose --profile webdashboard up -d`. Motorn (`smartbox`) syns i
+   `docker compose logs -f smartbox`, webben på port 8503.
+
+Mobilappen (`ewapp`) har ingen egen port. Den nås via en reverse proxy, se
+kommentarerna i `docker-compose.yml`. Vill du köra EnergyWizard under samma adress
+som Home Assistant (Container-installation utan Supervisor), se
+[kunskapsbanksartikeln](https://murre87.github.io/energywizard/kunskapsbank/ha-gateway.html).
+</details>
 
 ## Vilka märken stöds idag
 
