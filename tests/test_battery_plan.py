@@ -70,6 +70,66 @@ def test_tomt_eller_utan_kapacitet():
     assert optimize(_slots([1.0]), 0, None, 2, 10, 3, 3)["rows"] == []
 
 
+def test_wear_blocks_discharge_below_cost_but_allows_profitable_use():
+    slots = [{"t": "t0", "buy": 0.4, "sell": 0.0, "load_kw": 1.0}]
+    low = optimize(slots, 5, 10, 2, 10, 1, 1, eff=1, switch_cost=0,
+                   discharge_wear_cost_sek_per_kwh=0.5)
+    assert low["rows"][0]["battery_kw"] == 0
+    slots[0]["buy"] = 2.0
+    # Include cheap future energy so terminal valuation does not reward hoarding.
+    high = optimize(slots + [{**slots[0], "t": "t1", "buy": 0.0, "load_kw": 0.0}],
+                    5, 10, 2, 10, 1, 1, eff=1, switch_cost=0,
+                    discharge_wear_cost_sek_per_kwh=0.5)
+    assert high["rows"][0]["battery_kw"] < 0
+    assert high["wear_cost_sek"] > 0
+
+
+def test_charge_wear_blocks_small_negative_price_opportunity():
+    slots = [{"t": "t0", "buy": -0.1, "sell": -0.1, "load_kw": 0.0},
+             {"t": "t1", "buy": 0.0, "sell": 0.0, "load_kw": 0.0}]
+    r = optimize(slots, 2, 10, 2, 10, 1, 1, eff=1, switch_cost=0,
+                 charge_wear_cost_sek_per_kwh=0.5)
+    assert all(row["battery_kw"] == 0 for row in r["rows"])
+
+
+def test_reversal_penalty_remembers_direction_across_idle_and_auto():
+    slots = [{"t": "t0", "buy": 0.0, "sell": 0.0, "load_kw": 0.0, "solar_kw": 1.0},
+             {"t": "t1", "buy": 0.0, "sell": 0.0, "load_kw": 0.0},
+             {"t": "t2", "buy": 2.0, "sell": 0.0, "load_kw": 1.0}]
+    plain = optimize(slots, 2, 10, 2, 10, 1, 1, eff=1, allowed={"auto", "idle"}, switch_cost=0)
+    guarded = optimize(slots, 2, 10, 2, 10, 1, 1, eff=1, allowed={"auto", "idle"},
+                       switch_cost=0, reversal_cost_sek=10)
+    assert any(row["direction_reversal"] for row in plain["rows"])
+    assert not any(row["direction_reversal"] for row in guarded["rows"])
+
+
+def test_invalid_wear_cost_rejected():
+    import pytest
+    for value in (-1, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            optimize(_slots([1.0]), 5, 10, 2, 10, 1, 1, discharge_wear_cost_sek_per_kwh=value)
+
+
+def test_legacy_discharge_cost_and_new_wear_are_additive_with_losses():
+    import math
+    import pytest
+    slots = [{"t": "t0", "buy": 2.0, "sell": 0.0, "load_kw": 1.0}]
+    cost, rows = simulate(slots, 5, ["auto"], 10, 2, 10, 1, 1, 0.81, 0.30,
+                          discharge_wear_cost_sek_per_kwh=0.18)
+    # 0.25 AC kWh delivered, 0.25 / 0.9 stored kWh removed.
+    assert cost == pytest.approx(0.25 * 0.30 + 0.25 / math.sqrt(0.81) * 0.18)
+    assert rows[0]["cost"] == cost
+
+
+def test_plan_cost_includes_legacy_and_new_wear_once():
+    import pytest
+    r = optimize(_slots(CHEAP_THEN_DEAR), 2, 10, 2, 10, 3, 3, cycle_cost=0.30,
+                 charge_wear_cost_sek_per_kwh=0.05, discharge_wear_cost_sek_per_kwh=0.10)
+    grid_cost = sum((row["grid_kw"] * 0.25) * (slot["buy"] if row["grid_kw"] > 0 else slot["sell"])
+                    for row, slot in zip(r["rows"], _slots(CHEAP_THEN_DEAR)))
+    assert r["cost"] == pytest.approx(grid_cost + r["wear_cost_sek"], abs=0.01)
+
+
 def test_planvyn_och_tidslinjen_visar_batteriet():
     from datetime import datetime, timedelta
     from plan_brief import battery_items, SWE

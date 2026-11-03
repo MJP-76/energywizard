@@ -1673,7 +1673,8 @@ while True:
                     }, battery_cfg, battery_driver.supported_intents())
                     gpm_actions["log"].append(f"🔋 (BATTERI): {_bdec['reason']}")
                     battery_driver.refresh()       # håller en pågående tvångsladdning vid liv (Solis RC m.fl.)
-                    if battery_control.should_apply(_bdec, _battery["last"], _battery["at"], now):
+                    if battery_control.should_apply(_bdec, _battery["last"], _battery["at"], now,
+                                                    battery_cfg["min_change_minutes"]):
                         if battery_driver.apply_intent(_bdec["intent"], _bdec.get("power_w")):
                             _battery.update(last=_bdec, at=now)
                             print(f"🔋 Batteri: {_bdec['intent']} - {_bdec['reason']}")

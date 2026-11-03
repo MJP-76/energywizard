@@ -145,3 +145,29 @@ def test_planen_styr_effekten():
     r = d(planned_action="discharge", planned_power_w=1800.0)
     assert r["intent"] == "discharge" and r["power_w"] == 1800.0
     assert d(planned_action="charge", planned_power_w=99999.0)["power_w"] == 5000.0   # taket gäller
+
+def test_wear_keeps_negative_price_and_no_plan_behaviour():
+    cfg = {**STYR, "cycle_cost": 0.30, "discharge_wear_cost_sek_per_kwh": 0.5}
+    assert decide({**BASE, "price": -0.01}, cfg, ALL)["intent"] == "charge"
+    assert decide({**BASE, "price": -0.01, "planned_action": "idle"}, cfg, ALL)["intent"] == "charge"
+    assert decide(BASE, cfg, ALL)["intent"] == "auto"
+    assert decide({**BASE, "peak_reached": True}, cfg, ALL)["intent"] == "discharge"
+
+
+def test_cycle_cost_config_keeps_default_and_existing_values():
+    cfg = battery_settings({"battery": {"enabled": True}})
+    assert cfg["cycle_cost"] == 0.30
+    assert cfg["charge_wear_cost_sek_per_kwh"] == cfg["discharge_wear_cost_sek_per_kwh"] == 0
+    cfg = battery_settings({"battery": {"enabled": True, "cycle_cost": 0.75,
+                                       "discharge_wear_cost_sek_per_kwh": 0.1}})
+    assert cfg["cycle_cost"] == 0.75 and cfg["discharge_wear_cost_sek_per_kwh"] == 0.1
+    assert battery_settings({"battery": {"enabled": True, "cycle_cost": 0}})["cycle_cost"] == 0
+
+
+def test_configurable_command_dwell_keeps_safety_override():
+    t = datetime(2026, 11, 3, 12)
+    charge = {"intent": "charge", "rule": "plan"}
+    discharge = {"intent": "discharge", "rule": "plan"}
+    assert not should_apply(discharge, charge, t - timedelta(minutes=15), t, 30)
+    assert should_apply(discharge, charge, t - timedelta(minutes=30), t, 30)
+    assert should_apply({**discharge, "rule": "fuse"}, charge, t, t, 30)

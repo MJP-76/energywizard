@@ -79,7 +79,8 @@ def _cost(grid_kw, buy, sell):
     return e * buy if e > 0 else e * sell
 
 
-def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycle_cost=0.0):
+def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycle_cost=0.0,
+             charge_wear_cost_sek_per_kwh=0.0, discharge_wear_cost_sek_per_kwh=0.0):
     """Kör en given avsiktsserie och returnerar (kostnad, rader). Används för baslinjen."""
     eff_c = eff_d = math.sqrt(eff)
     soc, cost, rows = soc0, 0.0, []
@@ -88,9 +89,11 @@ def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycl
         b = _battery_power(a, net, pc, pd)
         if s.get("ev_kw", 0.0) > 0.1 and b < 0:
             b = 0.0
+        previous_soc = soc
         soc, b = _step(soc, b, reserve, max_kwh, eff_c, eff_d)
         grid = net + b
         c = _cost(grid, s["buy"], s["sell"]) + cycle_cost * max(0.0, -b) * DT_H
+        c += max(0.0, soc - previous_soc) * charge_wear_cost_sek_per_kwh + max(0.0, previous_soc - soc) * discharge_wear_cost_sek_per_kwh
         cost += c
         rows.append({"t": s["t"], "action": a, "soc_kwh": soc, "battery_kw": b, "grid_kw": grid, "cost": c})
     return cost, rows
@@ -98,17 +101,27 @@ def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycl
 
 def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, discharge_kw,
              eff=0.9, allowed=ACTIONS, step_kwh=None, switch_cost=0.10, cycle_cost=0.0,
-             terminal_pct=25, allow_export=True):
+             terminal_pct=25, allow_export=True, charge_wear_cost_sek_per_kwh=0.0,
+             discharge_wear_cost_sek_per_kwh=0.0, reversal_cost_sek=0.0):
     """slots: [{'t', 'buy', 'sell', 'load_kw', 'solar_kw', 'ev_kw'}] (kvartar, i tidsordning).
     cycle_cost: kr per urladdad kWh - batteriets slitage (cellernas pris / livslängd i kWh). Planen
     laddar då bara ur när prisskillnaden täcker förluster OCH slitage.
     switch_cost: kr per lägesbyte - håller planen sammanhängande (färre skrivningar till
     växelriktarens flashminne) i stället för att jaga varje öre mellan kvartspriserna.
+    Wear rates are SEK per stored kWh added/removed; reversal_cost_sek prices physical
+    direction changes, including through idle. New wear rates are additive to cycle_cost;
+    cost includes wear, as before. cycle_cost remains per discharged AC kWh.
     Returnerar {'rows': [...], 'cost': kr, 'baseline_cost': kr (bara auto), 'saving_kr': kr}."""
     if not slots or not capacity_kwh or capacity_kwh <= 0:
         return {"rows": [], "cost": 0.0, "baseline_cost": 0.0, "saving_kr": 0.0}
+    for value in (cycle_cost, charge_wear_cost_sek_per_kwh, discharge_wear_cost_sek_per_kwh, reversal_cost_sek):
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Battery wear and reversal costs must be finite and nonnegative")
     acts = [a for a in ACTIONS if a in set(allowed) | {"auto"}]
     A = len(acts)
+    # Previous mode and last physical direction (0=none, 1=charge, 2=discharge).
+    # Idle/hold must not erase a reversal; auto can reverse without a mode change.
+    P = A * 3
     eff_c = eff_d = math.sqrt(eff)
     step = step_kwh or max(0.05, capacity_kwh / 100.0)
     lo, hi = max(0.0, reserve_kwh), min(capacity_kwh, max_kwh)
@@ -121,9 +134,9 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
     terminal_value = buys[min(len(buys) - 1, int(len(buys) * terminal_pct / 100))] * eff_d   # kr per kWh kvar vid slutet
 
     INF = float("inf")
-    # future[i][k] = minsta kostnad framåt från energinivå i när förra kvartens avsikt var acts[k]
+    # State: energy index, previous mode and last nonzero physical direction.
     term = [-(i * step) * terminal_value for i in range(n_states)]
-    future = [[term[i]] * A for i in range(n_states)]
+    future = [[term[i]] * P for i in range(n_states)]
     choice = []
     for s in reversed(slots):
         net = s["load_kw"] + s.get("ev_kw", 0.0) - s.get("solar_kw", 0.0)
@@ -143,18 +156,23 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
                         continue
                     b = 0.0
                 new, b = _step(soc, b, min(lo, soc), hi if soc <= hi else soc, eff_c, eff_d)
-                row.append((idx(new), b, net + b, _cost(net + b, s["buy"], s["sell"]) + cycle_cost * max(0.0, -b) * DT_H))
+                wear = cycle_cost * max(0.0, -b) * DT_H + max(0.0, new - soc) * charge_wear_cost_sek_per_kwh + max(0.0, soc - new) * discharge_wear_cost_sek_per_kwh
+                row.append((idx(new), b, net + b, _cost(net + b, s["buy"], s["sell"]) + wear, wear))
             trans.append(row)
-        cur = [[INF] * A for _ in range(n_states)]
-        ch = [[None] * A for _ in range(n_states)]
+        cur = [[INF] * P for _ in range(n_states)]
+        ch = [[None] * P for _ in range(n_states)]
         for i in range(n_states):
-            for prev in range(A):
+            for prev in range(P):
                 best, arg = INF, None
                 for k in range(A):
                     t = trans[i][k]
                     if t is None:
                         continue
-                    c = t[3] + future[t[0]][k] + (switch_cost if k != prev else 0.0)
+                    direction = 1 if t[1] > 1e-9 else 2 if t[1] < -1e-9 else 0
+                    last_direction = prev % 3
+                    reversal = bool(direction and last_direction and direction != last_direction)
+                    nxt_prev = k * 3 + (direction or last_direction)
+                    c = t[3] + future[t[0]][nxt_prev] + (switch_cost if k != prev // 3 else 0.0) + (reversal_cost_sek if reversal else 0.0)
                     if c < best - 1e-12:
                         best, arg = c, k
                 cur[i][prev], ch[i][prev] = best, arg
@@ -162,11 +180,15 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
         choice.append((ch, trans))
     choice.reverse()
 
-    rows, i, prev = [], idx(soc0_kwh), acts.index("auto")
-    total = 0.0
+    rows, i, prev = [], idx(soc0_kwh), acts.index("auto") * 3
+    total = wear_total = reversal_total = 0.0
     for s, (ch, trans) in zip(slots, choice):
         k = ch[i][prev]
-        nxt, b, grid, c = trans[i][k]
+        nxt, b, grid, c, wear = trans[i][k]
+        direction = 1 if b > 1e-9 else 2 if b < -1e-9 else 0
+        reversal = bool(direction and prev % 3 and direction != prev % 3)
+        wear_total += wear
+        reversal_total += reversal_cost_sek if reversal else 0.0
         total += c
         a = acts[k]
         # Ladda med fullt batteri / ladda ur vid reservnivån gör i praktiken ingenting - visa och
@@ -174,15 +196,23 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
         if a in ("charge", "discharge") and abs(b) < 0.05 and "hold" in acts:
             a = "hold"
         rows.append({"t": s["t"], "action": a, "soc_kwh": nxt * step, "battery_kw": round(b, 3),
-                     "grid_kw": round(grid, 3), "cost": c, "buy": s["buy"]})
-        i, prev = nxt, k
-    base_cost, base_rows = simulate(slots, soc0_kwh, ["auto"] * len(slots), capacity_kwh, lo, hi, charge_kw, discharge_kw, eff,
-                                    cycle_cost)
+                     "grid_kw": round(grid, 3), "cost": c, "buy": s["buy"],
+                     "wear_cost_sek": wear, "direction_reversal": reversal})
+        i, prev = nxt, k * 3 + (direction or prev % 3)
+    base_cost, base_rows = simulate(slots, soc0_kwh, ["auto"] * len(slots), capacity_kwh, lo, hi, charge_kw, discharge_kw, eff, cycle_cost,
+                                    charge_wear_cost_sek_per_kwh, discharge_wear_cost_sek_per_kwh)
     # Rättvis jämförelse: värdera energin kvar vid slutet lika i båda.
     end_plan = rows[-1]["soc_kwh"] if rows else soc0_kwh
     end_base = base_rows[-1]["soc_kwh"] if base_rows else soc0_kwh
-    saving = (base_cost - end_base * terminal_value) - (total - end_plan * terminal_value)
-    return {"rows": rows, "cost": total, "baseline_cost": base_cost, "saving_kr": round(saving, 2)}
+    base_reversals, last_direction = 0, 0
+    for row in base_rows:
+        b = row["battery_kw"]
+        direction = 1 if b > 1e-9 else 2 if b < -1e-9 else 0
+        base_reversals += int(bool(direction and last_direction and direction != last_direction))
+        last_direction = direction or last_direction
+    saving = (base_cost + base_reversals * reversal_cost_sek - end_base * terminal_value) - (total + reversal_total - end_plan * terminal_value)
+    return {"rows": rows, "cost": total, "baseline_cost": base_cost, "saving_kr": round(saving, 2),
+            "wear_cost_sek": wear_total, "reversal_cost_sek": reversal_total}
 
 
 REASON = {
@@ -284,7 +314,10 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
                  settings.get("charge_kw") or settings["max_power_w"] / 1000.0,
                  settings.get("discharge_kw") or settings["max_power_w"] / 1000.0, eff=settings.get("efficiency", 0.9),
                  allowed=supported, cycle_cost=settings.get("cycle_cost", 0.30),
-                 terminal_pct=terminal_pct, allow_export=allow_export)
+                 terminal_pct=terminal_pct, allow_export=allow_export,
+                 charge_wear_cost_sek_per_kwh=settings.get("charge_wear_cost_sek_per_kwh", 0.0),
+                 discharge_wear_cost_sek_per_kwh=settings.get("discharge_wear_cost_sek_per_kwh", 0.0),
+                 reversal_cost_sek=settings.get("reversal_cost_sek", 0.0))
     r["style"], r["allow_export"] = style, allow_export
     try:
         with engine.begin() as c:

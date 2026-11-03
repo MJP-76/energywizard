@@ -201,6 +201,11 @@ def battery_settings(cfg: dict) -> dict:
             # Batteriets slitage, kr per urladdad kWh: cellernas pris / (kapacitet x antal cykler).
             # T.ex. 40 000 kr / (10 kWh x 6000 cykler) ≈ 0,67 kr; 0,30 kr är ett försiktigt standardvärde.
             "cycle_cost": f("cycle_cost", 0.30),
+            # Valfria extra slitagekostnader per lagrad kWh (utöver cycle_cost).
+            "charge_wear_cost_sek_per_kwh": f("charge_wear_cost_sek_per_kwh", 0.0),
+            "discharge_wear_cost_sek_per_kwh": f("discharge_wear_cost_sek_per_kwh", 0.0),
+            "reversal_cost_sek": f("reversal_cost_sek", 0.0),
+            "min_change_minutes": f("min_change_minutes", 5.0),
             # Dygnsplan (battery_plan.py) - bara i läget styr; plan: false = bara reglerna
             "plan": str(bat.get("plan", True)).lower() not in ("false", "0", "nej", "no"),
             # planeringsstil (very_careful/careful/balanced/bold/very_bold) och om batteriet får
