@@ -158,7 +158,7 @@ def _find(ents, domain, rx):
     return next((x for x in ents if x["e"].startswith(domain + ".") and _has(x.get("n") or x["e"], rx)), None)
 
 
-def _battery_control_preset(ents):
+def _battery_control_preset(ents, all_ents=None):
     """Känner igen batteristyrning från wills106/homeassistant-solax-modbus och föreslår hela
     lägesmappningen (drivers/battery_generic.py). Lägesnamnen är integrationens egna (plugin_solax.py /
     plugin_growatt.py), inte gissade."""
@@ -206,6 +206,16 @@ def _battery_control_preset(ents):
         if gd:
             out["entities"]["discharge_power"] = gd["e"]
         return out
+    # HomeWizard Plug-In Battery (HA:s inbyggda homewizard-integration): "Battery group charging strategy" ligger på
+    # P1-/kWh-mätaren, inte på batteriet - därför letas den bland alla entiteter (all_ents). Alternativen är HA:s
+    # interna nycklar ur homeassistant/components/homewizard (select.py + strings.json), inte visningsnamnen:
+    # zero = Net zero, zero_charge_only, zero_discharge_only, to_full = One-time full charge, standby.
+    # "Ladda ur" utelämnas: närmast vore zero_discharge_only, men den säljer aldrig till nätet - auto täcker huset ändå.
+    if any(_has(x.get("m"), re.compile(r"homewizard", re.I)) for x in ents):
+        hw = _find(all_ents or ents, "select", re.compile(r"battery group (charging strategy|mode)$", re.I))
+        if hw:
+            return {"name": "homewizard", "entities": {"mode_select": hw["e"]},
+                    "modes": {"auto": "zero", "hold": "zero_charge_only", "idle": "standby", "charge": "to_full"}}
     # Solax Gen4-6: "Charger Use Mode" + "Manual Mode Select"
     use = _find(ents, "select", re.compile(r"charger use mode$", re.I))
     manual = _find(ents, "select", re.compile(r"manual mode select$", re.I))
@@ -342,8 +352,11 @@ def discover_house(entities: list[dict] | None = None) -> dict:
     # --- Elmätare/nätimport: Pulse, smartmätare, eller BÅDA samtidigt (inte
     # antingen-eller) - alla matchande power-sensorer listas, inte bara den första.
     grid_meters = []
+    # Delsensorer på samma mätare (t.ex. HomeWizard P1: "Power phase 1", "Battery group power", "Average demand")
+    # är inte husets nettoeffekt - förut kunde den första av dem väljas.
+    not_total = re.compile(r"phase|fas\b|l[123]\b|battery|batteri|production|produktion|reactive|apparent|average|peak|demand|target", re.I)
     for e in power:
-        if e is solar_e or not _has(_candidate(e) + " " + (e.get("n") or ""), GRID):
+        if e is solar_e or not _has(_candidate(e) + " " + (e.get("n") or ""), GRID) or _has(e.get("n"), not_total):
             continue
         kind = "pulse" if _has(_candidate(e), re.compile("tibber", re.I)) else "smartmätare"
         grid_meters.append({"power_entity": e["e"], "maker": e.get("m"), "kind": kind})
@@ -353,6 +366,14 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         power_meter = {"driver": "tibber_pulse", "entities": pulse}
     elif grid_meters:
         power_meter = {"driver": "power_w", "entities": {"power_w": grid_meters[0]["power_entity"]}}
+        # Strömmen per fas på samma mätare (HomeWizard P1/kWh-mätare: "Current phase 1-3", avstängda som standard
+        # i HA) ger säkringsskyddet riktiga ampere. HomeWizard: effekten är + vid köp, - vid export (som vi vill).
+        dev = next((e.get("d") for e in entities if e["e"] == grid_meters[0]["power_entity"]), None)
+        for ph in (1, 2, 3):
+            cur = next((e for e in entities if dev and e.get("d") == dev and e["e"].startswith("sensor.") and e.get("u") == "A"
+                        and _has(e.get("n"), re.compile(rf"(current|ström).*(phase|fas|l) ?{ph}\b", re.I))), None)
+            if cur:
+                power_meter["entities"][f"current_l{ph}"] = cur["e"]
     else:
         power_meter = None
 
@@ -489,7 +510,7 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             if power_e:
                 suggested["power"] = power_e["e"]
             battery["generic_suggestion"] = {"driver": "generic", "entities": suggested}
-            preset = _battery_control_preset(ents)
+            preset = _battery_control_preset(ents, entities)
             if preset:
                 if "power_charge" in preset["entities"]:
                     battery["generic_suggestion"]["entities"].pop("power", None)
