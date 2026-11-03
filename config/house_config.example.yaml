@@ -121,6 +121,10 @@ spa:
 #     power: sensor.shelly_spa_power             # valfri
 
 # --- Husbatteri (valfri) ---
+# Ferroamp EnergyHub: driver: ferroamp_modbus läser lokalt via Modbus TCP.
+# Komplett exempel och jämförelse: docs/ferroamp-energyhub.md.
+# Batteri: control: styr + default_mode_verified: true krävs för skrivning.
+# Sol/export: control_enabled: true krävs separat. Kontrollera firmware innan styrning.
 # battery:
 #   enabled: true
 #   driver: generic
