@@ -23,6 +23,12 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   nollställning vid start) och HeishaMon (Panasonic) använder det. Motorn styr dock fortfarande
   pumparna som förut (rumsbörvärde, Thermia-lägen); att låta prioritetsmotorn använda kurva/paus
   för andra märken väntar. Liksom att flytta Thermia/NIBE till de nya krokarna.
+- **Elpris och avgifter utanför Sverige (önskat av betatestare 2026-11-03).** Standardkällan är SE3
+  (elprisetjustnu.se); andra Nord Pool-områden går via HA:s Nordpool-integration, men nätavgift, skatt och
+  moms är svenska. Önskat: Octopus Agile (Storbritannien, #86), Amber (Australien, #83), Nederländerna (#88),
+  Norge (#90). Kräver priskälla per land och avgifter som går att ställa in.
+- **Pool och ackumulatortank efter elpris.** Poolvärme (#76) och elpatron i ackumulatortank (#47, Mattias på
+  Facebook) - samma motor som spabadet, men med tankens temperatur som "laddnivå".
 - **Återbetalning av energiskatt för lagrad el i batteri.** Den som har ett batteri kan få tillbaka
   energiskatten för el som köpts, lagrats och sedan matats ut på nätet (Skatteverket). Kräver att
   laddning från nät och urladdning till nät räknas kvart för kvart och sammanställs per år, som FTW
