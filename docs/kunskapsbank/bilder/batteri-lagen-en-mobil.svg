@@ -1,0 +1,62 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 846' width='420' height='846' role='img' aria-label='The battery&#39;s five modes' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='420' height='846' rx='18' fill='#0b1220'/>
+<defs><marker id='a22d3a0' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#22d3a0'/></marker><marker id='a38bdf8' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#38bdf8'/></marker><marker id='afbbf24' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#fbbf24'/></marker><marker id='ac4b5fd' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#c4b5fd'/></marker></defs>
+<text x='20' y='40' font-size='20' fill='#f3f6fb' text-anchor='start' font-weight='700'>The battery's five modes</text>
+<text x='22' y='70' font-size='15' fill='#22d3a0' text-anchor='start' font-weight='400'>☀</text><text x='40' y='70' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Solar</text>
+<text x='118' y='70' font-size='15' fill='#38bdf8' text-anchor='start' font-weight='400'>⚡</text><text x='136' y='70' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Grid</text>
+<text x='214' y='70' font-size='15' fill='#c4b5fd' text-anchor='start' font-weight='400'>⌂</text><text x='232' y='70' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>House</text>
+<text x='310' y='70' font-size='15' fill='#fbbf24' text-anchor='start' font-weight='400'>▮</text><text x='328' y='70' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Battery</text>
+<rect x='12' y='90' width='396' height='138' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='117.52720795985272' y1='128.2965025902331' x2='137.28602695653768' y2='143.28595148427' stroke='#22d3a0' stroke-width='3' marker-end='url(#a22d3a0)'/>
+<line x1='100.0' y1='137.0' x2='100.0' y2='177.0' stroke='#22d3a0' stroke-width='3' marker-end='url(#a22d3a0)'/>
+<line x1='117.52720795985272' y1='189.7034974097669' x2='137.28602695653768' y2='174.71404851573' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)'/>
+<circle cx='100' cy='115' r='18' fill='#22d3a0' fill-opacity='.16' stroke='#22d3a0' stroke-width='2'/><text x='100' y='121' font-size='16' fill='#22d3a0' text-anchor='middle' font-weight='400'>☀</text>
+<circle cx='42' cy='159' r='18' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='42' y='165' font-size='16' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text>
+<circle cx='158' cy='159' r='18' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='158' y='165' font-size='16' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text>
+<circle cx='100' cy='203' r='18' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='100' y='209' font-size='16' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text>
+<text x='200' y='147' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Auto</text>
+<text x='200' y='173' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>Covers the house, takes</text>
+<text x='200' y='193' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>solar surplus</text>
+<rect x='12' y='240' width='396' height='138' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='117.52720795985272' y1='278.2965025902331' x2='137.28602695653768' y2='293.28595148426996' stroke='#22d3a0' stroke-width='3' marker-end='url(#a22d3a0)'/>
+<line x1='100.0' y1='287.0' x2='100.0' y2='327.0' stroke='#22d3a0' stroke-width='3' marker-end='url(#a22d3a0)'/>
+<line x1='64.0' y1='309.0' x2='132.0' y2='309.0' stroke='#38bdf8' stroke-width='3' marker-end='url(#a38bdf8)'/>
+<circle cx='100' cy='265' r='18' fill='#22d3a0' fill-opacity='.16' stroke='#22d3a0' stroke-width='2'/><text x='100' y='271' font-size='16' fill='#22d3a0' text-anchor='middle' font-weight='400'>☀</text>
+<circle cx='42' cy='309' r='18' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='42' y='315' font-size='16' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text>
+<circle cx='158' cy='309' r='18' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='158' y='315' font-size='16' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text>
+<circle cx='100' cy='353' r='18' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='100' y='359' font-size='16' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text>
+<text x='200' y='297' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Hold</text>
+<text x='200' y='323' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>Takes solar surplus, no</text>
+<text x='200' y='343' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>discharge</text>
+<rect x='12' y='390' width='396' height='138' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='117.52720795985272' y1='428.2965025902331' x2='137.28602695653768' y2='443.28595148426996' stroke='#22d3a0' stroke-width='3' marker-end='url(#a22d3a0)'/>
+<line x1='64.0' y1='459.0' x2='132.0' y2='459.0' stroke='#38bdf8' stroke-width='3' marker-end='url(#a38bdf8)'/>
+<circle cx='100' cy='415' r='18' fill='#22d3a0' fill-opacity='.16' stroke='#22d3a0' stroke-width='2'/><text x='100' y='421' font-size='16' fill='#22d3a0' text-anchor='middle' font-weight='400'>☀</text>
+<circle cx='42' cy='459' r='18' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='42' y='465' font-size='16' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text>
+<circle cx='158' cy='459' r='18' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='158' y='465' font-size='16' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text>
+<circle cx='100' cy='503' r='18' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='100' y='509' font-size='16' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text>
+<text x='200' y='447' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Idle</text>
+<text x='200' y='473' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>Neither charges nor</text>
+<text x='200' y='493' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>discharges</text>
+<rect x='12' y='540' width='396' height='138' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='59.52720795985272' y1='622.2965025902331' x2='79.2860269565377' y2='637.28595148427' stroke='#38bdf8' stroke-width='3' marker-end='url(#a38bdf8)'/>
+<line x1='100.0' y1='587.0' x2='100.0' y2='627.0' stroke='#22d3a0' stroke-width='3' marker-end='url(#a22d3a0)'/>
+<line x1='64.0' y1='609.0' x2='132.0' y2='609.0' stroke='#38bdf8' stroke-width='3' marker-end='url(#a38bdf8)'/>
+<circle cx='100' cy='565' r='18' fill='#22d3a0' fill-opacity='.16' stroke='#22d3a0' stroke-width='2'/><text x='100' y='571' font-size='16' fill='#22d3a0' text-anchor='middle' font-weight='400'>☀</text>
+<circle cx='42' cy='609' r='18' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='42' y='615' font-size='16' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text>
+<circle cx='158' cy='609' r='18' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='158' y='615' font-size='16' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text>
+<circle cx='100' cy='653' r='18' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='100' y='659' font-size='16' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text>
+<text x='200' y='597' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Charge</text>
+<text x='200' y='623' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>Full charge, also from</text>
+<text x='200' y='643' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>the grid</text>
+<rect x='12' y='690' width='396' height='138' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='117.52720795985272' y1='789.7034974097669' x2='137.28602695653768' y2='774.71404851573' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)'/>
+<line x1='82.47279204014728' y1='789.7034974097669' x2='62.7139730434623' y2='774.71404851573' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)' stroke-dasharray='5 5'/>
+<circle cx='100' cy='715' r='18' fill='#22d3a0' fill-opacity='.16' stroke='#22d3a0' stroke-width='2'/><text x='100' y='721' font-size='16' fill='#22d3a0' text-anchor='middle' font-weight='400'>☀</text>
+<circle cx='42' cy='759' r='18' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='42' y='765' font-size='16' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text>
+<circle cx='158' cy='759' r='18' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='158' y='765' font-size='16' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text>
+<circle cx='100' cy='803' r='18' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='100' y='809' font-size='16' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text>
+<text x='200' y='747' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Discharge</text>
+<text x='200' y='773' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>Full discharge, surplus</text>
+<text x='200' y='793' font-size='14' fill='#93a0b8' text-anchor='start' font-weight='400'>is sold</text>
+</svg>

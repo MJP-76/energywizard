@@ -1,0 +1,77 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 812' width='420' height='812' role='img' aria-label='Planeringsstil: hur mycket planen litar på prognosen' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='420' height='812' rx='18' fill='#0b1220'/>
+<text x='20' y='38' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Planeringsstil: hur mycket planen</text>
+<text x='20' y='63' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>litar på prognosen</text>
+<rect x='12' y='94' width='396' height='122' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<text x='26' y='120' font-size='16' fill='#f87171' text-anchor='start' font-weight='700'>Mycket försiktig</text>
+<text x='26' y='149' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Solprognos räknas som</text>
+<rect x='238' y='134' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='134' width='85.09090909090908' height='20' rx='6' fill='#f87171' fill-opacity='.6'/>
+<text x='316.0' y='149' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>60 %</text>
+<text x='26' y='175' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Förbrukning räknas som</text>
+<rect x='238' y='160' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='160' width='150.0' height='20' rx='6' fill='#f87171' fill-opacity='.6'/>
+<text x='316.0' y='175' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>125 %</text>
+<text x='26' y='201' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Sparar kvar i batteriet</text>
+<rect x='238' y='186' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='186' width='141.8181818181818' height='20' rx='6' fill='#f87171' fill-opacity='.6'/>
+<text x='316.0' y='201' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>mest</text>
+<rect x='12' y='226' width='396' height='122' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<text x='26' y='252' font-size='16' fill='#fb923c' text-anchor='start' font-weight='700'>Försiktig</text>
+<text x='26' y='281' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Solprognos räknas som</text>
+<rect x='238' y='266' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='266' width='113.45454545454545' height='20' rx='6' fill='#fb923c' fill-opacity='.6'/>
+<text x='316.0' y='281' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>80 %</text>
+<text x='26' y='307' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Förbrukning räknas som</text>
+<rect x='238' y='292' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='292' width='132.0' height='20' rx='6' fill='#fb923c' fill-opacity='.6'/>
+<text x='316.0' y='307' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>110 %</text>
+<text x='26' y='333' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Sparar kvar i batteriet</text>
+<rect x='238' y='318' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='318' width='99.27272727272727' height='20' rx='6' fill='#fb923c' fill-opacity='.6'/>
+<text x='316.0' y='333' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>mer</text>
+<rect x='12' y='358' width='396' height='122' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<text x='26' y='384' font-size='16' fill='#22d3a0' text-anchor='start' font-weight='700'>Balanserad</text>
+<text x='26' y='413' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Solprognos räknas som</text>
+<rect x='238' y='398' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='398' width='141.8181818181818' height='20' rx='6' fill='#22d3a0' fill-opacity='.6'/>
+<text x='316.0' y='413' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<text x='26' y='439' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Förbrukning räknas som</text>
+<rect x='238' y='424' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='424' width='119.99999999999999' height='20' rx='6' fill='#22d3a0' fill-opacity='.6'/>
+<text x='316.0' y='439' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<text x='26' y='465' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Sparar kvar i batteriet</text>
+<rect x='238' y='450' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='450' width='70.9090909090909' height='20' rx='6' fill='#22d3a0' fill-opacity='.6'/>
+<text x='316.0' y='465' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>normalt</text>
+<rect x='12' y='490' width='396' height='122' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<text x='26' y='516' font-size='16' fill='#38bdf8' text-anchor='start' font-weight='700'>Djärv</text>
+<text x='26' y='545' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Solprognos räknas som</text>
+<rect x='238' y='530' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='530' width='141.8181818181818' height='20' rx='6' fill='#38bdf8' fill-opacity='.6'/>
+<text x='316.0' y='545' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<text x='26' y='571' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Förbrukning räknas som</text>
+<rect x='238' y='556' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='556' width='119.99999999999999' height='20' rx='6' fill='#38bdf8' fill-opacity='.6'/>
+<text x='316.0' y='571' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<text x='26' y='597' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Sparar kvar i batteriet</text>
+<rect x='238' y='582' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='582' width='42.54545454545454' height='20' rx='6' fill='#38bdf8' fill-opacity='.6'/>
+<text x='316.0' y='597' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>mindre</text>
+<rect x='12' y='622' width='396' height='122' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<text x='26' y='648' font-size='16' fill='#818cf8' text-anchor='start' font-weight='700'>Mycket djärv</text>
+<text x='26' y='677' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Solprognos räknas som</text>
+<rect x='238' y='662' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='662' width='148.9090909090909' height='20' rx='6' fill='#818cf8' fill-opacity='.6'/>
+<text x='316.0' y='677' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>105 %</text>
+<text x='26' y='703' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Förbrukning räknas som</text>
+<rect x='238' y='688' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='688' width='114.0' height='20' rx='6' fill='#818cf8' fill-opacity='.6'/>
+<text x='316.0' y='703' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>95 %</text>
+<text x='26' y='729' font-size='12.5' fill='#93a0b8' text-anchor='start' font-weight='400'>Sparar kvar i batteriet</text>
+<rect x='238' y='714' width='156' height='20' rx='6' fill='#0b1220' stroke='#2a3446'/>
+<rect x='238' y='714' width='14.181818181818182' height='20' rx='6' fill='#818cf8' fill-opacity='.6'/>
+<text x='316.0' y='729' font-size='12.5' fill='#f3f6fb' text-anchor='middle' font-weight='600'>minst</text>
+<text x='20' y='768' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Säkerhetsgränserna (reservnivå, säkring, effekttak)</text>
+<text x='20' y='786' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>är desamma i alla stilar.</text>
+</svg>

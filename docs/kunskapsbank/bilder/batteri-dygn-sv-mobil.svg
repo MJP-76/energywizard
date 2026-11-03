@@ -1,0 +1,67 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 496' width='420' height='496' role='img' aria-label='Exempel: ett dygn med dygnsplanen' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='420' height='496' rx='18' fill='#0b1220'/>
+<text x='20' y='38' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>Exempel: ett dygn med</text>
+<text x='20' y='63' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>dygnsplanen</text>
+<text x='20' y='102' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Elpris</text>
+<rect x='21.5' y='217.81395348837208' width='12.833333333333334' height='34.18604651162791' rx='2' fill='#22d3a0' fill-opacity='.75'/>
+<rect x='37.333333333333336' y='221.06976744186045' width='12.833333333333334' height='30.930232558139537' rx='2' fill='#22d3a0' fill-opacity='.75'/>
+<rect x='53.16666666666667' y='223.51162790697674' width='12.833333333333334' height='28.488372093023255' rx='2' fill='#22d3a0' fill-opacity='.75'/>
+<rect x='69.0' y='225.13953488372093' width='12.833333333333334' height='26.86046511627907' rx='2' fill='#22d3a0' fill-opacity='.75'/>
+<rect x='84.83333333333334' y='224.32558139534885' width='12.833333333333334' height='27.674418604651162' rx='2' fill='#22d3a0' fill-opacity='.75'/>
+<rect x='100.66666666666667' y='219.4418604651163' width='12.833333333333334' height='32.55813953488372' rx='2' fill='#22d3a0' fill-opacity='.75'/>
+<rect x='116.5' y='188.51162790697674' width='12.833333333333334' height='63.48837209302326' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='132.33333333333334' y='150.25581395348837' width='12.833333333333334' height='101.74418604651163' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='148.16666666666669' y='138.04651162790697' width='12.833333333333334' height='113.95348837209302' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='164.0' y='162.46511627906978' width='12.833333333333334' height='89.53488372093024' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='179.83333333333334' y='185.25581395348837' width='12.833333333333334' height='66.74418604651163' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='195.66666666666669' y='195.02325581395348' width='12.833333333333334' height='56.97674418604651' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='211.5' y='201.53488372093022' width='12.833333333333334' height='50.46511627906977' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='227.33333333333334' y='203.1627906976744' width='12.833333333333334' height='48.83720930232558' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='243.16666666666669' y='198.27906976744185' width='12.833333333333334' height='53.72093023255814' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='259.0' y='186.88372093023256' width='12.833333333333334' height='65.11627906976744' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='274.83333333333337' y='155.95348837209303' width='12.833333333333334' height='96.04651162790698' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='290.6666666666667' y='121.76744186046511' width='12.833333333333334' height='130.2325581395349' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='306.5' y='112.0' width='12.833333333333334' height='140.0' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='322.33333333333337' y='129.90697674418607' width='12.833333333333334' height='122.09302325581395' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='338.1666666666667' y='162.46511627906978' width='12.833333333333334' height='89.53488372093024' rx='2' fill='#f87171' fill-opacity='.75'/>
+<rect x='354.0' y='186.88372093023256' width='12.833333333333334' height='65.11627906976744' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='369.83333333333337' y='203.1627906976744' width='12.833333333333334' height='48.83720930232558' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<rect x='385.6666666666667' y='212.93023255813955' width='12.833333333333334' height='39.06976744186046' rx='2' fill='#38bdf8' fill-opacity='.75'/>
+<text x='20' y='274' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Batteriet</text>
+<rect x='20.0' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<rect x='35.833333333333336' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<rect x='51.66666666666667' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<rect x='67.5' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<rect x='83.33333333333334' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<rect x='99.16666666666667' y='282' width='15.833333333333334' height='24' fill='#38bdf8' fill-opacity='.85'/>
+<rect x='115.0' y='282' width='15.833333333333334' height='24' fill='#38bdf8' fill-opacity='.85'/>
+<rect x='130.83333333333334' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='146.66666666666669' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='162.5' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='178.33333333333334' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='194.16666666666669' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='210.0' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='225.83333333333334' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='241.66666666666669' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='257.5' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='273.33333333333337' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='289.1666666666667' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='305.0' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='320.83333333333337' y='282' width='15.833333333333334' height='24' fill='#fbbf24' fill-opacity='.85'/>
+<rect x='336.6666666666667' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='352.5' y='282' width='15.833333333333334' height='24' fill='#c4b5fd' fill-opacity='.85'/>
+<rect x='368.33333333333337' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<rect x='384.1666666666667' y='282' width='15.833333333333334' height='24' fill='#22d3a0' fill-opacity='.85'/>
+<text x='20' y='330' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Laddnivå</text>
+<polyline points='27.9,379.9 43.8,370.8 59.6,361.7 75.4,352.6 91.3,343.5 107.1,343.5 122.9,343.5 138.8,353.3 154.6,363.1 170.4,372.9 186.2,374.3 202.1,375.7 217.9,377.1 233.8,378.5 249.6,379.9 265.4,381.3 281.3,391.1 297.1,399.5 312.9,399.5 328.8,399.5 344.6,399.5 360.4,399.5 376.3,390.4 392.1,381.3' fill='none' stroke='#fbbf24' stroke-width='3' stroke-linejoin='round'/>
+<line x1='20' y1='410' x2='400' y2='410' stroke='#2a3446'/>
+<text x='20.0' y='428' font-size='12' fill='#93a0b8' text-anchor='start' font-weight='400'>00</text>
+<text x='115.0' y='428' font-size='12' fill='#93a0b8' text-anchor='middle' font-weight='400'>06</text>
+<text x='210.0' y='428' font-size='12' fill='#93a0b8' text-anchor='middle' font-weight='400'>12</text>
+<text x='305.0' y='428' font-size='12' fill='#93a0b8' text-anchor='middle' font-weight='400'>18</text>
+<text x='400.0' y='428' font-size='12' fill='#93a0b8' text-anchor='end' font-weight='400'>24</text>
+<rect x='20' y='444' width='14' height='14' rx='3' fill='#22d3a0'/><text x='40' y='456' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>laddar billigt</text>
+<rect x='215' y='444' width='14' height='14' rx='3' fill='#38bdf8'/><text x='235' y='456' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>sparar</text>
+<rect x='20' y='468' width='14' height='14' rx='3' fill='#c4b5fd'/><text x='40' y='480' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>täcker huset</text>
+<rect x='215' y='468' width='14' height='14' rx='3' fill='#fbbf24'/><text x='235' y='480' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>laddar ur dyrt</text>
+</svg>

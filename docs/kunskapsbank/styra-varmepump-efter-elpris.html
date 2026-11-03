@@ -23,10 +23,44 @@
   kodmodul som vet exakt hur just det märket tar emot kommandon (SG Ready-kontakter,
   Modbus, eller en lokal webb-API beroende på märke).</p>
 
-  <p>Idag finns en färdig drivrutin för <strong>Thermia/Husdata</strong>, och arkitekturen
-  är byggd för att nya märken (NIBE, IVT, CTC, Mitsubishi) ska gå att lägga till som
-  egna moduler utan att röra styrlogiken i övrigt - samma mönster som bilar
-  (Nissan/Tesla/generisk EV) och växelriktare (SolarEdge) redan använder.</p>
+  <h3>Vilka värmepumpar stöds?</h3>
+  <table>
+    <tr><th>Värmepump</th><th>Väg</th><th>Läge</th></tr>
+    <tr><td>Thermia (Diplomat m.fl.)</td><td>Husdata H66, Modbus direkt</td><td>✅ i drift sedan länge</td></tr>
+    <tr><td>Alla med en <code>climate</code>-entitet i Home Assistant</td><td>HA (rumstemperatur)</td><td>✅ grundstyrning</td></tr>
+    <tr><td>NIBE S-serien (S735, S1155, S1255, S320 …)</td><td>pumpens lokala REST-API</td><td>byggd, ej provad mot pump</td></tr>
+    <tr><td>NIBE, Bosch, Atlantic, Daikin via myUplink</td><td>myUplink (molnet)</td><td>byggd, ej provad mot pump</td></tr>
+    <tr><td>Panasonic Aquarea</td><td><a href="https://github.com/Egyras/HeishaMon">HeishaMon</a>, lokalt</td><td>byggd, ej provad mot pump</td></tr>
+  </table>
+
+  <h3>Samma språk för alla märken</h3>
+  <p>Varje drivrutin översätter till samma begrepp, lånade från smarthemsstandarden Matter:
+  <strong>läge</strong> (av, värme, kyla, auto, varmvatten), <strong>inne- och utetemperatur</strong>,
+  <strong>går/står</strong>, <strong>effekt</strong>, <strong>energi</strong> och <strong>fel</strong>.
+  Där pumpen kan berätta mer kommer också <strong>värmekurvans förskjutning</strong>, <strong>avgiven
+  värmeeffekt</strong>, <strong>COP</strong>, <strong>avfrostning</strong> och <strong>varmvattentemperatur</strong>.</p>
+  <p>Två styrsätt finns för pumpar som klarar dem, i dag HeishaMon:</p>
+  <ul>
+    <li><strong>Höj/sänk kurvan ±n grader</strong> relativt din vanliga inställning, högst ±5.
+      Förskjutningen nollställs varje gång EnergyWizard startar, så en omstart eller krasch aldrig
+      lämnar pumpen förskjuten.</li>
+    <li><strong>Paus med tidsgräns:</strong> uppvärmningen stoppas en stund, högst 4 timmar, och
+      släpps av sig själv även om något går fel.</li>
+  </ul>
+  <p>Kan pumpen inte en viss sak svarar drivrutinen ärligt nej, i stället för att gissa.</p>
+
+  <h3>Panasonic via HeishaMon</h3>
+  <p>HeishaMon är ett litet kort som sätts i pumpens CN-CNT-kontakt. EnergyWizard läser och styr det lokalt
+  över HTTP. Kurvförskjutningen fungerar när pumpen går på värmekurva (inte direkt framledningstemperatur).</p>
+  <pre><code>heat_pump:
+  enabled: true
+  driver: heishamon
+  host: 192.168.1.60       # HeishaMon-kortets IP
+  base_shift: 0            # din vanliga förskjutning (-5..5)
+  indoor_from_z1: false    # true om zon 1 har en rumsgivare</code></pre>
+
+  <p>Arkitekturen är byggd för att fler märken (IVT, CTC, Mitsubishi) ska gå att lägga till som egna
+  moduler utan att röra styrlogiken, samma mönster som bilar, laddare och växelriktare redan använder.</p>
 
   <p>Själva besluten - <em>när</em> ska pumpen gå hårt, <em>när</em> ska den vila - fattas
   av en gemensam prioritetsmotor, inte av drivrutinen. Det betyder att hela

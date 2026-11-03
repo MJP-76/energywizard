@@ -1,0 +1,60 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 380' width='1000' height='380' role='img' aria-label='Planning style: how much the plan trusts the forecast' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='1000' height='380' rx='18' fill='#0b1220'/>
+<text x='30' y='44' font-size='22' fill='#f3f6fb' text-anchor='start' font-weight='700'>Planning style: how much the plan trusts the forecast</text>
+<text x='320.0' y='86' font-size='14' fill='#f87171' text-anchor='middle' font-weight='700'>Very</text>
+<text x='320.0' y='103' font-size='14' fill='#f87171' text-anchor='middle' font-weight='700'>careful</text>
+<text x='468.0' y='86' font-size='14' fill='#fb923c' text-anchor='middle' font-weight='700'>Careful</text>
+<text x='616.0' y='86' font-size='14' fill='#22d3a0' text-anchor='middle' font-weight='700'>Balanced</text>
+<text x='764.0' y='86' font-size='14' fill='#38bdf8' text-anchor='middle' font-weight='700'>Bold</text>
+<text x='912.0' y='86' font-size='14' fill='#818cf8' text-anchor='middle' font-weight='700'>Very</text>
+<text x='912.0' y='103' font-size='14' fill='#818cf8' text-anchor='middle' font-weight='700'>bold</text>
+<text x='30' y='162' font-size='14' fill='#f3f6fb' text-anchor='start' font-weight='400'>Solar forecast counted as</text>
+<rect x='250' y='140' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='250' y='140' width='76.36363636363636' height='34' rx='8' fill='#f87171' fill-opacity='.55'/>
+<text x='320.0' y='163' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>60 %</text>
+<rect x='398' y='140' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='398' y='140' width='101.81818181818183' height='34' rx='8' fill='#fb923c' fill-opacity='.55'/>
+<text x='468.0' y='163' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>80 %</text>
+<rect x='546' y='140' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='546' y='140' width='127.27272727272727' height='34' rx='8' fill='#22d3a0' fill-opacity='.55'/>
+<text x='616.0' y='163' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<rect x='694' y='140' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='694' y='140' width='127.27272727272727' height='34' rx='8' fill='#38bdf8' fill-opacity='.55'/>
+<text x='764.0' y='163' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<rect x='842' y='140' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='842' y='140' width='133.63636363636363' height='34' rx='8' fill='#818cf8' fill-opacity='.55'/>
+<text x='912.0' y='163' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>105 %</text>
+<text x='30' y='228' font-size='14' fill='#f3f6fb' text-anchor='start' font-weight='400'>Consumption counted as</text>
+<rect x='250' y='206' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='250' y='206' width='134.6153846153846' height='34' rx='8' fill='#f87171' fill-opacity='.55'/>
+<text x='320.0' y='229' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>125 %</text>
+<rect x='398' y='206' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='398' y='206' width='118.46153846153847' height='34' rx='8' fill='#fb923c' fill-opacity='.55'/>
+<text x='468.0' y='229' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>110 %</text>
+<rect x='546' y='206' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='546' y='206' width='107.69230769230768' height='34' rx='8' fill='#22d3a0' fill-opacity='.55'/>
+<text x='616.0' y='229' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<rect x='694' y='206' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='694' y='206' width='107.69230769230768' height='34' rx='8' fill='#38bdf8' fill-opacity='.55'/>
+<text x='764.0' y='229' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>100 %</text>
+<rect x='842' y='206' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='842' y='206' width='102.3076923076923' height='34' rx='8' fill='#818cf8' fill-opacity='.55'/>
+<text x='912.0' y='229' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>95 %</text>
+<text x='30' y='294' font-size='14' fill='#f3f6fb' text-anchor='start' font-weight='400'>Keeps in the battery</text>
+<rect x='250' y='272' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='250' y='272' width='127.27272727272727' height='34' rx='8' fill='#f87171' fill-opacity='.55'/>
+<text x='320.0' y='295' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>most</text>
+<rect x='398' y='272' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='398' y='272' width='89.0909090909091' height='34' rx='8' fill='#fb923c' fill-opacity='.55'/>
+<text x='468.0' y='295' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>more</text>
+<rect x='546' y='272' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='546' y='272' width='63.63636363636363' height='34' rx='8' fill='#22d3a0' fill-opacity='.55'/>
+<text x='616.0' y='295' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>normal</text>
+<rect x='694' y='272' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='694' y='272' width='38.18181818181818' height='34' rx='8' fill='#38bdf8' fill-opacity='.55'/>
+<text x='764.0' y='295' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>less</text>
+<rect x='842' y='272' width='140' height='34' rx='8' fill='#141c2c' stroke='#2a3446'/>
+<rect x='842' y='272' width='12.727272727272728' height='34' rx='8' fill='#818cf8' fill-opacity='.55'/>
+<text x='912.0' y='295' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='600'>least</text>
+<text x='30' y='356' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>The safety limits (reserve level, main fuse, peak cap) are the same in every style.</text>
+</svg>

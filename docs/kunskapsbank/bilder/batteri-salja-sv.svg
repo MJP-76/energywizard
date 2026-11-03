@@ -1,0 +1,20 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 230' width='1000' height='230' role='img' aria-label='Får batteriet sälja till nätet?' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='1000' height='230' rx='18' fill='#0b1220'/>
+<defs><marker id='a22d3a0' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#22d3a0'/></marker><marker id='a38bdf8' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#38bdf8'/></marker><marker id='afbbf24' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#fbbf24'/></marker><marker id='ac4b5fd' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#c4b5fd'/></marker></defs>
+<text x='30' y='44' font-size='22' fill='#f3f6fb' text-anchor='start' font-weight='700'>Får batteriet sälja till nätet?</text>
+<rect x='20' y='64' width='470' height='150' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='116' y1='130' x2='225' y2='130' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)'/>
+<line x1='281' y1='130' x2='390' y2='130' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)' stroke-dasharray='5 5'/>
+<text x='337.5' y='120' font-size='12' fill='#fbbf24' text-anchor='middle' font-weight='400'>säljs</text>
+<circle cx='90' cy='130' r='22' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='90' y='136' font-size='18' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text><text x='90' y='170' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Batteri</text>
+<circle cx='255' cy='130' r='22' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='255' y='136' font-size='18' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text><text x='255' y='170' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Hus</text>
+<circle cx='420' cy='130' r='22' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='420' y='136' font-size='18' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text><text x='420' y='170' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Nät</text>
+<text x='255' y='200' font-size='13' fill='#f3f6fb' text-anchor='middle' font-weight='400'>På: batteriet kan laddas ur mot nätet när priset är högt</text>
+<rect x='510' y='64' width='470' height='150' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='606' y1='130' x2='715' y2='130' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)'/>
+<line x1='785' y1='116' x2='870' y2='144' stroke='#f87171' stroke-width='3'/><line x1='785' y1='144' x2='870' y2='116' stroke='#f87171' stroke-width='3'/>
+<circle cx='580' cy='130' r='22' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='580' y='136' font-size='18' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text><text x='580' y='170' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Batteri</text>
+<circle cx='745' cy='130' r='22' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='745' y='136' font-size='18' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text><text x='745' y='170' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Hus</text>
+<circle cx='910' cy='130' r='22' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='910' y='136' font-size='18' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text><text x='910' y='170' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Nät</text>
+<text x='745' y='200' font-size='13' fill='#f3f6fb' text-anchor='middle' font-weight='400'>Av: batteriet täcker bara husets egen förbrukning</text>
+</svg>

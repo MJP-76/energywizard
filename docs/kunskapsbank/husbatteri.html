@@ -36,6 +36,23 @@
     <tr><td><code>av</code></td><td>Batteriet ignoreras.</td></tr>
   </table>
 
+  <h3>Batteriets fem lägen</h3>
+  <p>När EnergyWizard styr väljer det kvart för kvart ett av fem lägen. Batteriets egna lägesnamn
+  (till exempel "Self Use" eller "Force Charge") kopplas till de här fem:</p>
+  <picture><source media="(max-width:640px)" srcset="bilder/batteri-lagen-sv-mobil.svg"><img class="fig" src="bilder/batteri-lagen-sv.svg" alt="De fem lägena: auto, håll, vila, ladda och ladda ur, med flödet mellan sol, nät, hus och batteri" loading="lazy"></picture>
+
+  <h3>Vilka batterier kan styras?</h3>
+  <table>
+    <tr><th>Batteri / integration i Home Assistant</th><th>Läser</th><th>Styr</th></tr>
+    <tr><td>Solax Gen4-6 (<a href="https://github.com/wills106/homeassistant-solax-modbus">Solax Modbus</a>)</td><td>✅</td><td>✅ alla fem lägen</td></tr>
+    <tr><td>Growatt (Solax Modbus)</td><td>✅</td><td>✅ auto, håll, ladda, ladda ur</td></tr>
+    <tr><td>FoxESS lokalt (<a href="https://github.com/nathanmarlor/foxess_modbus">foxess_modbus</a>)</td><td>✅</td><td>✅ auto, håll, ladda, ladda ur + effekt</td></tr>
+    <tr><td>FoxESS via molnet (<a href="https://github.com/macxq/foxess-ha">foxess-ha</a>)</td><td>✅</td><td>auto och håll</td></tr>
+    <tr><td>Felicity Solar (<a href="https://github.com/partach/ha_felicity">ha_felicity</a>)</td><td>✅</td><td>nej, integrationens egen styrning sköter det (se nedan)</td></tr>
+    <tr><td>SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron, Pylontech m.fl.</td><td>✅</td><td>om du kopplar lägena själv (exempel längst ner)</td></tr>
+  </table>
+  <p>Allt utom läsningen är byggt mot integrationernas källkod och ännu inte kört mot ett riktigt batteri.</p>
+
   <h3>Reglerna (i prioritetsordning)</h3>
   <ol>
     <li><strong>Gammal data:</strong> svarar inte batteriet eller elmätaren tar växelriktaren över (auto).</li>
@@ -62,6 +79,24 @@
   tidslinjen och i "Just nu" med hur mycket den beräknas spara mot ren självförbrukning.
   Säkerhetsreglerna ovan går alltid före planen.</p>
   <p>Varje beslut syns med sin förklaring i "Just nu" på översikten och i appen.</p>
+  <picture><source media="(max-width:640px)" srcset="bilder/batteri-dygn-sv-mobil.svg"><img class="fig" src="bilder/batteri-dygn-sv.svg" alt="Exempel på ett vinterdygn: batteriet laddar på natten, laddar ur vid morgon- och kvällstopparna och täcker huset däremellan" loading="lazy"></picture>
+
+  <h3>Planeringsstil</h3>
+  <p>Under <em>Inställningar → Batteri</em> väljer du hur mycket planen ska lita på sol- och
+  förbrukningsprognosen, i fem steg från <strong>Mycket försiktig</strong> till <strong>Mycket djärv</strong>.
+  En försiktig plan räknar med mindre sol och mer förbrukning än prognosen och sparar mer i batteriet
+  till senare. En djärv plan tror på prognosen och använder batteriet mer, vilket tjänar mest när
+  prognosen stämmer. <strong>Balanserad</strong> är standard.</p>
+  <picture><source media="(max-width:640px)" srcset="bilder/batteri-stilar-sv-mobil.svg"><img class="fig" src="bilder/batteri-stilar-sv.svg" alt="De fem planeringsstilarna: hur solprognos och förbrukning räknas och hur mycket som sparas i batteriet" loading="lazy"></picture>
+  <p>Reservnivån, säkringsskyddet och effekttaket gäller likadant i alla stilar. Stilen ändrar bara hur
+  planen räknar, aldrig säkerheten.</p>
+
+  <h3>Får batteriet sälja till nätet?</h3>
+  <p>Med <em>Tillåt batteriet att sälja till nätet</em> påslaget (standard) kan planen ladda ur mot nätet när
+  priset är så högt att det lönar sig efter förluster och slitage. Stänger du av det täcker batteriet bara
+  husets egen förbrukning. Det kan vara klokt om ditt elavtal ger lite betalt för såld el eller om
+  elnätsbolaget tar ut en avgift för inmatning.</p>
+  <picture><source media="(max-width:640px)" srcset="bilder/batteri-salja-sv-mobil.svg"><img class="fig" src="bilder/batteri-salja-sv.svg" alt="På: batteriet kan sälja till nätet. Av: batteriet täcker bara huset" loading="lazy"></picture>
 
   <h3>Säkerhet</h3>
   <ul>
@@ -115,6 +150,17 @@
   </ul>
   <p>En FoxESS-laddbox (t.ex. A7300P/L07P) styrs via OCPP, som andra OCPP-laddare.</p>
 
+  <h3>Felicity Solar</h3>
+  <p>Kör du <a href="https://github.com/partach/ha_felicity">partach/ha_felicity</a> (T-REX 5K, 6K, 10K, 25K och 50K
+  via Modbus) känner entitetsväljaren igen batteriet och föreslår laddnivå och effekt, men <strong>bara för
+  avläsning</strong>. Integrationen har en egen prisstyrning (EMS) för batteriet, och om två system styr samma
+  batteri slåss de. Dessutom skriver integrationens val "Backup mode" i själva verket Economic mode till
+  T-REX 5/10K, så EnergyWizard kan inte välja läge säkert den vägen. Låt därför <code>ha_felicity</code> sköta
+  batteriet. EnergyWizard ser det, räknar med det i effektvakten och planen för resten av huset, och skriver
+  aldrig dit.</p>
+  <p>Visar effekten minus när batteriet laddar? Lägg till <code>power_invert: true</code> under
+  <code>battery:</code>, så vänds tecknet.</p>
+
   <h3>Så ställer du in det</h3>
   <p>Entitetsväljaren hittar batteriet och skriver <code>control: samarbete</code> som säker start.
   För <code>styr</code> anger du vilket av batteriets egna lägen som motsvarar varje avsikt - exakt
@@ -129,6 +175,9 @@
   max_power_w: 5000      # batteriets max laddeffekt (för planen)
   cycle_cost: 0.30       # slitage, kr per urladdad kWh
   plan: true             # dygnsplan (false = bara reglerna)
+  plan_style: balanced   # very_careful | careful | balanced | bold | very_bold
+  allow_export: true     # false = batteriet täcker bara huset
+  power_invert: false    # true om effektsensorn visar + vid urladdning
   entities:
     soc: sensor.batteri_soc
     power: sensor.batteri_effekt            # + = laddar

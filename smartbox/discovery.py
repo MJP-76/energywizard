@@ -46,7 +46,7 @@ OCPP_SESSION_LIMIT = re.compile(r"session_current_limit$", re.I)
 OCPP_STATION_MAX = re.compile(r"maximum_current$", re.I)
 # "tesla" ensamt är INTE med här (krockar med CAR_MAKERS - Powerwall kräver "powerwall"
 # uttryckligen i texten för att skiljas från en Tesla-bil).
-BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|solax battery|victron battery", re.I)
+BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|solax battery|victron battery|felicity", re.I)
 # Nätimport/elmätare: ett hus kan ha Tibber Pulse, en smartmätare (HAN/P1-port) eller
 # båda samtidigt - inte antingen-eller (Emils egen poäng, 2026-10-30). Förslaget blir en
 # power_meter:-sektion (homeassistant.configure_power_meter): en Tibber Pulse med spänning +
@@ -159,6 +159,14 @@ def _battery_control_preset(ents):
     """Känner igen batteristyrning från wills106/homeassistant-solax-modbus och föreslår hela
     lägesmappningen (drivers/battery_generic.py). Lägesnamnen är integrationens egna (plugin_solax.py /
     plugin_growatt.py), inte gissade."""
+    # Felicity Solar via partach/ha_felicity: BARA avläsning. Integrationen har en egen prisstyrning (EMS) som
+    # skriver växelriktarens Economic-regler, och dess "Operating Mode"-val skriver Economic (2) även när man väljer
+    # Backup (1) på T-REX 5/10K (type_specific.py _handle_operating_mode, läst 2026-11-03). Att styra därifrån vore
+    # att slåss med EMS:en och få fel läge, så EnergyWizard visar SOC/effekt och låter ha_felicity styra.
+    if any(_has(x.get("m"), re.compile(r"felicity", re.I)) for x in ents):
+        return {"name": "felicity_monitor", "entities": {}, "modes": {},
+                "note": "Styrs av ha_felicity:s egen EMS. EnergyWizard läser bara. Kontrollera effektens tecken "
+                        "(+ ska vara laddning, annars power_invert: true)."}
     # Solax Gen4-6: "Charger Use Mode" + "Manual Mode Select"
     use = _find(ents, "select", re.compile(r"charger use mode$", re.I))
     manual = _find(ents, "select", re.compile(r"manual mode select$", re.I))
@@ -448,6 +456,8 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                 battery["generic_suggestion"]["modes"] = preset["modes"]
                 battery["generic_suggestion"]["preset"] = preset["name"]
                 battery["control_preset"] = preset["name"]
+                if preset.get("note"):
+                    battery["note"] = preset["note"]
         break
 
     return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "power_meter": power_meter, "battery": battery}

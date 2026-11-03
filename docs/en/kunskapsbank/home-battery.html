@@ -18,48 +18,143 @@
   <h1>Do you have a home battery?</h1>
   <div class="meta">Home battery</div>
 
-  <p>Straight up: EnergyWizard doesn't currently control a real electrical home
-  battery (Powerwall, GivEnergy, Huawei Luna and similar). The house itself (floors,
-  walls) and the hot water tank are used as a <em>thermal</em> battery - see
-  <a href="the-house-as-a-heat-battery.html">the article about that</a> - but that's
-  slow and leaks heat. A real electric battery is fast, essentially lossless in the
-  short term, and competes directly with solar/grid/EV charging for the same watts
-  right now. It's a genuinely different optimization problem, not just "add one more
-  driver".</p>
+  <p>EnergyWizard can control a home battery as part of the <strong>whole</strong> house, not as an
+  island. The battery competes with the EV, the heat pump, the spa and solar export for the same watts,
+  so its decisions are made in the same engine that controls everything else: EV charging, the peak cap,
+  the main fuse, the electricity price and the solar surplus. Everything goes through the battery's own
+  Home Assistant integration, with no protocol code of our own.</p>
 
-  <h3>What you can do today</h3>
-  <p>Run <a href="https://github.com/springfall2008/batpred">Predbat</a> alongside
-  EnergyWizard. Predbat is a mature, well-established project specifically for
-  battery charge/discharge scheduling against electricity price and solar forecasts,
-  supporting many battery brands (GivEnergy, Solis, Huawei, Tesla Powerwall and
-  others). It runs as its own app inside Home Assistant (AppDaemon) - a completely
-  separate installation, no connection to EnergyWizard needed.</p>
+  <p><strong>Status:</strong> built and tested with simulated calls, but not yet run against a real
+  battery. Have one? Get in touch - that is exactly what we need.</p>
 
-  <p>Since the two systems don't talk to each other, they could in theory pull in
-  different directions (e.g. if both want to prioritize the same solar surplus). In
-  practice EnergyWizard controls heating/hot water/EV charging and Predbat controls
-  the battery - different "buckets" of electricity most of the time, so the conflict
-  is rarely significant. Keep an eye on it yourself until we know more.</p>
+  <h3>Three control modes</h3>
+  <table>
+    <tr><th>Mode</th><th>What happens</th></tr>
+    <tr><td><code>samarbete</code> (cooperate, default)</td><td>Another system controls the battery, e.g. the inverter's own
+      scheduling or Predbat. EnergyWizard reads the battery, shows it and plans around it, but never writes to it.</td></tr>
+    <tr><td><code>styr</code> (control)</td><td>EnergyWizard picks the battery's mode by the rules below.</td></tr>
+    <tr><td><code>av</code> (off)</td><td>The battery is ignored.</td></tr>
+  </table>
+
+  <h3>The battery's five modes</h3>
+  <p>When EnergyWizard is in control it picks one of five modes every quarter hour. The battery's own mode names
+  (e.g. "Self Use" or "Force Charge") are mapped to these five:</p>
+  <picture><source media="(max-width:640px)" srcset="../../kunskapsbank/bilder/batteri-lagen-en-mobil.svg"><img class="fig" src="../../kunskapsbank/bilder/batteri-lagen-en.svg" alt="The five modes: auto, hold, idle, charge and discharge, with the flow between solar, grid, house and battery" loading="lazy"></picture>
+
+  <h3>Which batteries can be controlled?</h3>
+  <table>
+    <tr><th>Battery / Home Assistant integration</th><th>Reads</th><th>Controls</th></tr>
+    <tr><td>Solax Gen4-6 (<a href="https://github.com/wills106/homeassistant-solax-modbus">Solax Modbus</a>)</td><td>✅</td><td>✅ all five modes</td></tr>
+    <tr><td>Growatt (Solax Modbus)</td><td>✅</td><td>✅ auto, hold, charge, discharge</td></tr>
+    <tr><td>FoxESS local (<a href="https://github.com/nathanmarlor/foxess_modbus">foxess_modbus</a>)</td><td>✅</td><td>✅ auto, hold, charge, discharge + power</td></tr>
+    <tr><td>FoxESS cloud (<a href="https://github.com/macxq/foxess-ha">foxess-ha</a>)</td><td>✅</td><td>auto and hold</td></tr>
+    <tr><td>Felicity Solar (<a href="https://github.com/partach/ha_felicity">ha_felicity</a>)</td><td>✅</td><td>no, the integration's own scheduler does it (see below)</td></tr>
+    <tr><td>SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron, Pylontech and others</td><td>✅</td><td>if you map the modes yourself (example at the bottom)</td></tr>
+  </table>
+  <p>Everything beyond reading is built against the integrations' source code and not yet run against a real battery.</p>
+
+  <h3>The rules (in priority order)</h3>
+  <ol>
+    <li><strong>Stale data:</strong> if the battery or the power meter stops answering, the inverter takes over (auto).</li>
+    <li><strong>Main fuse overloaded:</strong> the battery discharges to relieve the main fuse.</li>
+    <li><strong>Peak cap reached:</strong> the battery covers the peak.</li>
+    <li><strong>Negative price:</strong> the battery charges from the grid.</li>
+    <li><strong>The EV charges from the grid:</strong> the battery holds - it is never emptied into the car.</li>
+    <li><strong>The EV charges from solar:</strong> above your priority level the car gets the surplus before the battery.</li>
+    <li><strong>Reserve level:</strong> below it the battery is kept for power cuts.</li>
+    <li><strong>The daily plan:</strong> once calculated, it decides the rest (see below).</li>
+    <li><strong>No plan - cheap hour with more expensive ones ahead:</strong> the battery is saved for the expensive hours.</li>
+    <li><strong>Otherwise:</strong> the inverter's self-consumption.</li>
+  </ol>
+
+  <h3>The daily plan</h3>
+  <p>Every fifteen minutes EnergyWizard works out the cheapest plan for the rest of today and tomorrow, quarter
+  by quarter: when the battery should charge, save, discharge or just cover the house. It takes into account the
+  price (full purchase price and what you get for sold power), the house's expected consumption, the solar
+  forecast, the EV's charging plan, the battery's efficiency, the reserve level and how fast it can charge. Energy
+  left at the end of the plan is valued carefully, so the battery is used when it pays instead of being hoarded.
+  The safety rules above always come first.</p>
+  <picture><source media="(max-width:640px)" srcset="../../kunskapsbank/bilder/batteri-dygn-en-mobil.svg"><img class="fig" src="../../kunskapsbank/bilder/batteri-dygn-en.svg" alt="Example winter day: the battery charges at night, discharges at the morning and evening peaks and covers the house in between" loading="lazy"></picture>
+
+  <h3>Planning style</h3>
+  <p>Under <em>Settings → Battery</em> you choose how much the plan trusts the solar and consumption forecast, in
+  five steps from <strong>Very careful</strong> to <strong>Very bold</strong>. A careful plan assumes less solar and
+  more consumption than forecast and keeps more in the battery for later. A bold plan trusts the forecast and uses
+  the battery more, which earns the most when the forecast is right. <strong>Balanced</strong> is the default.</p>
+  <picture><source media="(max-width:640px)" srcset="../../kunskapsbank/bilder/batteri-stilar-en-mobil.svg"><img class="fig" src="../../kunskapsbank/bilder/batteri-stilar-en.svg" alt="The five planning styles: how solar forecast and consumption are counted and how much is kept in the battery" loading="lazy"></picture>
+  <p>The reserve level, fuse protection and peak cap are the same in every style. The style only changes how the
+  plan calculates, never the safety.</p>
+
+  <h3>May the battery sell to the grid?</h3>
+  <p>With <em>Allow the battery to sell to the grid</em> on (default) the plan may discharge to the grid when the
+  price is high enough to pay for losses and wear. Turn it off and the battery only covers the house's own
+  consumption - sensible if your contract pays little for exported power or your grid operator charges for it.</p>
+  <picture><source media="(max-width:640px)" srcset="../../kunskapsbank/bilder/batteri-salja-en-mobil.svg"><img class="fig" src="../../kunskapsbank/bilder/batteri-salja-en.svg" alt="On: the battery may sell to the grid. Off: it only covers the house" loading="lazy"></picture>
+
+  <h3>Safety</h3>
+  <ul>
+    <li>The battery returns to the inverter's own mode when EnergyWizard starts and stops (e.g. during an update),
+      so it is never left in "discharge" with nothing controlling it.</li>
+    <li>Mode changes happen at most every five minutes (safety rules excepted), since inverters store the mode in flash.</li>
+    <li>If the battery lacks a mode, the nearest safe one is used instead (idle → hold → auto).</li>
+  </ul>
+
+  <h3>The plan learns your battery</h3>
+  <p><strong>Wear is counted.</strong> Each discharged kWh costs a little battery life - 0.30 SEK/kWh by default
+  (<code>cycle_cost</code>; cell price / (capacity × cycles)). The plan only discharges when the price difference
+  covers both losses and wear, and each mode switch costs a little too, so the battery doesn't flip back and forth.</p>
+  <p>From history EnergyWizard learns the battery's <strong>real efficiency</strong>, <strong>usable capacity</strong>
+  and <strong>actual max power</strong>, how far off the <strong>solar forecast</strong> usually is hour by hour at
+  your house, and the house's <strong>consumption per weekday and hour</strong>. Learned values are only used when
+  there is enough data and they are physically plausible. Every day it also works out what the battery
+  <strong>actually saved</strong> yesterday.</p>
+
+  <h3>Felicity Solar</h3>
+  <p>With <a href="https://github.com/partach/ha_felicity">partach/ha_felicity</a> (T-REX 5K, 6K, 10K, 25K and 50K over
+  Modbus) the entity picker recognises the battery and fills in charge level and power, but <strong>read-only</strong>.
+  The integration has its own price-based scheduler (EMS), and two systems controlling one battery fight each other.
+  Its "Backup mode" option also writes Economic mode to the T-REX 5/10K, so EnergyWizard cannot pick modes safely
+  that way. Let <code>ha_felicity</code> run the battery; EnergyWizard sees it, counts it in the fuse guard and the plan
+  for the rest of the house, and never writes to it.</p>
+  <p>Does power show minus while charging? Add <code>power_invert: true</code> under <code>battery:</code>.</p>
+
+  <h3>How to set it up</h3>
+  <p>The entity picker finds the battery and writes <code>control: samarbete</code> as a safe start. For
+  <code>styr</code> you map each intent to one of the battery's own modes - exactly the options your select entity
+  shows in Home Assistant:</p>
+  <pre><code>battery:
+  enabled: true
+  driver: generic
+  capacity_kwh: 10
+  control: styr          # samarbete | styr | av
+  reserve_soc: 20        # always kept for power cuts
+  priority_soc: 50       # above this the EV gets solar first
+  max_power_w: 5000
+  cycle_cost: 0.30       # wear, SEK per discharged kWh
+  plan: true             # daily plan (false = rules only)
+  plan_style: balanced   # very_careful | careful | balanced | bold | very_bold
+  allow_export: true     # false = the battery only covers the house
+  power_invert: false    # true if the power sensor shows + while discharging
+  entities:
+    soc: sensor.battery_soc
+    power: sensor.battery_power            # + = charging
+    mode_select: select.battery_mode
+  modes:
+    auto: "Self-use"
+    hold: "..."
+    idle: "..."
+    charge: "..."
+    discharge: "..."</code></pre>
 
   <h3>Let Predbat see EnergyWizard's planned EV charging</h3>
   <p>EnergyWizard publishes its EV charging plan as <code>sensor.smartbox_planerad_last</code>
   in Home Assistant. Its <code>predbat</code> attribute uses the exact format Predbat's
-  <code>load_forecast</code> reads (timestamps with incrementing kWh, checked against Predbat's
-  source). Add to Predbat's <code>apps.yaml</code>:</p>
+  <code>load_forecast</code> reads (checked against Predbat's source). Add to Predbat's <code>apps.yaml</code>:</p>
   <pre><code>  load_forecast:
     - sensor.smartbox_planerad_last$predbat</code></pre>
-  <p><strong>Avoid double counting:</strong> Predbat's own forecast is built from historical
-  house load, which already includes past EV charging. Enable Predbat's
-  <code>car_charging_hold</code> and point <code>car_charging_energy</code> at the charger's
-  energy sensor so the car is removed from history and only comes back via EnergyWizard's plan.
-  Only the EV is included; heat pump and spa are decided minute by minute and have no forward
-  plan. Not yet verified against a real Predbat installation.</p>
-
-  <h3>What comes next</h3>
-  <p>A real, built-in battery category in EnergyWizard's driver architecture is a
-  reasonable next step - but we'll build it once more beta testers actually have a
-  home battery to validate against, not in advance on guesses. Have one? Get in
-  touch - that's exactly the kind of real house we need to get it right.</p>
+  <p><strong>Avoid double counting:</strong> enable Predbat's <code>car_charging_hold</code> and point
+  <code>car_charging_energy</code> at the charger's energy sensor, so the car is removed from history and only comes
+  back via EnergyWizard's plan. Not yet verified against a real Predbat installation.</p>
 </article>
 </div>
 </body>

@@ -58,8 +58,10 @@ from drivers.battery import BatteryDriver, INTENTS
 class GenericBatteryDriver(BatteryDriver):
     """Default för batterier utan egen drivrutin. Alla entiteter valfria - supports_control()
     är bara True om en mode_select-entitet OCH minst en lägesmappning finns."""
-    def __init__(self, capacity_kwh: float | None = None, entities: dict | None = None, modes: dict | None = None):
+    def __init__(self, capacity_kwh: float | None = None, entities: dict | None = None, modes: dict | None = None,
+                 power_invert: bool = False):
         self.capacity_kwh = capacity_kwh
+        self._invert = bool(power_invert)       # battery.power_invert: true om sensorn visar + vid URladdning
         self._e = entities or {}
         self._modes = {k: v for k, v in (modes or {}).items() if k in INTENTS and v}
 
@@ -69,6 +71,8 @@ class GenericBatteryDriver(BatteryDriver):
         mode_e = self._e.get("mode_select")
         soc = homeassistant._get_numeric_state(soc_e) if soc_e else None
         power = homeassistant._get_numeric_state(power_e) if power_e else None
+        if power is not None and self._invert:
+            power = -power
         if power is None and (self._e.get("power_charge") or self._e.get("power_discharge")):
             pc = homeassistant._get_numeric_state(self._e["power_charge"]) if self._e.get("power_charge") else 0.0
             pd = homeassistant._get_numeric_state(self._e["power_discharge"]) if self._e.get("power_discharge") else 0.0

@@ -1,0 +1,74 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 440' width='1000' height='440' role='img' aria-label='Example: one day with the daily plan' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='1000' height='440' rx='18' fill='#0b1220'/>
+<text x='30' y='44' font-size='22' fill='#f3f6fb' text-anchor='start' font-weight='700'>Example: one day with the daily plan</text>
+<text x='30' y='86' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Price</text>
+<rect x='92.0' y='183.37209302325581' width='32.25' height='36.627906976744185' rx='3' fill='#22d3a0' fill-opacity='.7'/>
+<rect x='128.25' y='186.86046511627907' width='32.25' height='33.13953488372093' rx='3' fill='#22d3a0' fill-opacity='.7'/>
+<rect x='164.5' y='189.47674418604652' width='32.25' height='30.523255813953487' rx='3' fill='#22d3a0' fill-opacity='.7'/>
+<rect x='200.75' y='191.22093023255815' width='32.25' height='28.77906976744186' rx='3' fill='#22d3a0' fill-opacity='.7'/>
+<rect x='237.0' y='190.34883720930233' width='32.25' height='29.651162790697676' rx='3' fill='#22d3a0' fill-opacity='.7'/>
+<rect x='273.25' y='185.11627906976744' width='32.25' height='34.883720930232556' rx='3' fill='#22d3a0' fill-opacity='.7'/>
+<rect x='309.5' y='151.97674418604652' width='32.25' height='68.02325581395348' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='345.75' y='110.98837209302326' width='32.25' height='109.01162790697674' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='382.0' y='97.90697674418605' width='32.25' height='122.09302325581395' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='418.25' y='124.06976744186046' width='32.25' height='95.93023255813954' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='454.5' y='148.48837209302326' width='32.25' height='71.51162790697674' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='490.75' y='158.95348837209303' width='32.25' height='61.04651162790697' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='527.0' y='165.93023255813955' width='32.25' height='54.06976744186046' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='563.25' y='167.67441860465118' width='32.25' height='52.325581395348834' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='599.5' y='162.4418604651163' width='32.25' height='57.55813953488372' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='635.75' y='150.2325581395349' width='32.25' height='69.76744186046511' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='672.0' y='117.09302325581395' width='32.25' height='102.90697674418605' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='708.25' y='80.46511627906978' width='32.25' height='139.53488372093022' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='744.5' y='70.0' width='32.25' height='150.0' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='780.75' y='89.1860465116279' width='32.25' height='130.8139534883721' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='817.0' y='124.06976744186046' width='32.25' height='95.93023255813954' rx='3' fill='#f87171' fill-opacity='.7'/>
+<rect x='853.25' y='150.2325581395349' width='32.25' height='69.76744186046511' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='889.5' y='167.67441860465118' width='32.25' height='52.325581395348834' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<rect x='925.75' y='178.13953488372093' width='32.25' height='41.86046511627907' rx='3' fill='#38bdf8' fill-opacity='.7'/>
+<text x='30' y='260' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Battery</text>
+<rect x='90.0' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<rect x='126.25' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<rect x='162.5' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<rect x='198.75' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<rect x='235.0' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<rect x='271.25' y='242' width='36.25' height='28' fill='#38bdf8' fill-opacity='.8'/>
+<rect x='307.5' y='242' width='36.25' height='28' fill='#38bdf8' fill-opacity='.8'/>
+<rect x='343.75' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='380.0' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='416.25' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='452.5' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='488.75' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='525.0' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='561.25' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='597.5' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='633.75' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='670.0' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='706.25' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='742.5' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='778.75' y='242' width='36.25' height='28' fill='#fbbf24' fill-opacity='.8'/>
+<rect x='815.0' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='851.25' y='242' width='36.25' height='28' fill='#c4b5fd' fill-opacity='.8'/>
+<rect x='887.5' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<rect x='923.75' y='242' width='36.25' height='28' fill='#22d3a0' fill-opacity='.8'/>
+<text x='30' y='324' font-size='13' fill='#93a0b8' text-anchor='start' font-weight='400'>Charge level</text>
+<polyline points='108.1,333.9 144.4,324.8 180.6,315.7 216.9,306.6 253.1,297.5 289.4,297.5 325.6,297.5 361.9,307.3 398.1,317.1 434.4,326.9 470.6,328.3 506.9,329.7 543.1,331.1 579.4,332.5 615.6,333.9 651.9,335.3 688.1,345.1 724.4,353.5 760.6,353.5 796.9,353.5 833.1,353.5 869.4,353.5 905.6,344.4 941.9,335.3' fill='none' stroke='#fbbf24' stroke-width='3' stroke-linejoin='round'/>
+<line x1='90' y1='364' x2='960' y2='364' stroke='#2a3446'/>
+<text x='90.0' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>00</text>
+<text x='198.75' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>03</text>
+<text x='307.5' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>06</text>
+<text x='416.25' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>09</text>
+<text x='525.0' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>12</text>
+<text x='633.75' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>15</text>
+<text x='742.5' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>18</text>
+<text x='851.25' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>21</text>
+<text x='960.0' y='382' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>24</text>
+<rect x='90' y='414' width='14' height='14' rx='3' fill='#22d3a0'/>
+<text x='110' y='426' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>charges cheap</text>
+<rect x='290' y='414' width='14' height='14' rx='3' fill='#38bdf8'/>
+<text x='310' y='426' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>saves</text>
+<rect x='490' y='414' width='14' height='14' rx='3' fill='#c4b5fd'/>
+<text x='510' y='426' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>covers the house</text>
+<rect x='690' y='414' width='14' height='14' rx='3' fill='#fbbf24'/>
+<text x='710' y='426' font-size='13' fill='#f3f6fb' text-anchor='start' font-weight='400'>discharges expensive</text>
+</svg>

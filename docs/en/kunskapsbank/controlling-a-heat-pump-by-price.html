@@ -33,6 +33,38 @@
 
   <p>Missing a driver for your brand? That's exactly the kind of contribution this project is built to take -
   see the <a href="https://github.com/murre87/energywizard">code on GitHub</a>.</p>
+  <h3>Which heat pumps are supported?</h3>
+  <table>
+    <tr><th>Heat pump</th><th>Route</th><th>Status</th></tr>
+    <tr><td>Thermia (Diplomat and others)</td><td>Husdata H66, Modbus direct</td><td>✅ in daily use</td></tr>
+    <tr><td>Anything with a <code>climate</code> entity in Home Assistant</td><td>HA (room temperature)</td><td>✅ basic control</td></tr>
+    <tr><td>NIBE S series (S735, S1155, S1255, S320 …)</td><td>the pump's local REST API</td><td>built, not run against a pump</td></tr>
+    <tr><td>NIBE, Bosch, Atlantic, Daikin via myUplink</td><td>myUplink (cloud)</td><td>built, not run against a pump</td></tr>
+    <tr><td>Panasonic Aquarea</td><td><a href="https://github.com/Egyras/HeishaMon">HeishaMon</a>, local</td><td>built, not run against a pump</td></tr>
+  </table>
+
+  <h3>One language for every brand</h3>
+  <p>Every driver translates to the same concepts, borrowed from the Matter smart home standard:
+  <strong>mode</strong> (off, heat, cool, auto, hot water), <strong>indoor and outdoor temperature</strong>,
+  <strong>running</strong>, <strong>power</strong>, <strong>energy</strong> and <strong>fault</strong>. Where the pump can
+  tell more: <strong>curve offset</strong>, <strong>heat output</strong>, <strong>COP</strong>, <strong>defrost</strong> and
+  <strong>hot water temperature</strong>.</p>
+  <p>Two controls exist for pumps that support them (today HeishaMon):</p>
+  <ul>
+    <li><strong>Raise/lower the curve ±n degrees</strong> relative to your normal setting, at most ±5. The offset is
+      reset every time EnergyWizard starts, so a restart or crash never leaves the pump shifted.</li>
+    <li><strong>Pause with a time limit:</strong> heating stops for a while, at most 4 hours, and is released by itself.</li>
+  </ul>
+
+  <h3>Panasonic via HeishaMon</h3>
+  <p>HeishaMon is a small board on the pump's CN-CNT connector. EnergyWizard reads and controls it locally over
+  HTTP. The curve offset works when the pump runs on its heating curve (not direct flow temperature).</p>
+  <pre><code>heat_pump:
+  enabled: true
+  driver: heishamon
+  host: 192.168.1.60
+  base_shift: 0            # your normal shift (-5..5)
+  indoor_from_z1: false    # true if zone 1 has a room sensor</code></pre>
 </article>
 </div>
 </body>

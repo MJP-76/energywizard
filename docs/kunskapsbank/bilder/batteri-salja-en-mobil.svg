@@ -1,0 +1,22 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 423' width='420' height='423' role='img' aria-label='May the battery sell to the grid?' font-family='Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif'>
+<rect width='420' height='423' rx='18' fill='#0b1220'/>
+<defs><marker id='a22d3a0' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#22d3a0'/></marker><marker id='a38bdf8' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#38bdf8'/></marker><marker id='afbbf24' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#fbbf24'/></marker><marker id='ac4b5fd' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto'><path d='M0,0 L10,5 L0,10 z' fill='#c4b5fd'/></marker></defs>
+<text x='20' y='38' font-size='19' fill='#f3f6fb' text-anchor='start' font-weight='700'>May the battery sell to the grid?</text>
+<rect x='12' y='63' width='396' height='166' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='96' y1='119' x2='180' y2='119' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)'/>
+<line x1='236' y1='119' x2='320' y2='119' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)' stroke-dasharray='5 5'/>
+<text x='280.0' y='107' font-size='13' fill='#fbbf24' text-anchor='middle' font-weight='400'>sold</text>
+<circle cx='70' cy='119' r='22' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='70' y='125' font-size='18' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text><text x='70' y='159' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Battery</text>
+<circle cx='210' cy='119' r='22' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='210' y='125' font-size='18' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text><text x='210' y='159' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>House</text>
+<circle cx='350' cy='119' r='22' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='350' y='125' font-size='18' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text><text x='350' y='159' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Grid</text>
+<text x='210' y='189' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='400'>On: the battery may discharge to the grid</text>
+<text x='210' y='208' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='400'>when prices are high</text>
+<rect x='12' y='241' width='396' height='166' rx='14' fill='#141c2c' stroke='#2a3446'/>
+<line x1='96' y1='297' x2='180' y2='297' stroke='#fbbf24' stroke-width='3' marker-end='url(#afbbf24)'/>
+<line x1='246' y1='284' x2='314' y2='310' stroke='#f87171' stroke-width='3'/><line x1='246' y1='310' x2='314' y2='284' stroke='#f87171' stroke-width='3'/>
+<circle cx='70' cy='297' r='22' fill='#fbbf24' fill-opacity='.16' stroke='#fbbf24' stroke-width='2'/><text x='70' y='303' font-size='18' fill='#fbbf24' text-anchor='middle' font-weight='400'>▮</text><text x='70' y='337' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Battery</text>
+<circle cx='210' cy='297' r='22' fill='#c4b5fd' fill-opacity='.16' stroke='#c4b5fd' stroke-width='2'/><text x='210' y='303' font-size='18' fill='#c4b5fd' text-anchor='middle' font-weight='400'>⌂</text><text x='210' y='337' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>House</text>
+<circle cx='350' cy='297' r='22' fill='#38bdf8' fill-opacity='.16' stroke='#38bdf8' stroke-width='2'/><text x='350' y='303' font-size='18' fill='#38bdf8' text-anchor='middle' font-weight='400'>⚡</text><text x='350' y='337' font-size='11' fill='#93a0b8' text-anchor='middle' font-weight='400'>Grid</text>
+<text x='210' y='367' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='400'>Off: the battery only covers the house's own</text>
+<text x='210' y='386' font-size='14' fill='#f3f6fb' text-anchor='middle' font-weight='400'>consumption</text>
+</svg>

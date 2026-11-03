@@ -1,17 +1,15 @@
 # EnergyWizard Open
 
+**🇸🇪 Svenska · 🇬🇧 [English](README.en.md)**
+
 [![Sponsra på GitHub](https://img.shields.io/badge/Sponsra-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/murre87)
 [![Tester](https://github.com/murre87/energywizard/actions/workflows/tester.yml/badge.svg)](https://github.com/murre87/energywizard/actions/workflows/tester.yml)
 [![Sajten](https://img.shields.io/badge/sajt-murre87.github.io%2Fenergywizard-22d3a0)](https://murre87.github.io/energywizard/)
 [![Översätt](https://img.shields.io/badge/%C3%B6vers%C3%A4tt-svenska%20%C2%B7%20English%20%C2%B7%20ditt%20spr%C3%A5k-38bdf8)](TRANSLATING.md)
 
-> 🇬🇧 **English:** EnergyWizard is available in English. Pick the language in the setup wizard
-> or under Settings. Want it in your language? See [TRANSLATING.md](TRANSLATING.md). It takes
-> minutes and needs no coding.
-
 **Ett öppet styrsystem som fattar minut-för-minut-beslut för hela huset efter
 elpriset** - inte en punktlösning för en enda sak. Elbilsladdning, värmepump,
-solcellsexport, spabad och huvudsäkringen koordineras tillsammans, byggt
+solcellsexport, husbatteri, spabad och huvudsäkringen koordineras tillsammans, byggt
 ovanpå [Home Assistant](https://www.home-assistant.io/) så det pratar med
 hårdvara som redan fungerar där istället för att uppfinna ny protokollkod.
 Öppen källkod, gratis, inget abonnemang.
@@ -21,6 +19,7 @@ hårdvara som redan fungerar där istället för att uppfinna ny protokollkod.
 - 🚗 **Elbil** - laddar till vald tid/nivå på de billigaste timmarna.
 - 🌡️ **Värmepump** - sänker värmen automatiskt när elen är dyr, "laddar"
   husets egen värmetröghet när den är billig.
+- 🔋 **Husbatteri** - dygnsplan kvart för kvart: när det ska ladda, spara och ladda ur.
 - ☀️ **Solcellsexport** - stänger av exporten automatiskt vid minuspris,
   släpper den igen när priset går över 0.
 - 🛁 **Spabad** - värmer under de billiga timmarna.
@@ -108,18 +107,22 @@ som Home Assistant (Container-installation utan Supervisor), se
 
 ## Vilka märken stöds idag
 
-Drivrutinsarkitekturen (`smartbox/drivers/`) är byggd för att vara
-märkesoberoende, men konkreta drivrutiner finns bara för det som redan testats
-mot riktig hårdvara:
+Allt går via enhetens egen Home Assistant-integration eller ett lokalt API, aldrig via egen
+protokollkod mot okända register. Det som körs i skarp drift är markerat ✅. Resten är byggt mot
+integrationernas källkod och väntar på en betatestare med riktig hårdvara.
 
-| Delsystem    | Stödda märken idag           |
-|--------------|-------------------------------|
-| Värmepump    | Thermia/Husdata (Modbus), + en generisk (HA:s `climate`-entitet - funkar för de flesta) |
-| Elbil        | Nissan, Tesla, + en generisk (läser valfri HA-entitet, funkar för de flesta bilar) |
-| Laddare      | Easee, + en generisk (HA:s `switch`/`number`-entiteter) |
-| Solceller    | SolarEdge, + en generisk (HA:s `number`-entitet - funkar även för Solplanet, Sigenergy, Solis m.fl.) |
-| Spabad       | Gecko, Balboa (byggd mot HA:s officiella integration, väntar på verifiering mot riktig hårdvara) |
-| Husbatteri   | En generisk (läser SOC/effekt, kan sätta läge via HA:s `select`-entitet - läser bara, fattar inga automatiska laddningsbeslut än) |
+| Delsystem | Stöds |
+|---|---|
+| 🌡️ **Värmepump** | ✅ Thermia via Husdata · ✅ alla med `climate`-entitet i HA · NIBE S-serien (lokalt API) · NIBE/Bosch/Atlantic/Daikin via myUplink · Panasonic Aquarea via HeishaMon |
+| 🔋 **Husbatteri** | styr: Solax Gen4-6 och Growatt (Solax Modbus), FoxESS (lokalt och moln) · läser: Felicity, SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron m.fl. Planeringsstil i fem steg och val om batteriet får sälja till nätet. |
+| ☀️ **Solceller** | ✅ SolarEdge · Huawei SUN2000 · Growatt · Sungrow · Fronius · generisk exportgräns (Solis, Solplanet, Sigenergy m.fl.) |
+| 🚗 **Elbil** | ✅ Tesla · ✅ Nissan · generisk (valfri HA-entitet) |
+| 🔌 **Laddbox** | ✅ Easee · OCPP (t.ex. Charge Amps, cFos, FoxESS) · generisk (`switch`/`number`) |
+| 🛁 **Spabad** | ✅ Gecko · Balboa · Shelly-relä |
+
+Hur batteriet fungerar beroende på dina val, med bilder:
+[Har du ett husbatteri?](https://murre87.github.io/energywizard/kunskapsbank/husbatteri.html) ·
+värmepumparna: [Så styrs värmepumpen](https://murre87.github.io/energywizard/kunskapsbank/styra-varmepump-efter-elpris.html).
 
 Saknas ditt märke? De generiska drivrutinerna (`generic_*`) täcker redan de
 flesta fall så länge enheten redan fungerar i Home Assistant - ingen egen

@@ -7,7 +7,7 @@ on:
     branches: [main]
     # Bara dokumentation/sajt ändrad (t.ex. Buy Me a Coffee-listan i README varje natt) -> inga nya
     # bilder, så Watchtower inte startar om huset i onödan.
-    paths-ignore: ["README.md", "ROADMAP.md", "docs/**"]
+    paths-ignore: ["README.md", "README.en.md", "ROADMAP.md", "docs/**"]
   workflow_dispatch:
 permissions:
   contents: read
