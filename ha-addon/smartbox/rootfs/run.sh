@@ -25,12 +25,23 @@ if [ -f "$OPTIONS" ]; then
     export DASHBOARD_PASSWORD="$(opt dashboard_password)"
 fi
 
-export PGDATA="/config/pgdata"
+# Som HA-tillägg ligger databas och house_config.yaml i /config (tilläggets egen mapp).
+# Fristående (docker run / compose utan Supervisor) ligger allt i /data, som monteras från värden.
+if [ -n "$SUPERVISOR_TOKEN" ] || { [ -d /config ] && [ -f "$OPTIONS" ]; }; then
+    EW_HOME="/config"
+else
+    EW_HOME="/data"
+fi
+mkdir -p "$EW_HOME"
+export PGDATA="$EW_HOME/pgdata"
 export POSTGRES_HOST="localhost"
 export POSTGRES_USER="${POSTGRES_USER:-smartbox}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-smartbox}"
 export POSTGRES_DB="${POSTGRES_DB:-smartbox}"
-export HOUSE_CONFIG_PATH="/config/house_config.yaml"
+export HOUSE_CONFIG_PATH="$EW_HOME/house_config.yaml"
+export HOUSE_CONFIG_WRITABLE=1        # entitetsväljarens "Spara och starta"
+export EW_SETTINGS_PATH="/data/energywizard.json"   # startguidens lösenord och HA-anslutning
+[ -f "$HOUSE_CONFIG_PATH" ] || printf 'house_id: "mitt-hus"\n' > "$HOUSE_CONFIG_PATH"
 export TELEMETRY_OPT_IN="${TELEMETRY_OPT_IN:-false}"
 export TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-}"
 export DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-}"
@@ -64,15 +75,10 @@ keep_running() {
       done ) &
 }
 
-if [ -n "$DASHBOARD_PASSWORD" ]; then
-    keep_running "mobilappen (ewapp)" /ewapp 8502
-    keep_running "webdashboard" /webdashboard 8503
-else
-    # Utan lösenord går det inte att logga in (webauth.py nekar tomt lösenord) - starta
-    # hellre inte gränssnitten alls än att visa en inloggning som aldrig fungerar.
-    echo "⚠️ Inget dashboard_password satt i tilläggets inställningar - webdashboard och mobilappen startas INTE."
-    echo "   Sätt ett lösenord under Konfiguration och starta om tillägget. Motorn kör ändå."
-fi
+# Utan lösenord öppnar webben startguiden, där lösenordet väljs - gränssnitten startas alltid.
+keep_running "mobilappen (ewapp)" /ewapp 8502
+keep_running "webdashboard" /webdashboard 8503
+echo "👉 Öppna http://<den här datorns adress>:8503 för att komma igång."
 
 echo "🔆 Startar EnergyWizard (smartbox)..."
 cd /smartbox

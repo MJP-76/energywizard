@@ -61,23 +61,29 @@ installation).
 
 Har du Home Assistant OS? Använd tillägget ovan i stället.
 
-Annars, på en Linux-maskin med Docker:
+Annars, på en dator med Docker (t.ex. en Raspberry Pi, NUC eller NAS):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/murre87/energywizard/main/install.sh | bash
 ```
 
-Skriptet frågar efter tre saker: Home Assistants adress, en token från Home Assistant
-(ditt namn nere till vänster, fliken Säkerhet, "Skapa token") och ett lösenord till webben.
-Sedan skapar det resten och startar allt.
+Öppna sedan `http://din-dator:8503`. Startguiden i webben tar resten:
 
-Öppna sedan `http://din-server:8503`. Under **Inställningar** hittar entitetsväljaren
-dina prylar i Home Assistant. Kryssa i det du har och tryck **Spara och starta**.
+1. **Välj ett lösenord.**
+2. **Koppla Home Assistant.** Skriv in adressen och klistra in en token. Guiden testar anslutningen innan den sparar.
+3. **Välj dina prylar.** Entitetsväljaren hittar dem i Home Assistant. Kryssa i det du har och tryck **Spara och starta**.
 
-Uppdatera genom att köra samma rad igen. Dina inställningar behålls.
+Ingen fil behöver redigeras. Allt sparas i `~/energywizard/data`, och EnergyWizard uppdaterar sig själv.
+
+Vill du hellre göra det själv räcker det med `docker-compose.enkel.yml`, som du sparar som
+`docker-compose.yml` och startar med `docker compose up -d`. Eller utan compose:
+
+```bash
+docker run -d --name energywizard --restart unless-stopped -p 8503:8503 -p 8502:8502 -v energywizard:/data ghcr.io/murre87/energywizard:latest
+```
 
 <details>
-<summary>För dig som vill göra det för hand</summary>
+<summary>Utvecklare: köra från källkoden med docker-compose.yml (flera containrar)</summary>
 
 1. Klona repot. Kopiera `.env.example` till `.env` och fyll i `HA_URL` (t.ex.
    `http://192.168.1.10:8123`), `HA_TOKEN` och Postgres-uppgifterna. Kopiera

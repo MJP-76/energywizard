@@ -90,6 +90,15 @@ last_heartbeat = datetime.now(SWE_TZ)
 # resten av styrloopen byts om ett delsystem i taget, med produktionsverifiering mellan
 # varje. Fail-safe: om configen saknas/är trasig byggs bara Null-drivrutiner, inget kraschar.
 HOUSE_CONFIG_PATH = os.environ.get("HOUSE_CONFIG_PATH", "/house_config.yaml")
+
+# Ny installation: väntar tills startguiden i webben har kopplat Home Assistant.
+if not homeassistant.configured():
+    import ew_settings
+    print("👋 Home Assistant är inte kopplat än. Öppna webben (port 8503) och följ startguiden. Motorn väntar.")
+    while not homeassistant.configured():
+        time.sleep(10)
+        homeassistant.reconfigure()
+    print("✅ Home Assistant kopplat via startguiden - startar.")
 try:
     house_cfg = house_config.load_house_config(HOUSE_CONFIG_PATH)
 except Exception as e:
@@ -143,6 +152,8 @@ def _on_sigterm(signum, frame):
 
 signal.signal(signal.SIGTERM, _on_sigterm)
 config_watch.start(HOUSE_CONFIG_PATH)   # ny house_config.yaml -> omstart som läser in den
+import ew_settings as _ew_settings
+config_watch.start(_ew_settings.PATH)   # ny anslutning till HA från startguiden -> omstart
 _battery_to_auto("uppstart")
 print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(battery_driver.supported_intents()) or '-'}")
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))

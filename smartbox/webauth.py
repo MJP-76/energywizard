@@ -32,11 +32,28 @@ for _pair in os.environ.get("EW_USERS", "").split(","):
         EXTRA_ROLES[_parts[0].strip().lower()] = _parts[2].strip() if len(_parts) > 2 and _parts[2].strip() in ("owner", "family") else "family"
 
 
+def owner_password() -> str:
+    """DASHBOARD_PASSWORD om den är satt, annars lösenordet från webbens startguide."""
+    if PASSWORD:
+        return PASSWORD
+    try:
+        import ew_settings
+        return ew_settings.get("dashboard_password", "") or ""
+    except Exception:
+        return ""
+
+
 class Auth:
     def __init__(self, salt: str, family_write_prefixes: tuple = ()):
-        self.secret = hashlib.sha256((salt + "|" + PASSWORD).encode()).digest()
+        self._salt = salt
         self.family_write_prefixes = family_write_prefixes
         self._fails: dict = {}
+
+    @property
+    def secret(self) -> bytes:
+        # Räknas om varje gång: när startguiden satt lösenordet gäller det direkt, och ett nytt
+        # lösenord loggar ut alla gamla kakor.
+        return hashlib.sha256((self._salt + "|" + owner_password()).encode()).digest()
 
     def sign(self, exp: int, role: str = "owner", user: str = "") -> str:
         user = (user or role).replace(".", "_")
@@ -62,7 +79,7 @@ class Auth:
     def user_password(self, user: str):
         """Lösenordet för den inloggade användaren (t.ex. för omverifiering vid känsliga åtgärder)."""
         if user == "owner":
-            return PASSWORD
+            return owner_password()
         return EXTRA_USERS.get(user.lower())
 
     @staticmethod
@@ -84,7 +101,8 @@ class Auth:
         body = await request.json()
         user, pw = str(body.get("user", "")).strip(), str(body.get("password", ""))
         role = who = None
-        if user.lower() in ("", "admin") and PASSWORD and hmac.compare_digest(pw, PASSWORD):
+        owner_pw = owner_password()
+        if user.lower() in ("", "admin") and owner_pw and hmac.compare_digest(pw, owner_pw):
             role, who = "owner", "owner"
         elif user.lower() in EXTRA_USERS and hmac.compare_digest(pw, EXTRA_USERS[user.lower()]):
             role, who = EXTRA_ROLES.get(user.lower(), "family"), user.lower()
@@ -116,7 +134,7 @@ class Auth:
     def guard_response(self, request: Request):
         """None om anropet är tillåtet, annars ett JSONResponse-felsvar att returnera direkt."""
         p = request.url.path
-        if not (p.startswith("/api/") and p not in ("/api/login", "/api/logout")):
+        if not (p.startswith("/api/") and p not in ("/api/login", "/api/logout")) or p in OPEN_PATHS:
             return None
         role = self.role(request)
         if role is None:
@@ -127,6 +145,9 @@ class Auth:
             return JSONResponse({"detail": "Det här kan bara administratören ändra"}, status_code=403)
         return None
 
+
+# Startguiden: visar om något saknas, och sätter det första lösenordet (bara när inget finns).
+OPEN_PATHS = ("/api/setup/status", "/api/setup/password")
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",

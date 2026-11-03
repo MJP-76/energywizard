@@ -146,17 +146,54 @@ def normalize_ha_url(url: str) -> str:
     return "http://" + url
 
 
-if SUPERVISOR_TOKEN:
-    _BASE = "http://supervisor/core/api"
-    _HEADERS = {"Authorization": f"Bearer {SUPERVISOR_TOKEN}", "Content-Type": "application/json"}
-    _VERIFY = True   # intern anslutning inom Supervisorns eget nät, ingen TLS-fråga
-else:
-    _BASE = f"{normalize_ha_url(HA_URL)}/api" if HA_URL else f"https://{HA_IP}:{HA_PORT}/api"
+def reconfigure():
+    """Sätter _BASE/_HEADERS/_VERIFY. Ordning: Supervisor (HA-tillägget), miljövariablerna
+    HA_URL/HA_IP + HA_TOKEN, och sist det som sparats i webbens startguide (ew_settings).
+    Anropas vid import och igen när guiden sparat en ny anslutning."""
+    global _BASE, _HEADERS, _VERIFY, HA_URL, HA_TOKEN
+    if SUPERVISOR_TOKEN:
+        _BASE = "http://supervisor/core/api"
+        _HEADERS = {"Authorization": f"Bearer {SUPERVISOR_TOKEN}", "Content-Type": "application/json"}
+        _VERIFY = True   # intern anslutning inom Supervisorns eget nät, ingen TLS-fråga
+        return
+    url, token = _ENV_URL, _ENV_TOKEN
+    if not (url or HA_IP):
+        import ew_settings
+        st = ew_settings.load()
+        url, token = (st.get("ha_url") or "").strip(), (st.get("ha_token") or "").strip()
+    HA_URL, HA_TOKEN = url, token
+    _BASE = f"{normalize_ha_url(url)}/api" if url else f"https://{HA_IP}:{HA_PORT}/api"
     _HEADERS = {
-        "Authorization": f"Bearer {HA_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
     _VERIFY = False  # oförändrat: självsignerat/okänt cert mot HA_IP, som idag
+
+
+def configured() -> bool:
+    """Finns det någon väg till Home Assistant alls?"""
+    return bool(SUPERVISOR_TOKEN or ((HA_URL or HA_IP) and HA_TOKEN))
+
+
+def test_connection(url: str, token: str, timeout: float = 10.0):
+    """(ok, meddelande) för en adress + token, innan den sparas. Rör inte den aktiva anslutningen."""
+    base = normalize_ha_url(url)
+    try:
+        r = requests.get(f"{base}/api/", headers={"Authorization": f"Bearer {token.strip()}"},
+                         timeout=timeout, verify=False)
+    except requests.exceptions.SSLError:
+        return False, f"Kunde inte prata krypterat med {base}. Prova http:// i stället."
+    except requests.exceptions.RequestException:
+        return False, f"Fick inget svar från {base}. Stämmer adressen, och når servern Home Assistant?"
+    if r.status_code == 200:
+        return True, f"Kontakt med Home Assistant på {base}."
+    if r.status_code in (401, 403):
+        return False, "Home Assistant svarade men tog inte emot token. Skapa en ny och klistra in den igen."
+    return False, f"Oväntat svar från {base} ({r.status_code}). Är det rätt adress till Home Assistant?"
+
+
+_ENV_URL, _ENV_TOKEN = HA_URL, HA_TOKEN
+reconfigure()
 
 _states_cache = {}
 

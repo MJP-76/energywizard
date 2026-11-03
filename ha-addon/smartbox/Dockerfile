@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         postgresql postgresql-contrib git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
+# Commit-id:t gör att byggcachen inte återanvänder en gammal klon (sätts av CI, tomt annars).
+ARG ENERGYWIZARD_COMMIT=
+RUN echo "EnergyWizard ${ENERGYWIZARD_REF} ${ENERGYWIZARD_COMMIT}" && git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
         https://github.com/murre87/energywizard /src
 
 # Samma layout som docker-compose-driften: ewapp och webdashboard gör
@@ -38,4 +40,6 @@ WORKDIR /smartbox
 COPY rootfs/run.sh /run.sh
 RUN chmod +x /run.sh
 
+EXPOSE 8502 8503
+VOLUME /data
 CMD ["/run.sh"]

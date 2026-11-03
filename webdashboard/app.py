@@ -58,7 +58,7 @@ AUTH = webauth.Auth(salt="webdash", family_write_prefixes=())
 # det är ett separat omverifieringsflöde (eget "ew2"-cookie, lösenord igen, 10 minuters
 # fönster) som förtjänar sin egen, noga testade implementation - inte en hastig kopia.
 EWAPP_URL = os.environ.get("EWAPP_URL", "http://ewapp:8502")
-_EWAPP_SECRET = hashlib.sha256(("ewapp|" + webauth.PASSWORD).encode()).digest()
+_EWAPP_SECRET = hashlib.sha256(("ewapp|" + webauth.owner_password()).encode()).digest()
 
 
 def _ewapp_cookie() -> str:
@@ -164,6 +164,70 @@ async def login(request: Request):
 @app.post("/api/logout")
 async def logout():
     return AUTH.logout()
+
+
+# ---------- Startguiden: lösenord, Home Assistant, prylar (allt i webben) ----------
+import ew_settings  # noqa: E402
+import homeassistant  # noqa: E402
+
+
+def _devices_chosen() -> bool:
+    # Filen som den står (inte med standardvärden ifyllda): något mer än house_id?
+    try:
+        import yaml
+        with open(HOUSE_CONFIG_FILE, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        return False
+    return isinstance(cfg, dict) and any(k != "house_id" and v for k, v in cfg.items())
+
+
+@app.get("/api/setup/status")
+async def api_setup_status(request: Request):
+    """Vad som saknas. Öppen före inloggning, men avslöjar inget utöver ja/nej."""
+    role, _ = AUTH.session(request)
+    has_pw = bool(webauth.owner_password())
+    out = {"needs_password": not has_pw, "supervisor": bool(homeassistant.SUPERVISOR_TOKEN),
+           "ha_ok": homeassistant.configured(), "devices_chosen": _devices_chosen()}
+    if role == "owner":
+        out.update(ha_url=homeassistant.HA_URL or "", ha_from_env=bool(homeassistant._ENV_URL or homeassistant.HA_IP),
+                   can_save_config=_config_writable())
+    return out
+
+
+@app.post("/api/setup/password")
+async def api_setup_password(request: Request):
+    """Första lösenordet. Går bara när inget lösenord finns; loggar in direkt."""
+    if webauth.owner_password():
+        return JSONResponse({"detail": "Lösenordet är redan valt. Logga in."}, status_code=409)
+    body = await request.json()
+    pw = str(body.get("password", ""))
+    if len(pw) < 8:
+        return JSONResponse({"detail": "Välj minst 8 tecken."}, status_code=400)
+    ew_settings.update(dashboard_password=pw)
+    return await AUTH.login(request)
+
+
+@app.post("/api/setup/ha")
+async def api_setup_ha(request: Request):
+    """Testar och sparar adress + token till Home Assistant (bara ägaren)."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"detail": "Bara ägaren kan ändra anslutningen"}, status_code=403)
+    if homeassistant.SUPERVISOR_TOKEN:
+        return {"ok": True, "message": "Körs som Home Assistant-tillägg: anslutningen sköts av Home Assistant."}
+    if homeassistant._ENV_URL or homeassistant.HA_IP:
+        return JSONResponse({"detail": "Anslutningen styrs av HA_URL/HA_IP i .env och ändras där."}, status_code=409)
+    body = await request.json()
+    url, token = str(body.get("url", "")).strip(), str(body.get("token", "")).strip()
+    if not url or not token:
+        return JSONResponse({"detail": "Fyll i både adress och token."}, status_code=400)
+    ok, msg = homeassistant.test_connection(url, token)
+    if not ok:
+        return JSONResponse({"detail": msg}, status_code=400)
+    ew_settings.update(ha_url=homeassistant.normalize_ha_url(url), ha_token=token)
+    homeassistant.reconfigure()
+    return {"ok": True, "message": msg}
 
 
 @app.get("/api/me")

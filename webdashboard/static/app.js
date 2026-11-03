@@ -768,6 +768,7 @@ async function api(path, opts) {
 }
 
 function showLogin() {
+  hideSetup();
   document.getElementById("login").classList.remove("off");
   document.getElementById("shell").classList.remove("on");
 }
@@ -859,8 +860,13 @@ async function renderInstallningar() {
   main.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:1.1rem;font-weight:700">⚙️ Entitetsväljare</div>
-      <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, spa och laddare - du väljer vilka som stämmer, sen genererar du en färdig house_config.yaml att spara och starta om smartbox med.</div>
+      <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, batteri, spa och laddare. Kryssa i det som stämmer och tryck <b>Spara och starta</b>.</div>
       <button class="icobtn" id="scanbtn" style="margin-top:10px">Skanna mitt Home Assistant</button>
+    </div>
+    <div class="card" style="margin-bottom:16px" id="hacard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">🏠 Home Assistant</div>
+      <div class="note" style="margin-top:4px" id="hainfo"></div>
+      <button class="icobtn" id="habtn" style="margin-top:10px">Ändra anslutning</button>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:1.1rem;font-weight:700">📡 Sök Modbus-värmepump på nätverket</div>
@@ -871,6 +877,12 @@ async function renderInstallningar() {
     <div id="discoverResults"></div>`;
   document.getElementById("scanbtn").onclick = runDiscovery;
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
+  setupStatus().then(st => {
+    if (!st || st.supervisor || st.ha_from_env || st.ha_url === undefined) return;
+    document.getElementById("hacard").hidden = false;
+    document.getElementById("hainfo").textContent = st.ha_ok ? `Kopplat till ${st.ha_url}.` : "Inte kopplat.";
+    document.getElementById("habtn").onclick = () => setupHA(3, st.ha_url);
+  });
 }
 
 async function runModbusScan() {
@@ -1053,12 +1065,87 @@ function openPage(id) {
   }
 }
 
+// ---------- Startguiden (första start): lösenord -> Home Assistant -> prylar ----------
+async function setupStatus() {
+  try { const r = await fetch("api/setup/status", { credentials: "same-origin" }); return r.ok ? r.json() : null; }
+  catch (e) { return null; }
+}
+
+function showSetup(step, total, title, bodyHtml, btnText, onSubmit) {
+  document.getElementById("login").classList.remove("off");
+  document.getElementById("shell").classList.remove("on");
+  document.getElementById("loginform").style.display = "none";
+  const f = document.getElementById("setupform");
+  f.style.display = "";
+  document.getElementById("setupstep").textContent = `Steg ${step} av ${total}: ${title}`;
+  document.getElementById("setupbody").innerHTML = bodyHtml;
+  document.getElementById("setuperr").textContent = "";
+  document.getElementById("setupok").textContent = "";
+  const btn = document.getElementById("setupbtn");
+  btn.textContent = btnText;
+  btn.disabled = false;
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    document.getElementById("setuperr").textContent = "";
+    try { await onSubmit(); } catch (err) { document.getElementById("setuperr").textContent = err.message || String(err); btn.disabled = false; }
+  };
+  const first = f.querySelector("input"); if (first) first.focus();
+}
+
+function hideSetup() {
+  document.getElementById("setupform").style.display = "none";
+  document.getElementById("loginform").style.display = "";
+}
+
+async function postJSON(path, body) {
+  const r = await fetch(path, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+function setupPassword(total) {
+  showSetup(1, total, "välj lösenord",
+    `<div class="note">Lösenordet skyddar webben och mobilappen. Logga in med det sedan (användarnamn behövs inte).</div>
+     <input type="password" id="s_pw" placeholder="Lösenord, minst 8 tecken" autocomplete="new-password" required minlength="8">
+     <input type="password" id="s_pw2" placeholder="Samma lösenord igen" autocomplete="new-password" required>`,
+    "Spara lösenord", async () => {
+      const a = document.getElementById("s_pw").value, b = document.getElementById("s_pw2").value;
+      if (a !== b) throw new Error("Lösenorden är inte lika.");
+      await postJSON("api/setup/password", { password: a });
+      boot();
+    });
+}
+
+function setupHA(total, prev) {
+  showSetup(2, total, "koppla Home Assistant",
+    `<div class="note">EnergyWizard läser och styr allt via Home Assistant.</div>
+     <input type="text" id="s_url" placeholder="Adress, t.ex. 192.168.1.10 eller http://homeassistant.local:8123" value="${esc(prev || "")}" required>
+     <input type="password" id="s_tok" placeholder="Token" required>
+     <details class="note"><summary>Var hittar jag token?</summary>
+       I Home Assistant: klicka på ditt namn längst ner till vänster, välj fliken <b>Säkerhet</b>,
+       scrolla längst ner till <b>Långlivade åtkomsttoken</b> och tryck <b>Skapa token</b>. Kopiera den och klistra in här.
+     </details>`,
+    "Testa och spara", async () => {
+      const j = await postJSON("api/setup/ha", { url: document.getElementById("s_url").value, token: document.getElementById("s_tok").value });
+      document.getElementById("setupok").textContent = j.message || "Kopplat!";
+      setTimeout(boot, 900);
+    });
+}
+
 async function boot() {
+  const st = await setupStatus();
+  const total = st && st.supervisor ? 2 : 3;
+  if (st && st.needs_password) { setupPassword(total); return; }
   try {
     const me = await api("api/me");
     if (!me.role) { showLogin(); return; }
+    hideSetup();
     PAGES = me.pages;
+    if (st && me.role === "owner" && !st.ha_ok && !st.supervisor) { setupHA(total, st.ha_url); return; }
     showShell();
+    if (st && me.role === "owner" && !st.devices_chosen) { openPage("installningar"); return; }
     openPage("oversikt");
   } catch (e) { showLogin(); }
 }

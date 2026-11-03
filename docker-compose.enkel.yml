@@ -1,0 +1,32 @@
+# EnergyWizard, enklaste installationen: en container, en datamapp.
+#
+#   mkdir energywizard && cd energywizard
+#   curl -fsSL https://raw.githubusercontent.com/murre87/energywizard/main/docker-compose.enkel.yml -o docker-compose.yml
+#   docker compose up -d
+#
+# Öppna sedan http://<datorns-adress>:8503. Startguiden frågar efter lösenord, adressen till
+# Home Assistant och en token, och sedan väljer du dina prylar. Allt sparas i ./data.
+services:
+  energywizard:
+    image: ghcr.io/murre87/energywizard:latest
+    container_name: energywizard
+    restart: unless-stopped
+    ports:
+      - "8503:8503"   # webben (dator/surfplatta)
+      - "8502:8502"   # mobilappen
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Europe/Stockholm
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Uppdaterar EnergyWizard av sig själv (var sjätte timme). Ta bort om du uppdaterar själv
+  # med "docker compose pull && docker compose up -d".
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: energywizard-watchtower
+    restart: unless-stopped
+    command: --label-enable --cleanup --interval 21600
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

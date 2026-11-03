@@ -13,8 +13,21 @@ from sqlalchemy import create_engine, text
 import homeassistant as H
 
 TZ = ZoneInfo("Europe/Stockholm")
-PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+import ew_settings
+_ENV_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+PASSWORD = _ENV_PASSWORD or ew_settings.get("dashboard_password", "") or ""
 SECRET = hashlib.sha256(("ewapp|" + PASSWORD).encode()).digest()
+
+
+def _sync_password():
+    """Lösenordet från webbens startguide gäller direkt, utan omstart (bara när det inte
+    kommer från DASHBOARD_PASSWORD)."""
+    global PASSWORD, SECRET
+    if _ENV_PASSWORD:
+        return
+    pw = ew_settings.get("dashboard_password", "") or ""
+    if pw != PASSWORD:
+        PASSWORD, SECRET = pw, hashlib.sha256(("ewapp|" + pw).encode()).digest()
 ENGINE = create_engine(f"postgresql+psycopg://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}@{os.environ.get('POSTGRES_HOST', 'postgres-smartbox')}/{os.environ['POSTGRES_DB']}", pool_pre_ping=True, pool_size=3)
 
 CARS = {
@@ -125,6 +138,7 @@ async def logout():
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    _sync_password()
     p = request.url.path
     if p.startswith("/api/") and p not in ("/api/login", "/api/logout"):
         role = _role(request)

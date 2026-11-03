@@ -21,20 +21,13 @@ konfiguration pekar därför nu rätt, mot `http://<din-HA-adress>:8503`.
 ## Kom igång
 
 1. Installera tillägget.
-2. Under fliken **Konfiguration**: sätt `dashboard_password`. Utan lösenord
-   startas inte gränssnitten alls (det går inte att logga in med ett tomt
-   lösenord) - motorn kör ändå.
-3. Starta tillägget och klicka på **Öppna webbgränssnitt**. Logga in med
-   användarnamn `admin` (eller tomt) och ditt lösenord.
-4. Kör entitetsväljaren under **Inställningar**. Den ger dig en färdig
-   `house_config.yaml` att ladda ner. Lägg den i
-   `/addon_configs/<tilläggets id>_smartbox/house_config.yaml` med
-   **File editor**- eller **Samba**-tillägget (eller SSH). En helt tom fil
-   (bara `house_id: mitt-hus`) är också ett giltigt utgångsläge där allt bara
-   blir overksamt.
-5. Starta om tillägget efter att du ändrat filen.
-6. Följ loggen (fliken **Log**) - samma utskrifter som
-   `docker compose logs -f` ger i den vanliga driften.
+2. Starta tillägget och klicka på **Öppna webbgränssnitt**. Första gången öppnas en
+   startguide: välj ett lösenord (eller sätt `dashboard_password` under
+   **Konfiguration**). Anslutningen till Home Assistant sköts av tillägget själv.
+3. Under **Inställningar** hittar entitetsväljaren dina prylar. Kryssa i det du har och
+   tryck **Spara och starta**. Konfigurationen sparas i
+   `/addon_configs/<tilläggets id>_smartbox/house_config.yaml`, och motorn läser in den
+   av sig själv.
 
 Kraschar ett gränssnitt startas det om efter 5 sekunder, utan att motorn
 påverkas. Dör motorn startar Supervisor om hela tillägget.
