@@ -54,6 +54,9 @@ services:
       # redan verifierad mot riktiga drivrutiner i tests/test_config_loader.py) - en annan
       # installation pekar HOUSE_CONFIG_PATH mot sin egen kopia av house_config.example.yaml.
       - ${HOUSE_CONFIG_HOST_PATH:-./config/examples/emil_house.yaml}:/house_config.yaml:ro
+      # Webbens inställningar (/data/energywizard.json: elpris och avgifter, batteriets stil, språk ...) delas av
+      # motorn, webben och appen. Förut låg filen bara i webbcontainern och försvann vid varje uppdatering.
+      - ew_data:/data
     environment:
       - PYTHONUNBUFFERED=1
       - POSTGRES_HOST=postgres-smartbox
@@ -121,6 +124,7 @@ services:
       - ${DASHBOARD_ENV_PATH:-./secrets/dashboard.env}
     volumes:
       - ./smartbox:/smartbox:ro
+      - ew_data:/data
     depends_on:
       postgres-smartbox:
         condition: service_healthy
@@ -156,6 +160,7 @@ services:
       - "8503:8503"
     volumes:
       - ./smartbox:/smartbox:ro
+      - ew_data:/data
       # Entitetsväljarens "Spara och starta": skrivbar bara när install.sh satt HOUSE_CONFIG_MODE=rw
       # och HOUSE_CONFIG_WRITABLE=1. Annars läsbar, och väljaren erbjuder bara nedladdning.
       - ${HOUSE_CONFIG_HOST_PATH:-./config/examples/emil_house.yaml}:/house_config.yaml:${HOUSE_CONFIG_MODE:-ro}
@@ -240,3 +245,4 @@ services:
 volumes:
   postgres_data:
   telemetry_data:
+  ew_data:

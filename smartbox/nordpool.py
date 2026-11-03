@@ -24,43 +24,117 @@ from logger import get_db
 # gpm.py, mpc.py, pump_runtime.py och smartdashboard/app.py (källoberoende konstanter:
 # nätavgift+skatt+elhandlarens avgift är redan momsinklusive, oavsett vilken bas spotpriset
 # har). Sälj: ingen moms på sålt solöverskott (svenska skatteregler för mikroproduktion).
-BUY_FIXED_KR = 0.62675
+BUY_FIXED_KR = 0.62675        # Sverige (standard): nätöverföring + energiskatt + elhandlarens påslag, inkl. moms
 SELL_FIXED_KR = 0.02125
 VAT_FACTOR = 1.25
 
+# ---- Elpris och avgifter per land (2026-11-03) ----------------------------------------------------------------
+# Allt som gör spotpriset till en verklig kostnad går att ställa in: i webben (Inställningar -> Elpris och avgifter,
+# sparas i /data/energywizard.json), med miljövariabler (PRICE_COUNTRY, PRICE_AREA, PRICE_VAT_PCT, PRICE_BUY_EXTRA,
+# PRICE_SELL_EXTRA, PRICE_SELL_VAT, PRICE_CURRENCY) eller inte alls (= Sverige, exakt som förut).
+# Landet ger bara standardmoms, valuta och elområden - nätavgift, energiskatt och påslag står på elräkningen och
+# skiljer sig mellan nätbolag, så de skrivs in av användaren (0 om inget anges, utom Sverige).
+# Momssatserna är de allmänna för hushållsel; kontrollera mot elräkningen (t.ex. är Nordnorge momsfritt).
+COUNTRIES = {
+    "SE": {"name": "Sverige", "vat_pct": 25.0, "currency": "SEK", "areas": ["SE1", "SE2", "SE3", "SE4"],
+           "buy_extra": BUY_FIXED_KR, "sell_extra": SELL_FIXED_KR},
+    "NO": {"name": "Norge", "vat_pct": 25.0, "currency": "NOK", "areas": ["NO1", "NO2", "NO3", "NO4", "NO5"]},
+    "DK": {"name": "Danmark", "vat_pct": 25.0, "currency": "DKK", "areas": ["DK1", "DK2"]},
+    "FI": {"name": "Finland", "vat_pct": 25.5, "currency": "EUR", "areas": ["FI"]},
+    "EE": {"name": "Estland", "vat_pct": 24.0, "currency": "EUR", "areas": ["EE"]},
+    "LV": {"name": "Lettland", "vat_pct": 21.0, "currency": "EUR", "areas": ["LV"]},
+    "LT": {"name": "Litauen", "vat_pct": 21.0, "currency": "EUR", "areas": ["LT"]},
+    "DE": {"name": "Tyskland", "vat_pct": 19.0, "currency": "EUR", "areas": ["DE-LU"]},
+    "NL": {"name": "Nederländerna", "vat_pct": 21.0, "currency": "EUR", "areas": ["NL"]},
+    "BE": {"name": "Belgien", "vat_pct": 6.0, "currency": "EUR", "areas": ["BE"]},
+    "AT": {"name": "Österrike", "vat_pct": 20.0, "currency": "EUR", "areas": ["AT"]},
+    "FR": {"name": "Frankrike", "vat_pct": 20.0, "currency": "EUR", "areas": ["FR"]},
+    "PL": {"name": "Polen", "vat_pct": 23.0, "currency": "PLN", "areas": ["PL"]},
+    "GB": {"name": "Storbritannien", "vat_pct": 5.0, "currency": "GBP", "areas": ["GB"]},
+}
+CURRENCY_SYMBOL = {"SEK": "kr", "NOK": "kr", "DKK": "kr", "EUR": "€", "PLN": "zł", "GBP": "£"}
+
+
+def _setting(key, env, default=None):
+    try:
+        import ew_settings
+        v = ew_settings.get(key)
+    except Exception:
+        v = None
+    if v in (None, ""):
+        v = os.environ.get(env, "").strip() or None
+    return default if v in (None, "") else v
+
+
+def _num(v, default):
+    try:
+        return float(str(v).replace(",", "."))
+    except (TypeError, ValueError):
+        return default
+
+
+def cost_settings() -> dict:
+    """Gällande land, elområde, moms och avgifter. Utan inställningar: Sverige SE3 med dagens värden."""
+    country = str(_setting("price_country", "PRICE_COUNTRY", "SE")).upper()
+    preset = COUNTRIES.get(country, COUNTRIES["SE"] if country == "SE" else {"vat_pct": 0.0, "currency": "EUR", "areas": []})
+    area = str(_setting("price_area", "PRICE_AREA", "SE3" if country == "SE" else (preset.get("areas") or [""])[0])).upper()
+    currency = str(_setting("price_currency", "PRICE_CURRENCY", preset.get("currency", "EUR"))).upper()
+    return {
+        "country": country, "area": area, "currency": currency, "symbol": CURRENCY_SYMBOL.get(currency, currency),
+        "vat_pct": _num(_setting("price_vat_pct", "PRICE_VAT_PCT"), preset.get("vat_pct", 0.0)),
+        "buy_extra": _num(_setting("price_buy_extra", "PRICE_BUY_EXTRA"), preset.get("buy_extra", 0.0)),
+        "sell_extra": _num(_setting("price_sell_extra", "PRICE_SELL_EXTRA"), preset.get("sell_extra", 0.0)),
+        "sell_vat": str(_setting("price_sell_vat", "PRICE_SELL_VAT", "false")).lower() in ("1", "true", "ja", "yes"),
+    }
+
+
+def price_source() -> str:
+    """elprisetjustnu.se har bara Sverige. Andra länder läser HA:s Nordpool-integration om inget annat är valt."""
+    if "PRICE_SOURCE" in os.environ or cost_settings()["country"] == "SE":
+        return PRICE_SOURCE
+    return "ha_nordpool"
+
+
+def _vat_factor() -> float:
+    return 1.0 + cost_settings()["vat_pct"] / 100.0
+
 
 def prices_include_vat() -> bool:
-    """True om elpriser.sek_per_kwh redan är momsinklusive (PRICE_SOURCE=ha_nordpool)."""
-    return PRICE_SOURCE == "ha_nordpool"
+    """True om elpriser.sek_per_kwh redan är momsinklusive (Nordpool-integrationen i HA)."""
+    return price_source() == "ha_nordpool"
 
 
 def full_buy_cost(spot: float) -> float:
-    """Verklig köpkostnad kr/kWh inkl moms, nätöverföring och skatt. Dubbelräknar aldrig
+    """Verklig köpkostnad per kWh inkl moms, nätöverföring och skatt (i landets valuta). Dubbelräknar aldrig
     moms oavsett vilken bas spotpriset har."""
+    c = cost_settings()
     if prices_include_vat():
-        return spot + BUY_FIXED_KR
-    return spot * VAT_FACTOR + BUY_FIXED_KR
+        return spot + c["buy_extra"]
+    return spot * _vat_factor() + c["buy_extra"]
 
 
 def full_sell_income(spot: float) -> float:
-    """Verklig försäljningsintäkt kr/kWh vid solexport - ingen moms på sålt överskott."""
-    if prices_include_vat():
-        return spot / VAT_FACTOR + SELL_FIXED_KR
-    return spot + SELL_FIXED_KR
+    """Verklig försäljningsintäkt per kWh vid export. Sverige: ingen moms på sålt överskott (mikroproduktion)."""
+    c = cost_settings()
+    f = _vat_factor()
+    base = spot / f if prices_include_vat() else spot
+    return (base * f if c["sell_vat"] else base) + c["sell_extra"]
 
 
 def sql_buy_cost_expr(col: str) -> str:
     """Samma formel som SQL-uttryck (Postgres), för ställen som räknar i databasen
     istället för rad-för-rad i Python (pump_runtime.py, smartdashboard)."""
+    c = cost_settings()
     if prices_include_vat():
-        return f"({col} + {BUY_FIXED_KR})"
-    return f"({col} * {VAT_FACTOR} + {BUY_FIXED_KR})"
+        return f"({col} + {c['buy_extra']})"
+    return f"({col} * {_vat_factor()} + {c['buy_extra']})"
 
 
 def sql_sell_income_expr(col: str) -> str:
-    if prices_include_vat():
-        return f"({col} / {VAT_FACTOR} + {SELL_FIXED_KR})"
-    return f"({col} + {SELL_FIXED_KR})"
+    c = cost_settings()
+    f = _vat_factor()
+    base = f"({col} / {f})" if prices_include_vat() else f"{col}"
+    return f"({base}{f' * {f}' if c['sell_vat'] else ''} + {c['sell_extra']})"
 
 def init_db():
     try:
@@ -79,7 +153,8 @@ def init_db():
 
 def fetch_api_and_save(date_obj):
     date_str = date_obj.strftime("%Y/%m-%d")
-    url = f"https://www.elprisetjustnu.se/api/v1/prices/{date_str}_SE3.json"
+    area = cost_settings()["area"] if cost_settings()["area"] in COUNTRIES["SE"]["areas"] else "SE3"
+    url = f"https://www.elprisetjustnu.se/api/v1/prices/{date_str}_{area}.json"
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
@@ -115,12 +190,13 @@ def fetch_ha_nordpool_and_save(date_obj):
     import homeassistant
     date_str = date_obj.strftime("%Y-%m-%d")
     try:
+        entity = _setting("price_ha_entity", "NORDPOOL_HA_ENTITY", NORDPOOL_HA_ENTITY)
         r = requests.get(
-            f"{homeassistant._BASE}/states/{NORDPOOL_HA_ENTITY}",
+            f"{homeassistant._BASE}/states/{entity}",
             headers=homeassistant._HEADERS, timeout=10, verify=homeassistant._VERIFY,
         )
         if r.status_code != 200:
-            print(f"❌ HA nordpool-sensorn ({NORDPOOL_HA_ENTITY}) svarade {r.status_code}.")
+            print(f"❌ HA nordpool-sensorn ({entity}) svarade {r.status_code}.")
             return False
         attrs = r.json().get("attributes", {})
         raw_today = attrs.get("raw_today") or []
@@ -157,7 +233,7 @@ def _fetch_and_save(date_obj):
     """Hämtar och sparar ett dygns priser enligt konfigurerad PRICE_SOURCE, med automatisk
     fallback till elprisetjustnu.se samma cykel om den primära källan misslyckas - pris-
     optimeringen får aldrig stå helt utan källa bara för att HA-integrationen är otillgänglig."""
-    if PRICE_SOURCE == "ha_nordpool":
+    if price_source() == "ha_nordpool":
         if fetch_ha_nordpool_and_save(date_obj):
             return True
         print("⚠️ HA nordpool-källan misslyckades, faller tillbaka till elprisetjustnu.se.")
@@ -174,6 +250,20 @@ def ensure_prices_exist():
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
+                # Byte av land/elområde/källa: dagens och morgondagens priser hämtas om (annars ligger det gamla
+                # områdets priser kvar, ON CONFLICT DO NOTHING).
+                c = cost_settings()
+                key = f"{price_source()}:{c['country']}:{c['area']}"
+                try:
+                    import ew_settings
+                    if ew_settings.get("price_fetched_for") not in (None, key):
+                        cur.execute("DELETE FROM elpriser WHERE time_start >= %s", (today,))
+                        conn.commit()
+                        print(f"🔁 Elområde/källa ändrad ({ew_settings.get('price_fetched_for')} -> {key}) - hämtar om priserna.")
+                    if ew_settings.get("price_fetched_for") != key:
+                        ew_settings.update(price_fetched_for=key)
+                except Exception as e:
+                    print(f"⚠️ Kunde inte kontrollera elområdet: {e}")
                 cur.execute("SELECT COUNT(*) FROM elpriser WHERE time_start >= %s AND time_start < %s", (today, tomorrow))
                 if cur.fetchone()[0] == 0:
                     print("⚠️ Saknar priser för idag. Hämtar från API...")

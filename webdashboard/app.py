@@ -17,6 +17,7 @@ import sys
 import time
 import zoneinfo
 
+import re
 import requests
 
 sys.path.insert(0, "/smartbox")
@@ -264,6 +265,56 @@ async def api_battery_plan_settings_save(request: Request):
         upd["battery_allow_export"] = bool(body["allow_export"])
     ew_settings.update(**upd)
     return {"ok": True, **upd}
+
+
+_PRICE_KEYS = ("price_country", "price_area", "price_vat_pct", "price_buy_extra", "price_sell_extra", "price_sell_vat",
+               "price_currency", "price_ha_entity")
+
+
+@app.get("/api/price-settings")
+async def price_settings_get():
+    """Inställningar -> Elpris och avgifter: gällande värden, länderna och ett räkneexempel."""
+    import nordpool
+    c = nordpool.cost_settings()
+    return {"ok": True, **c, "source": nordpool.price_source(), "ha_entity": ew_settings.get("price_ha_entity") or "sensor.nordpool",
+            "countries": {k: {"name": v["name"], "vat_pct": v["vat_pct"], "currency": v["currency"], "areas": v["areas"]}
+                          for k, v in nordpool.COUNTRIES.items()},
+            # Räkneexempel för spotpris 1,00 exkl. moms: samma formel som nordpool.full_buy_cost/full_sell_income
+            "example": {"spot": 1.0, "buy": round(1.0 * (1 + c["vat_pct"] / 100) + c["buy_extra"], 4),
+                        "sell": round((1 + c["vat_pct"] / 100 if c["sell_vat"] else 1.0) + c["sell_extra"], 4)}}
+
+
+@app.post("/api/price-settings")
+async def price_settings_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra elpris och avgifter"}, status_code=403)
+    import nordpool
+    body = await request.json()
+    upd = {}
+    country = str(body.get("country") or "SE").upper()
+    if country not in nordpool.COUNTRIES:
+        return JSONResponse({"error": "Okänt land"}, status_code=400)
+    upd["price_country"] = country
+    area = str(body.get("area") or "").upper()
+    upd["price_area"] = area if area in nordpool.COUNTRIES[country]["areas"] else nordpool.COUNTRIES[country]["areas"][0]
+    for key, field, lo, hi in (("price_vat_pct", "vat_pct", 0, 50), ("price_buy_extra", "buy_extra", -5, 50), ("price_sell_extra", "sell_extra", -5, 50)):
+        v = body.get(field)
+        if v in (None, ""):
+            upd[key] = None                     # tomt = landets standard
+            continue
+        try:
+            v = float(str(v).replace(",", "."))
+        except ValueError:
+            return JSONResponse({"error": f"Ogiltigt värde: {field}"}, status_code=400)
+        if not lo <= v <= hi:
+            return JSONResponse({"error": f"{field} utanför rimligt intervall"}, status_code=400)
+        upd[key] = v
+    upd["price_sell_vat"] = bool(body.get("sell_vat"))
+    ent = str(body.get("ha_entity") or "").strip()
+    upd["price_ha_entity"] = ent if re.fullmatch(r"sensor\.[a-z0-9_]+", ent) else None
+    ew_settings.update(**upd)
+    return {"ok": True}
 
 
 @app.get("/api/me")

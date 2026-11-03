@@ -954,6 +954,54 @@ const BAT_STYLES = {
   bold: ["Djärv", "Planerar nära prognosen och använder batteriet mer."],
   very_bold: ["Mycket djärv", "Planerar på prognosen som den är. Tjänar mest när den stämmer och kostar mer när den slår fel."],
 };
+// Elpris och avgifter per land (smartbox/nordpool.py cost_settings): land, elområde, moms, avgifter.
+async function mountPriceSettings() {
+  let d;
+  try { d = await api("api/price-settings"); } catch (e) { return; }
+  const card = document.getElementById("pricecard"), body = document.getElementById("pricebody");
+  if (!card || !d.ok) return;
+  card.hidden = false;
+  const field = (id, label, val, hint) => `<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0">
+      <span class="note">${label}</span><input id="${id}" inputmode="decimal" value="${val ?? ""}" style="width:100%">${hint ? `<span class="note" style="font-size:.78rem">${hint}</span>` : ""}</label>`;
+  const draw = () => {
+    const c = d.countries[d.country] || d.countries.SE, sym = d.symbol;
+    body.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px"><span class="note">Land</span>
+          <select id="pcountry">${Object.entries(d.countries).map(([k, v]) => `<option value="${k}"${k === d.country ? " selected" : ""}>${esc(v.name)}</option>`).join("")}</select></label>
+        <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px"><span class="note">Elområde</span>
+          <select id="parea">${c.areas.map((a) => `<option${a === d.area ? " selected" : ""}>${a}</option>`).join("")}</select></label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+        ${field("pvat", "Moms (%)", d.vat_pct, `Standard för ${esc(c.name)}: ${String(c.vat_pct).replace(".", ",")} %`)}
+        ${field("pbuy", `Avgifter vid köp (${sym}/kWh, inkl. moms)`, d.buy_extra, "Nätöverföring + energiskatt + elhandlarens påslag")}
+        ${field("psell", `Ersättning vid försäljning (${sym}/kWh)`, d.sell_extra, "Utöver spotpriset, t.ex. nätnytta")}
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="psellvat"${d.sell_vat ? " checked" : ""}> Moms på såld el (oftast nej för privatpersoner)</label>
+      ${d.country !== "SE" ? `<div class="note" style="margin-top:10px">Priserna läses från Home Assistants Nordpool-integration (elprisetjustnu.se har bara Sverige).
+        Installera den för ${esc(d.area)} och ange sensorn: <input id="pent" value="${esc(d.ha_entity)}" style="width:200px;max-width:100%"></div>` : ""}
+      <div class="stat" style="margin-top:12px;padding:10px 12px">Exempel: spotpris 1,00 ${sym} (exkl. moms) blir
+        <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
+      <button class="icobtn" id="psave" style="margin-top:10px">Spara</button>`;
+    document.getElementById("pcountry").onchange = (e) => {
+      const k = e.target.value, cc = d.countries[k];
+      Object.assign(d, { country: k, area: cc.areas[0], vat_pct: cc.vat_pct, currency: cc.currency, symbol: cc.currency === "EUR" ? "€" : cc.currency === "GBP" ? "£" : cc.currency === "PLN" ? "zł" : "kr",
+        buy_extra: k === "SE" ? 0.62675 : 0, sell_extra: k === "SE" ? 0.02125 : 0 });
+      draw();
+    };
+    document.getElementById("psave").onclick = async () => {
+      const v = (id) => (document.getElementById(id) || {}).value;
+      try {
+        await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
+          sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked, ha_entity: v("pent") || "" });
+        toast("Sparat - priser och kostnader räknas om inom en minut");
+        mountPriceSettings();
+      } catch (e) { toast(e.message); }
+    };
+  };
+  draw();
+}
+
 async function mountBatteryPlanSettings() {
   let d;
   try { d = await api("api/battery-plan-settings"); } catch (e) { return; }
@@ -1102,6 +1150,11 @@ async function renderInstallningar() {
       <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, batteri, spa och laddare. Kryssa i det som stämmer och tryck <b>Spara och starta</b>.</div>
       <button class="icobtn" id="scanbtn" style="margin-top:10px">Skanna mitt Home Assistant</button>
     </div>
+    <div class="card" style="margin-bottom:16px" id="pricecard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">💶 Elpris och avgifter</div>
+      <div class="note" style="margin-top:4px">Gör spotpriset till din verkliga kostnad. Nätavgift, energiskatt och påslag står på elräkningen.</div>
+      <div id="pricebody" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="batplancard" hidden>
       <div style="font-size:1.1rem;font-weight:700">🔋 Batteriets planering</div>
       <div class="note" style="margin-top:4px">Hur mycket planen litar på prognosen för sol och förbrukning. Säkerhetsgränserna är desamma i alla stilar.</div>
@@ -1142,6 +1195,7 @@ async function renderInstallningar() {
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
   mountLangSelect("setlang", true);
   mountBatteryPlanSettings();
+  mountPriceSettings();
   if (window.I18N && I18N.lang !== "sv") {
     const mb = document.getElementById("missingbtn");
     mb.hidden = false; mb.onclick = () => I18N.downloadMissing();
