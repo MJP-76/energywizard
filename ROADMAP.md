@@ -18,6 +18,16 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 ## Övervägs, väntar på fler verkliga hus att verifiera mot
 
+- **Värmepumpar: styrning via Matter-lagret (pausat 2026-11-03, Emils beslut).** Gränssnittet finns
+  redan (`drivers/heatpump.py`: läge, effekt, COP, fel, kurva ±n med tak ±5, paus med tidsgräns,
+  nollställning vid start) och HeishaMon (Panasonic) använder det. Motorn styr dock fortfarande
+  pumparna som förut (rumsbörvärde, Thermia-lägen); att låta prioritetsmotorn använda kurva/paus
+  för andra märken väntar. Liksom att flytta Thermia/NIBE till de nya krokarna.
+- **Återbetalning av energiskatt för lagrad el i batteri.** Den som har ett batteri kan få tillbaka
+  energiskatten för el som köpts, lagrats och sedan matats ut på nätet (Skatteverket). Kräver att
+  laddning från nät och urladdning till nät räknas kvart för kvart och sammanställs per år, som FTW
+  visar i historiken. Bygg när ett riktigt batteri kör, så att siffrorna går att stämma av.
+
 - **Husbatteri: steg 1-2 byggda (läsa, visa, regler i motorn) + samarbetsläge -
   overifierat mot riktigt batteri.** `smartbox/battery_control.py` fattar besluten med
   hela husets läge som indata: gammal data -> växelriktaren tar över; säkring/effekttak
