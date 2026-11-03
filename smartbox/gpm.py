@@ -60,6 +60,39 @@ def _ev_fuse_room(state, house_excluding_ev):
 
 
 
+# Husvärme UTAN innegivare: motorn ser inte om huset kyls ut, så sänkningen vid dyr el får
+# skydd i stället: kortare tid i sträck, och mindre (eller ingen) sänkning när det är kallt ute.
+NO_SENSOR_MAX_LOWERED_S = 3 * 3600     # högst 3 h sänkt i sträck ...
+NO_SENSOR_RECOVER_S = 3600             # ... sedan minst 1 h normal värme innan nästa sänkning
+NO_SENSOR_COLD_LIMIT_C = -5.0          # kallare än så: högst 1 °C sänkning
+NO_SENSOR_NO_DROP_C = -15.0            # kallare än så: ingen sänkning alls
+
+
+def no_sensor_heat(mode, outdoor_c, cheap_t, expensive_t, lowered_since, recover_until, now):
+    """(läge, måltemp, lowered_since, recover_until, förklaring) för ett hus utan innegivare."""
+    if mode != "EXPENSIVE":
+        return mode, cheap_t, None, recover_until, None
+    if recover_until is not None and now < recover_until:
+        left = int((recover_until - now).total_seconds() // 60)
+        return "CHEAP", cheap_t, None, recover_until, (
+            f"Utan innegivare: huset har varit sänkt länge - normal värme ett tag till ({left} min) innan nästa sänkning.")
+    out = 0.0 if outdoor_c is None else float(outdoor_c)
+    drop = max(0.0, cheap_t - expensive_t)
+    if out < NO_SENSOR_NO_DROP_C:
+        drop = 0.0
+    elif out < NO_SENSOR_COLD_LIMIT_C:
+        drop = min(drop, 1.0)
+    if drop <= 0:
+        return "CHEAP", cheap_t, None, None, f"Utan innegivare: för kallt ute ({out:.0f}°C) för att sänka värmen - håller normal värme."
+    lowered_since = lowered_since or now
+    if (now - lowered_since).total_seconds() >= NO_SENSOR_MAX_LOWERED_S:
+        return "CHEAP", cheap_t, None, now + timedelta(seconds=NO_SENSOR_RECOVER_S), (
+            f"Utan innegivare: värmen har varit sänkt i {NO_SENSOR_MAX_LOWERED_S // 3600} h - höjer igen en timme så huset inte kyls ut.")
+    since_min = int((now - lowered_since).total_seconds() // 60)
+    return "EXPENSIVE", cheap_t - drop, lowered_since, None, (
+        f"Utan innegivare: dyr el - sänker värmen {drop:.0f}°C (sänkt i {since_min} min, högst {NO_SENSOR_MAX_LOWERED_S // 3600} h i sträck).")
+
+
 class GlobalPriorityManager:
     def __init__(self):
         self.pump_mode_lock_until = None
@@ -81,6 +114,8 @@ class GlobalPriorityManager:
         self.avg_net_history = []
         self.spa_cooldown_until = None
         self.prio5_hysteresis_active = False
+        self.no_sensor_lowered_since = None   # husvärme utan innegivare: sänkt sedan
+        self.no_sensor_recover_until = None   # ... och normal värme minst till
         # FIX: borttagen död variabel prio5_min_hysteresis_active (skrevs/lästes aldrig).
 
         # För larm om hög nettoeffekt (15 minuter)
@@ -798,6 +833,19 @@ class GlobalPriorityManager:
                     actions["pump_target_temp"] = target_t
                     if "Prediktiv överladdning" not in actions["log"][-1]:
                         actions["log"].append(f"🏠 Prio 5 (HUS): Pris och villkor godkända -> Håller huset på {target_t}°C.")
+
+        else:
+            # Ingen innegivare: prisstyrningen ovan (grundläget) får skydd mot att huset kyls ut.
+            if is_summer:
+                self.no_sensor_lowered_since = None
+            else:
+                mode, target, self.no_sensor_lowered_since, self.no_sensor_recover_until, why = no_sensor_heat(
+                    actions["pump_mode"], state.get('outdoor_temp'), state.get('temp_cheap', 22.0),
+                    state.get('temp_expensive', 20.0), self.no_sensor_lowered_since, self.no_sensor_recover_until, now)
+                if why:
+                    actions["pump_mode"] = mode
+                    actions["pump_target_temp"] = target
+                    actions["log"].append(f"🏠 Prio 5 (HUS): {why}")
 
         # --- Prio 5.5: BORTALÄGE (AWAY MODE) ---
         if state.get('away_mode_active'):

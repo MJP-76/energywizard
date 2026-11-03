@@ -100,6 +100,16 @@ spa:
 #     current_temp: sensor.mitt_spa_temperatur    # valfri
 #     target_temp: sensor.mitt_spa_maltemp         # valfri
 #     power_w: sensor.mitt_spa_effekt              # valfri - utelämna om du saknar en effektsensor
+#
+# Spabad vars värmare sitter på ett relä, t.ex. en Shelly. EnergyWizard blir termostaten:
+# på under målet, av vid målet, högst ett byte per 5 min och aldrig över 40 °C.
+# spa:
+#   enabled: true
+#   driver: switch                     # eller "shelly", samma sak
+#   entities:
+#     heater_switch: switch.shelly_spa           # krävs
+#     temperature: sensor.spa_vattentemperatur   # rekommenderas (Shelly Add-on + DS18B20)
+#     power: sensor.shelly_spa_power             # valfri
 
 # --- Husbatteri (valfri) ---
 # battery:
