@@ -3,6 +3,7 @@
 **🇸🇪 [Svenska](README.md) · 🇬🇧 English**
 
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/murre87)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Tests](https://github.com/murre87/energywizard/actions/workflows/tester.yml/badge.svg)](https://github.com/murre87/energywizard/actions/workflows/tester.yml)
 [![Website](https://img.shields.io/badge/site-murre87.github.io%2Fenergywizard-22d3a0)](https://murre87.github.io/energywizard/en/)
 [![Translate](https://img.shields.io/badge/translate-svenska%20%C2%B7%20English%20%C2%B7%20your%20language-38bdf8)](TRANSLATING.md)
@@ -124,6 +125,12 @@ code but **verifying against real hardware**.
 - ⭐ **Star the repo** - it makes the project easier to find.
 - 🙋 **Become a beta tester** - [open a "Beta tester: my house" issue](https://github.com/murre87/energywizard/issues) and tell us what you have.
 - 🐛 **Report bugs** with the log - [open an issue](https://github.com/murre87/energywizard/issues).
+
+## License
+
+EnergyWizard Open is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+You may use, modify and share the code freely. Anyone who distributes a modified version, or runs it as a service
+for others, must share their source code under the same license.
 
 ## Structure
 

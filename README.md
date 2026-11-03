@@ -3,6 +3,7 @@
 **🇸🇪 Svenska · 🇬🇧 [English](README.en.md)**
 
 [![Sponsra på GitHub](https://img.shields.io/badge/Sponsra-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/murre87)
+[![Licens: AGPL-3.0](https://img.shields.io/badge/licens-AGPL--3.0-blue)](LICENSE)
 [![Tester](https://github.com/murre87/energywizard/actions/workflows/tester.yml/badge.svg)](https://github.com/murre87/energywizard/actions/workflows/tester.yml)
 [![Sajten](https://img.shields.io/badge/sajt-murre87.github.io%2Fenergywizard-22d3a0)](https://murre87.github.io/energywizard/)
 [![Översätt](https://img.shields.io/badge/%C3%B6vers%C3%A4tt-svenska%20%C2%B7%20English%20%C2%B7%20ditt%20spr%C3%A5k-38bdf8)](TRANSLATING.md)
@@ -188,6 +189,12 @@ Senaste hälsningarna från dem som bjudit på en kaffe (uppdateras varje natt a
 
 <!--START_SECTION:buy-me-a-coffee-->
 <!--END_SECTION:buy-me-a-coffe-->
+
+## Licens
+
+EnergyWizard Open är fri programvara under [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+Du får använda, ändra och sprida koden fritt. Den som sprider en ändrad version, eller kör den som en tjänst
+åt andra, ska dela sin källkod under samma licens.
 
 ## Struktur
 

@@ -3,18 +3,10 @@
 Inte löften om datum - bara vad som är nästa rimliga steg och varför, så det är
 tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
-## Öppna beslut
+## Beslut
 
-- **Licens: MIT eller AGPL-3.0 - avvaktar.** Repot saknar idag licensfil, vilket
-  juridiskt betyder "alla rättigheter förbehållna" trots att README och
-  kunskapsbanken kallar projektet öppen källkod. Behöver bestämmas innan fler
-  betatestare/bidragsgivare kommer in.
-  - **MIT:** enklast för andra att använda och bygga vidare på, även i stängda
-    produkter.
-  - **AGPL-3.0:** samma som [FTW](https://github.com/srcfl/ftw) - den som bygger
-    vidare (även som tjänst) måste dela sin kod. Skulle också låta oss låna kod
-    rakt av från FTW; idag tar vi bara idéer därifrån (besparingskortet, planen i
-    klartext) med egen implementation.
+- **Licens: AGPL-3.0 - beslutat 2026-11-03.** LICENSE-filen finns i repots rot. Samma licens som
+  [FTW](https://github.com/srcfl/ftw), så kod därifrån får nu också återanvändas (med källhänvisning).
 
 ## Övervägs, väntar på fler verkliga hus att verifiera mot
 
