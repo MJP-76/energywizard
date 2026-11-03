@@ -365,7 +365,10 @@ async def price_entities():
             n = len(nordpool.parse_price_attributes(a, a.get("unit_of_measurement", "")))
             out.append({"entity_id": e, "name": a.get("friendly_name") or e, "integration": kind,
                         "unit": a.get("unit_of_measurement") or "", "points": n})
-    return {"ok": True, "entities": out, "selected": ew_settings.get("price_ha_entity") or "",
+    selected = ew_settings.get("price_ha_entity") or ""
+    if not selected and nordpool.price_source() == "ha_nordpool":       # vald via miljön (PRICE_SOURCE/NORDPOOL_HA_ENTITY)
+        selected = os.environ.get("NORDPOOL_HA_ENTITY", "sensor.nordpool")
+    return {"ok": True, "entities": out, "selected": selected,
             "includes_vat": nordpool.prices_include_vat() if ew_settings.get("price_ha_entity") else
             str(ew_settings.get("price_includes_vat", True)).lower() not in ("0", "false")}
 

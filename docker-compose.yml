@@ -183,6 +183,9 @@ services:
       # Bara på utvecklarens server: telemetrisamlarens sammanställning visas på System-sidan (antal aktiva +
       # utrustning). Tom = inget kort. T.ex. http://telemetry-collector:8504/api/stats
       - TELEMETRY_STATS_URL=${TELEMETRY_STATS_URL:-}
+      # Samma priskälla som motorn, så att Inställningar -> Elpris visar den som faktiskt används
+      - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
+      - NORDPOOL_HA_ENTITY=${NORDPOOL_HA_ENTITY:-sensor.nordpool}
       - TELEMETRY_STATS_TOKEN=${TELEMETRY_STATS_TOKEN:-}
       - HOUSE_CONFIG_PATH=/house_config.yaml
       - HOUSE_CONFIG_WRITABLE=${HOUSE_CONFIG_WRITABLE:-}

@@ -1072,8 +1072,8 @@ async function mountPriceSettings() {
       </div>
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="psellvat"${d.sell_vat ? " checked" : ""}> Moms på såld el (oftast nej för privatpersoner)</label>
       <div id="pricesrc" style="margin-top:12px"></div>
-      <div class="stat" style="margin-top:12px;padding:10px 12px">Exempel: spotpris 1,00 ${sym} (exkl. moms) blir
-        <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
+      <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card2);line-height:1.5">
+        Exempel: spotpris 1,00 ${sym} (exkl. moms) blir <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
       <button class="icobtn" id="psave" style="margin-top:10px">Spara</button>`;
     document.getElementById("pcountry").onchange = (e) => {
       const k = e.target.value, cc = d.countries[k];
