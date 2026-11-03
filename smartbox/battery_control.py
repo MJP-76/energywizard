@@ -131,8 +131,8 @@ def decide(s, cfg, supported=frozenset({"auto"})):
     return out("auto", "default", f"Självförbrukning - batteriet täcker husets behov ({soc:.0f} %).")
 
 
-def should_apply(new, last, last_change_at, now):
-    """Byt läge bara när det behövs: direkt vid säkerhetsregler, annars högst var 5:e minut."""
+def should_apply(new, last, last_change_at, now, min_change_minutes=5.0):
+    """Byt vid behov: säkerhetsregler direkt, annars konfigurerat intervall (minst 5 min)."""
     if new is None or new.get("intent") is None:
         return False
     if last is None or last_change_at is None:
@@ -141,4 +141,4 @@ def should_apply(new, last, last_change_at, now):
         return False
     if new.get("rule") in SAFETY_RULES or last.get("rule") in SAFETY_RULES:
         return True
-    return (now - last_change_at) >= MIN_CHANGE_INTERVAL
+    return (now - last_change_at) >= max(MIN_CHANGE_INTERVAL, timedelta(minutes=min_change_minutes))

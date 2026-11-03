@@ -27,3 +27,5 @@ ewapp/static/icons/
 # Skapas av install.sh: ditt eget hus, sparas från webbens entitetsväljare
 config/house_config.yaml
 secrets/ha-gateway-certs/
+
+SESSION_MEMORY.md
