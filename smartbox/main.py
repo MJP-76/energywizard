@@ -617,7 +617,7 @@ fuse_model = fuse_guard.FuseThermalModel()
 _fuse_cfg = {"fuse_a": decisions.MAX_FUSE_A, "margin_a": 0.0}
 _fuse_charger_ids = {}
 _hour_import = {"h": None, "wh": 0.0, "t": None}
-_meter_freeze = battery_control.MeterFreeze()       # samma värde i 10 min = mätaren har fastnat
+_bat_meter_freeze = battery_control.MeterFreeze()   # samma värde i 10 min = mätaren har fastnat (eget namn: _meter_freeze är health-varianten, rad ~298)
 _meter_ok_at = {"t": None}                           # senaste lyckade avläsning av elmätaren   # köpt energi denna timme (reserv när mätaren saknar timsensor)
 
 def get_last_legionella(target_temp):
@@ -644,7 +644,7 @@ while True:
         homeassistant.update_states()
 
         tibber = homeassistant.read_power_meter()
-        if tibber is not None and not _meter_freeze.update(tibber["net_power_w"], time.time()):
+        if tibber is not None and not _bat_meter_freeze.update(tibber["net_power_w"], time.time()):
             _meter_ok_at["t"] = time.time()
             fast_net.append(tibber["net_power_w"])
             # Fasströmmar är valfria (en mätare med bara nettoeffekt har inga) - då får säkrings-
