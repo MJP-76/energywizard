@@ -211,7 +211,11 @@ def _loop():
         print(f"⚠️ pump_runtime backfill: {e}")
     while True:
         try:
-            homeassistant.publish_states(_collect())
+            import mqtt_bridge
+            mqtt_bridge.ensure()                       # MQTT med autodiscovery om en broker är inställd
+            ents = _collect()
+            if not mqtt_bridge.publish(ents):
+                homeassistant.publish_states(ents)     # utan MQTT: REST som förut
         except Exception as e:  # ska aldrig påverka något annat
             print(f"⚠️ ha_publisher: {e}")
         time.sleep(INTERVAL_S)

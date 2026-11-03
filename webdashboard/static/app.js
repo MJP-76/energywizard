@@ -1004,6 +1004,30 @@ const BAT_STYLES = {
   bold: ["Djärv", "Planerar nära prognosen och använder batteriet mer."],
   very_bold: ["Mycket djärv", "Planerar på prognosen som den är. Tjänar mest när den stämmer och kostar mer när den slår fel."],
 };
+// Home Assistant via MQTT (smartbox/mqtt_bridge.py): broker + status. Bara ägaren ser kortet.
+async function mountMqtt() {
+  let d;
+  try { d = await api("api/mqtt-settings"); } catch (e) { return; }
+  const card = document.getElementById("mqttcard"), body = document.getElementById("mqttbody");
+  if (!card || !d.ok) return;
+  card.hidden = false;
+  const st = d.status;
+  const stat = !d.host ? "Av" : !st ? "Ansluter… (inom en minut)" : (st.ok ? "✅ " : "⚠️ ") + st.msg;
+  const fld = (id, label, val, type, ph) => `<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 150px;min-width:0"><span class="note">${label}</span>
+      <input id="${id}" type="${type || "text"}" value="${esc(val ?? "")}" placeholder="${esc(ph || "")}" style="width:100%" autocomplete="off"></label>`;
+  body.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${fld("mqhost", "Broker (adress)", d.host, "text", d.suggested_host)}${fld("mqport", "Port", d.port, "number")}
+      ${fld("mquser", "Användare", d.user)}${fld("mqpass", "Lösenord", "", "password", d.has_password ? "(sparat - lämna tomt)" : "")}</div>
+    <div style="margin-top:8px;font-weight:600">Status: ${esc(stat)}</div>
+    <button class="icobtn" id="mqsave" style="margin-top:8px">Spara</button>`;
+  document.getElementById("mqsave").onclick = async () => {
+    const v = (id) => document.getElementById(id).value;
+    try { await postJSON("api/mqtt-settings", { host: v("mqhost"), port: v("mqport"), user: v("mquser"), password: v("mqpass") });
+      toast(v("mqhost") ? "Sparat - EnergyWizard ansluter inom en minut" : "MQTT avstängt"); setTimeout(mountMqtt, 70000); mountMqtt(); }
+    catch (e) { toast(e.message); }
+  };
+}
+
 // Skuggläge (smartbox/shadow.py): brytare + vad EnergyWizard hade gjort.
 async function mountShadow() {
   let d;
@@ -1246,6 +1270,13 @@ async function renderInstallningar() {
       <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, batteri, spa och laddare. Kryssa i det som stämmer och tryck <b>Spara och starta</b>.</div>
       <button class="icobtn" id="scanbtn" style="margin-top:10px">Skanna mitt Home Assistant</button>
     </div>
+    <div class="card" style="margin-bottom:16px" id="mqttcard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">📡 Home Assistant via MQTT</div>
+      <div class="note" style="margin-top:4px;line-height:1.5">Med MQTT blir EnergyWizard en riktig enhet i Home Assistant: sensorerna behåller sina namn,
+        går att redigera och finns kvar när HA startar om, och du kan slå på/av skuggläget och den automatiska exportstyrningen från HA.
+        Använd samma broker som Home Assistant (oftast Mosquitto-tillägget). Tomt = av, sensorerna skickas då som förut.</div>
+      <div id="mqttbody" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="shadowcard">
       <div class="togglerow" style="align-items:flex-start;gap:14px"><div>
         <div style="font-size:1.1rem;font-weight:700">🕶️ Skuggläge</div>
@@ -1302,6 +1333,7 @@ async function renderInstallningar() {
   mountBatteryPlanSettings();
   mountPriceSettings();
   mountShadow();
+  mountMqtt();
   if (window.I18N && I18N.lang !== "sv") {
     const mb = document.getElementById("missingbtn");
     mb.hidden = false; mb.onclick = () => I18N.downloadMissing();

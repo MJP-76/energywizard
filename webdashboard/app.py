@@ -267,6 +267,42 @@ async def api_battery_plan_settings_save(request: Request):
     return {"ok": True, **upd}
 
 
+@app.get("/api/mqtt-settings")
+async def mqtt_get(request: Request):
+    """Inställningar -> Home Assistant via MQTT (smartbox/mqtt_bridge.py). Lösenordet skickas aldrig tillbaka."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    st = ew_settings.load()
+    from urllib.parse import urlparse
+    guess = urlparse(homeassistant._BASE).hostname or ""
+    return {"ok": True, "host": st.get("mqtt_host") or "", "port": st.get("mqtt_port") or 1883, "user": st.get("mqtt_user") or "",
+            "has_password": bool(st.get("mqtt_password")), "status": st.get("mqtt_status"), "suggested_host": guess}
+
+
+@app.post("/api/mqtt-settings")
+async def mqtt_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra MQTT"}, status_code=403)
+    b = await request.json()
+    host = str(b.get("host") or "").strip()
+    if host and not re.fullmatch(r"[A-Za-z0-9.\-:\[\]]{1,253}", host):
+        return JSONResponse({"error": "Ogiltig adress"}, status_code=400)
+    try:
+        port = int(b.get("port") or 1883)
+    except ValueError:
+        return JSONResponse({"error": "Ogiltig port"}, status_code=400)
+    upd = {"mqtt_host": host or None, "mqtt_port": port if host else None, "mqtt_user": (str(b.get("user") or "").strip() or None) if host else None,
+           "mqtt_status": None}
+    if not host:
+        upd["mqtt_password"] = None
+    elif b.get("password"):                        # tomt fält = behåll det sparade lösenordet
+        upd["mqtt_password"] = str(b["password"])
+    ew_settings.update(**upd)
+    return {"ok": True}
+
+
 @app.get("/api/shadow")
 async def shadow_get():
     """Skuggläget (smartbox/shadow.py): på/av och vad EnergyWizard hade gjort de senaste dygnen."""

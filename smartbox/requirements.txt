@@ -12,3 +12,4 @@ psycopg[binary]
 psycopg_pool
 SQLAlchemy>=2.0.0
 scikit-learn==1.8.0
+paho-mqtt>=2.0
