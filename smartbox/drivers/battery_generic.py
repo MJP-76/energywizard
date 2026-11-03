@@ -10,8 +10,8 @@ batteriets egna lägesnamn, t.ex. för SolarEdge Modbus (HA 2026.10) "Storage co
         soc: sensor.batteri_soc
         power: sensor.batteri_effekt          # + = laddar
         mode_select: select.solaredge_storage_command_mode
-        charge_power: number.batteri_laddeffekt          # valfri, W
-        discharge_power: number.batteri_urladdningseffekt # valfri, W
+        charge_power: number.batteri_laddeffekt          # valfri, W eller kW (läses ur entiteten)
+        discharge_power: number.batteri_urladdningseffekt # valfri, W eller kW
       modes:
         auto: "Maximize self-consumption"
         hold: "Charge from solar power"
@@ -94,6 +94,21 @@ class GenericBatteryDriver(BatteryDriver):
             return False
         return homeassistant.set_select(mode_e, mode)
 
+    @staticmethod
+    def _power_value(entity: str, watts: float):
+        """Watt -> reglagets egen enhet (W eller kW, t.ex. FoxESS Force Charge Power), högst dess max."""
+        unit = homeassistant.get_attribute(entity, "unit_of_measurement")
+        unit = unit.strip().lower() if isinstance(unit, str) else "w"
+        value = watts / 1000.0 if unit == "kw" else watts
+        top = homeassistant.get_attribute(entity, "max")
+        if isinstance(top, (int, float, str)) and not isinstance(top, bool):
+            try:
+                top = float(top)
+                value = min(value, top) if top > 0 else value
+            except ValueError:
+                pass
+        return round(value, 3) if unit == "kw" else int(round(value))
+
     def apply_intent(self, intent: str, power_w: float | None = None) -> bool:
         option = self._modes.get(intent)
         if not option or (not isinstance(option, dict) and not self._e.get("mode_select")):
@@ -102,7 +117,7 @@ class GenericBatteryDriver(BatteryDriver):
         if power_w is not None:
             num = self._e.get("charge_power" if intent == "charge" else "discharge_power" if intent == "discharge" else "")
             if num:
-                ok = homeassistant.set_number(num, int(round(abs(power_w))))
+                ok = homeassistant.set_number(num, self._power_value(num, abs(power_w)))
         if isinstance(option, dict):                     # flera val i tur och ordning (t.ex. Solax)
             for entity, opt in option.items():
                 ok = ok and homeassistant.set_select(entity, opt)

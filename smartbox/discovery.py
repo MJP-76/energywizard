@@ -168,6 +168,27 @@ def _battery_control_preset(ents):
             "auto": {u: "Self Use Mode"}, "hold": {u: "Back Up Mode"},
             "idle": {u: "Manual Mode", m: "Stop Charge and Discharge"},
             "charge": {u: "Manual Mode", m: "Force Charge"}, "discharge": {u: "Manual Mode", m: "Force Discharge"}}}
+    # FoxESS via nathanmarlor/foxess_modbus (lokalt, Modbus): "Work Mode" har Force Charge/Force
+    # Discharge när integrationens fjärrstyrning är påslagen, och effekten sätts i kW.
+    work = _find(ents, "select", re.compile(r"work mode$", re.I))
+    fcp = _find(ents, "number", re.compile(r"force charge power$", re.I))
+    fdp = _find(ents, "number", re.compile(r"force discharge power$", re.I))
+    if work and (fcp or fdp):
+        w = work["e"]
+        out = {"name": "foxess_modbus", "entities": {"mode_select": w},
+               "modes": {"auto": "Self Use", "hold": "Back-up", "charge": "Force Charge", "discharge": "Force Discharge"}}
+        if fcp:
+            out["entities"]["charge_power"] = fcp["e"]
+        if fdp:
+            out["entities"]["discharge_power"] = fdp["e"]
+        return out
+    # FoxESS via macxq/foxess-ha (FoxESS Cloud): bara lägena. Molnet har en daglig anropsgräns,
+    # och EnergyWizard byter läge högst var femte minut. Laddning från nätet styrs inte här.
+    cloud = next((x for x in ents if x["e"].startswith("select.") and "fox" in str(x.get("m") or "").lower()
+                  and _has(x.get("n") or x["e"], re.compile(r" - work mode$", re.I))), None)
+    if cloud:
+        return {"name": "foxess_cloud", "entities": {"mode_select": cloud["e"]},
+                "modes": {"auto": "Self-Use", "hold": "Backup"}}
     # Growatt via Solax Modbus: "Time 1 Mode" (sparas lokalt) + knappen "Time 1 Update"
     tmode = _find(ents, "select", re.compile(r"time 1 mode$", re.I))
     tbtn = _find(ents, "button", re.compile(r"time 1 update$", re.I))

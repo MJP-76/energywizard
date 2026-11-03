@@ -121,3 +121,21 @@ def test_plan_installningar():
     cfg = battery_settings({"battery": {"enabled": True, "control": "styr", "capacity_kwh": 10, "plan": False}})
     assert cfg["plan"] is False and cfg["capacity_kwh"] == 10.0 and cfg["efficiency"] == 0.9
     assert battery_settings({"battery": {"enabled": True}})["plan"] is True
+
+
+def test_sakringsskydd_laddar_bara_ur_overskottet():
+    # 2 A över på värsta fasen -> 2 × 230 × 3 × 1,2 ≈ 1 656 W, inte hela 5 000 W
+    r = d(fuse_state="overload", fuse_excess_a=2.0)
+    assert r["intent"] == "discharge" and 1600 < r["power_w"] < 1700
+    assert d(fuse_state="trip", fuse_excess_a=50.0)["power_w"] == 5000.0     # taket gäller
+    assert d(fuse_state="overload", fuse_excess_a=0.1)["power_w"] == 500      # minsta steg
+    assert d(fuse_state="overload")["power_w"] == 5000.0                       # okänt överskott
+
+
+def test_elmatare_som_fastnat_raknas_som_dod():
+    from battery_control import MeterFreeze
+    m = MeterFreeze(after_s=600)
+    assert not m.update(1234.0, 0)
+    assert not m.update(1234.0, 599)
+    assert m.update(1234.0, 600)                  # samma värde i 10 min
+    assert not m.update(1235.0, 601)              # ändras igen -> levande

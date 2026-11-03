@@ -100,6 +100,21 @@
   <p>Lägesnamnen kommer från integrationens egen källkod. Det är ännu inte kört mot ett riktigt
   batteri - hör av dig om du testar!</p>
 
+  <h3>FoxESS</h3>
+  <ul>
+    <li><strong>Lokalt (rekommenderas):</strong>
+      <a href="https://github.com/nathanmarlor/foxess_modbus">nathanmarlor/foxess_modbus</a> via LAN eller RS485.
+      Slå på fjärrstyrningen ("remote control") i integrationens inställningar. Då får "Work Mode" lägena
+      Force Charge och Force Discharge, och entitetsväljaren fyller i Self Use, Back-up och effektreglagen
+      (i kW, som EnergyWizard räknar om till själv). Fungerar med H1, H3, H3 Pro, H3 Smart och KH.</li>
+    <li><strong>Via molnet:</strong> <a href="https://github.com/macxq/foxess-ha">macxq/foxess-ha</a> ger bara
+      lägena Self-Use och Backup. FoxESS Cloud har en daglig gräns för antal anrop, och EnergyWizard byter
+      läge högst var femte minut. Laddning från nätet styrs inte den vägen.</li>
+    <li><a href="https://github.com/StealthChesnut/HA-FoxESS-Modbus">StealthChesnut/HA-FoxESS-Modbus</a>
+      kan bara läsa (batterinivå, effekt, sol). Den räcker för <code>samarbete</code>.</li>
+  </ul>
+  <p>En FoxESS-laddbox (t.ex. A7300P/L07P) styrs via OCPP, som andra OCPP-laddare.</p>
+
   <h3>Så ställer du in det</h3>
   <p>Entitetsväljaren hittar batteriet och skriver <code>control: samarbete</code> som säker start.
   För <code>styr</code> anger du vilket av batteriets egna lägen som motsvarar varje avsikt - exakt

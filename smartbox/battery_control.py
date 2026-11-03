@@ -33,6 +33,27 @@ from datetime import timedelta
 
 MIN_CHANGE_INTERVAL = timedelta(minutes=5)     # lägesbyten sparsamt (flashminne), säkerhetsregler undantagna
 SAFETY_RULES = {"stale", "fuse", "peak"}
+FUSE_MIN_W = 500
+FROZEN_AFTER_S = 600          # elmätaren visar exakt samma värde så här länge -> räknas som död
+
+
+class MeterFreeze:
+    """Känner igen en elmätare som fastnat (FTW-lärdom). HA kan fortsätta svara med senaste
+    värdet när mätaren tystnat, så en lyckad läsning betyder inte att värdet är färskt.
+    En riktig mätare ändras hela tiden, även lite."""
+
+    def __init__(self, after_s=FROZEN_AFTER_S):
+        self.after_s = after_s
+        self._value = None
+        self._since = None
+
+    def update(self, value, now):
+        if value != self._value:
+            self._value, self._since = value, now
+        return self.frozen(now)
+
+    def frozen(self, now):
+        return self._since is not None and (now - self._since) >= self.after_s
 _FALLBACK = {"idle": ["idle", "hold", "auto"], "hold": ["hold", "auto"], "charge": ["charge", "auto"],
              "discharge": ["discharge", "auto"], "auto": ["auto"]}
 
@@ -72,7 +93,15 @@ def decide(s, cfg, supported=frozenset({"auto"})):
     if soc is None or not s.get("meter_fresh", True):
         return out("auto", "stale", "Säkerhet: batteriet eller elmätaren svarar inte - växelriktaren styr själv.")
     if s.get("fuse_state") in ("trip", "overload") and above_reserve:
-        return out("discharge", "fuse", f"Säkringen är överbelastad - batteriet laddar ur för att avlasta ({soc:.0f} %).", pmax)
+        # Bara överskottet (FTW-lärdom): full urladdning trycker ner nätet långt under gränsen
+        # och slösar batteri. Överskottet i A på värsta fasen räknas om till effekt för en
+        # trefasig växelriktare, med 20 % marginal. Okänt överskott -> full effekt.
+        excess_a = s.get("fuse_excess_a") or 0
+        p = pmax
+        if excess_a > 0:
+            p = max(FUSE_MIN_W, excess_a * 230.0 * 3 * 1.2)
+            p = min(pmax, p) if pmax else p
+        return out("discharge", "fuse", f"Säkringen är överbelastad - batteriet laddar ur för att avlasta ({soc:.0f} %).", p)
     if s.get("peak_reached") and (s.get("avg_net_w") or 0) > 100 and above_reserve:
         return out("discharge", "peak", f"Effekttaket är nått - batteriet täcker toppen ({soc:.0f} %).", pmax)
     price = s.get("price")

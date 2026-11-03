@@ -606,6 +606,7 @@ fuse_model = fuse_guard.FuseThermalModel()
 _fuse_cfg = {"fuse_a": decisions.MAX_FUSE_A, "margin_a": 0.0}
 _fuse_charger_ids = {}
 _hour_import = {"h": None, "wh": 0.0, "t": None}
+_meter_freeze = battery_control.MeterFreeze()       # samma värde i 10 min = mätaren har fastnat
 _meter_ok_at = {"t": None}                           # senaste lyckade avläsning av elmätaren   # köpt energi denna timme (reserv när mätaren saknar timsensor)
 
 def get_last_legionella(target_temp):
@@ -632,7 +633,7 @@ while True:
         homeassistant.update_states()
 
         tibber = homeassistant.read_power_meter()
-        if tibber is not None:
+        if tibber is not None and not _meter_freeze.update(tibber["net_power_w"], time.time()):
             _meter_ok_at["t"] = time.time()
             fast_net.append(tibber["net_power_w"])
             # Fasströmmar är valfria (en mätare med bara nettoeffekt har inga) - då får säkrings-
@@ -1636,6 +1637,7 @@ while True:
                         "soc": battery_state.get("soc_pct"), "price": current_price, "avg_net_w": avg_net,
                         "meter_fresh": _meter_ok_at["t"] is not None and time.time() - _meter_ok_at["t"] < 120,
                         "fuse_state": fuse_model.check(_fuse_cfg["fuse_a"], _fuse_cfg["margin_a"])[0] if fuse_model.is_fresh() else "ok",
+                        "fuse_excess_a": fuse_model.check(_fuse_cfg["fuse_a"], _fuse_cfg["margin_a"])[1] if fuse_model.is_fresh() else 0,
                         "peak_reached": bool(cfg.get("peak_shaving_enabled", True)) and float(consumed_kwh_this_hour) >= float(allowed_kwh_now),
                         "ev_charging_grid": _ev_on and not _ev_sol, "ev_solar_active": _ev_on and _ev_sol,
                         "prices_rest_of_day": (all_prices or [])[_q:],
