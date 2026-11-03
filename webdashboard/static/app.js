@@ -68,6 +68,24 @@ function savingsCardHtml(d) {
     </div>`;
 }
 
+// Kostnad per dag (Ekonomi): uppåt = kostnad, nedåt (grönt) = dagar då solen gav mer än elen kostade.
+function costBars(elId, days, sym) {
+  const el = document.getElementById(elId);
+  if (!el || !days.length) return;
+  const chart = echarts.init(el, null, { renderer: "svg" });
+  const css = getComputedStyle(document.documentElement);
+  const blue = css.getPropertyValue("--acc2").trim() || "#38bdf8", good = css.getPropertyValue("--acc").trim() || "#22d3a0";
+  chart.setOption({
+    grid: { left: 44, right: 4, top: 6, bottom: 30 },
+    tooltip: { trigger: "axis", formatter: (ps) => { const r = days[ps[0].dataIndex];
+      return `${r.day}<br>Köpt ${r.cost.toFixed(2)} ${sym} (${r.bought_kwh.toFixed(1)} kWh)<br>Sålt ${r.income.toFixed(2)} ${sym}<br><b>Netto ${r.net.toFixed(2)} ${sym}</b>`; } },
+    xAxis: { type: "category", data: days.map((r) => r.day.slice(5)), axisLabel: { color: "#93a0b8" } },
+    yAxis: { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } }, axisLabel: { color: "#93a0b8" } },
+    series: [{ type: "bar", data: days.map((r) => ({ value: r.net, itemStyle: { color: r.net >= 0 ? blue : good, borderRadius: r.net >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] } })), barMaxWidth: 14 }],
+  });
+  window.addEventListener("resize", () => chart.resize());
+}
+
 function savingsBars(elId, days, height) {
   const el = document.getElementById(elId);
   if (!el || !days || !days.length) return;
@@ -596,20 +614,30 @@ async function renderSolceller() {
       ${statTile("☀️ PV-effekt", fmt(d.pv_power_w != null ? d.pv_power_w / 1000 : null, 2, " kW"))}
       ${statTile("🔆 Idag", fmt(d.solar_today_kwh, 1, " kWh"))}
       ${statTile("📈 Prognos nu", fmt(d.solar_forecast_w != null ? d.solar_forecast_w / 1000 : null, 2, " kW"))}
-      ${statTile("🚫 Exportgräns", d.solar_limit_pct != null ? d.solar_limit_pct.toFixed(0) + " %" : "Ingen", d.solar_limit_pct != null && d.solar_limit_pct < 100 ? "AI begränsar (minuspris)" : "")}
+      ${statTile("🚫 Exportgräns", d.solar_limit_pct != null ? d.solar_limit_pct.toFixed(0) + " %" : "Ingen", d.ai_limit ? "automatiken begränsar (minuspris)" : "")}
     </div>
     ${d.battery_soc != null ? `<div class="card" style="margin-bottom:16px">
       <h2>🔋 Husbatteri</h2>
       ${barRow("Laddning", d.battery_soc, d.battery_soc.toFixed(0) + "%")}
       <div class="note" style="margin-top:6px">${fmt(d.battery_power_w, 0, " W")} ${d.battery_power_w > 0 ? "(laddar)" : d.battery_power_w < 0 ? "(laddar ur)" : ""}</div>
     </div>` : ""}
+    <div class="card" style="margin-bottom:16px">
+      <div class="togglerow" style="align-items:flex-start;gap:14px"><div>
+        <h2 style="margin:0">🤖 Automatisk exportstyrning</h2>
+        <div style="margin-top:6px;font-weight:600">${!d.auto_export ? "Av – du styr exportgränsen själv" : d.ai_limit ? "Aktiv nu: minuspris, solelen används hemma i stället för att säljas" : "På – väntar på minuspris (exporten är fri)"}</div></div>
+        <label class="switch" style="flex:0 0 auto"><input type="checkbox" id="solarauto" ${d.auto_export ? "checked" : ""}><span class="slider"></span></label></div>
+      <div class="note" style="margin-top:10px;line-height:1.5"><b>Vad den gör:</b> när elpriset blir negativt får du betala för att sälja.
+        Då sänker EnergyWizard växelriktarens exportgräns steg för steg så att nästan ingenting går ut på nätet, och huset använder solen själv.
+        Vid minuspris laddas också elbilen och spabadet gärna med den gratis elen. När priset blir positivt igen släpps gränsen till 100 %.</div>
+      <div class="note" style="margin-top:8px;line-height:1.5"><b>Det här kan du göra:</b> låta automatiken sköta allt (rekommenderas),
+        eller stänga av den och sätta en egen gräns nedan, t.ex. om elnätsbolaget kräver en exportgräns.</div>
+      <div class="togglerow" style="margin-top:10px"><span>Avisera när exporten begränsas</span><label class="switch"><input type="checkbox" id="solarnotify" ${d.notify ? "checked" : ""}><span class="slider"></span></label></div>
+    </div>
     <div class="card${d.ai_limit ? " row-disabled" : ""}" style="margin-bottom:16px">
-      <h2>🚫 Manuell exportgräns${d.ai_limit ? " · AI:n styr just nu (minuspris) – manuell ändring spärrad" : ""}</h2>
+      <h2>🎚️ Manuell exportgräns${d.ai_limit ? " · automatiken styr just nu" : ""}</h2>
+      <div class="note">${d.auto_export ? "Gäller tills nästa minuspris, då tar automatiken över." : "Ligger kvar tills du ändrar den."}</div>
       <div class="numfield" style="margin-top:8px"><input type="range" id="solarlimit" min="0" max="100" step="5" value="${d.solar_limit_pct != null ? d.solar_limit_pct : 100}"><span id="solarlimitval" style="min-width:48px;text-align:right;font-weight:700">${d.solar_limit_pct != null ? d.solar_limit_pct.toFixed(0) : 100} %</span></div>
       <button class="icobtn" id="setsolarlimitbtn" style="margin-top:10px">Sätt gräns</button>
-      <div class="note" style="margin-top:12px">Begränsa export automatiskt när priset går under:</div>
-      <div class="numfield" style="margin-top:6px"><input type="number" id="solarfloor" step="0.1" min="-1" max="5" value="${d.export_price_floor}"> kr/kWh <button class="icobtn" id="setsolarfloorbtn">Spara</button></div>
-      <div class="togglerow" style="margin-top:6px"><span>Avisera vid begränsning</span><label class="switch"><input type="checkbox" id="solarnotify" ${d.notify ? "checked" : ""}><span class="slider"></span></label></div>
     </div>
     <div class="card"><h2>Elpris</h2><div class="note">Styr när exportbegränsningen slår till (minuspris)</div><div id="solarpricechart" style="height:220px;margin-top:10px"></div></div>`);
   if (d && d.price_24h) lineChart("solarpricechart", d.price_24h, { step: "end" });
@@ -617,28 +645,44 @@ async function renderSolceller() {
     const rangeEl = document.getElementById("solarlimit"), valEl = document.getElementById("solarlimitval");
     rangeEl.oninput = () => valEl.textContent = rangeEl.value + " %";
     document.getElementById("setsolarlimitbtn").onclick = () => postAction("api/energy-action/limit", { value: parseInt(rangeEl.value, 10) }).then(renderSolceller);
-    document.getElementById("setsolarfloorbtn").onclick = () => postAction("api/energy-action/floor", { value: parseFloat(document.getElementById("solarfloor").value) }).then(renderSolceller);
+    document.getElementById("solarauto").onchange = (e) => postAction("api/energy-action/auto", { value: e.target.checked }).then(renderSolceller);
     document.getElementById("solarnotify").onchange = (e) => postAction("api/energy-action/notify", { value: e.target.checked });
   }
 }
 
+let econPeriod = "today";
 async function renderEkonomi() {
-  const d = await loadPage("api/economy", (d) => `
+  const d = await loadPage("api/economy", (d) => {
+    const m = d.money[econPeriod], t = d.timing[econPeriod] || {}, sym = d.symbol || "kr";
+    const money = (v) => v == null ? "–" : `${v.toFixed(v >= 100 || v <= -100 ? 0 : 2).replace(".", ",")} ${sym}`;
+    const chip = (k, label) => `<button class="icobtn" data-econ="${k}"${k === econPeriod ? ` style="border-color:var(--acc);color:var(--acc)"` : ""}>${label}</button>`;
+    const label = { today: "idag", week: "senaste 7 dagarna", month: "den här månaden" }[econPeriod];
+    return `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chip("today", "Idag")}${chip("week", "7 dagar")}${chip("month", "Månad")}</div>
     <div class="grid" style="margin-bottom:16px">
-      ${statTile("💸 Elpris just nu", fmtKrOre(d.price) + "/kWh")}
+      ${statTile("🧾 Köpt el", money(m.cost), `${fmt(m.bought_kwh, 1, " kWh")}${m.avg_paid != null ? " · snitt " + m.avg_paid.toFixed(2).replace(".", ",") + " " + sym + "/kWh" : ""}`)}
+      ${statTile("☀️ Såld el", money(m.income), fmt(m.sold_kwh, 1, " kWh"))}
+      ${statTile("💰 Netto", money(m.net), "köpt minus sålt")}
+      ${statTile("🎯 Sparat genom tajmning", t.saved_kr != null ? (t.saved_kr >= 0 ? "+" : "") + money(t.saved_kr) : "–", t.pct != null ? `${t.pct.toFixed(0)} % billigare än dygnets snitt` : "")}
+    </div>
+    <div class="card" style="margin-bottom:16px"><h2>💸 Kostnad per dag</h2>
+      <div class="note">Köpt el inklusive moms, nätavgift och skatt, minus såld el. Senaste 31 dagarna.</div>
+      <div id="econcostbars" style="height:220px;margin-top:10px"></div></div>
+    <div class="card" style="margin-bottom:16px"><h2>📊 Sparat per dag</h2><div class="note">Grönt = du köpte billigare än dygnets snittpris, rött = dyrare.</div><div id="econsavingsbars" style="height:220px;margin-top:10px"></div></div>
+    <div class="grid" style="margin-bottom:16px">
+      ${statTile("💸 Elpris just nu", fmtKrOre(d.price) + "/kWh", "spotpris")}
       ${statTile("📉 Lägst idag", fmtKrOre(d.price_min) + "/kWh")}
       ${statTile("📊 Snitt idag", fmtKrOre(d.price_avg) + "/kWh")}
       ${statTile("📈 Högst idag", fmtKrOre(d.price_max) + "/kWh")}
     </div>
-    <div class="card" style="margin-bottom:16px">
-      <h2>💰 Uppskattad kostnad idag</h2>
-      <div class="v" style="font-size:1.8rem">${d.est_cost_today != null ? d.est_cost_today.toFixed(2) + " kr" : "–"}</div>
-      <div class="note" style="margin-top:4px">${fmt(d.accumulated_consumption_kwh, 1, " kWh")} förbrukat × dagens snittpris - en grov uppskattning, inte en exakt timme-för-timme-kostnad.</div>
-    </div>
-    <div class="card" style="margin-bottom:16px"><h2>📊 Sparat per dag</h2><div class="note">Grönt = billigare än dygnets snittpris, rött = dyrare. Senaste 31 dagarna.</div><div id="econsavingsbars" style="height:220px;margin-top:10px"></div></div>
-    <div class="card"><h2>Elpris senaste dygnet</h2><div id="econpricechart" style="height:240px;margin-top:10px"></div></div>`);
-  if (d && d.price_24h) lineChart("econpricechart", d.price_24h, { step: "end" });
-  if (d) api("api/savings").then((sv) => { if (sv.ok) savingsBars("econsavingsbars", sv.days, 220); }).catch(() => {});
+    <div class="card"><h2>Elpris senaste dygnet</h2><div id="econpricechart" style="height:240px;margin-top:10px"></div></div>
+    <div class="note" style="margin-top:10px">Beloppen räknas minut för minut med dina inställningar under Inställningar → Elpris och avgifter (${esc(label)}).</div>`;
+  });
+  if (!d) return;
+  document.querySelectorAll("[data-econ]").forEach((b) => b.onclick = () => { econPeriod = b.dataset.econ; renderEkonomi(); });
+  if (d.price_24h) lineChart("econpricechart", d.price_24h, { step: "end" });
+  costBars("econcostbars", d.money_days || [], d.symbol || "kr");
+  api("api/savings").then((sv) => { if (sv.ok) savingsBars("econsavingsbars", sv.days, 220); }).catch(() => {});
 }
 
 async function renderElforbrukning() {

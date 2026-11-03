@@ -1029,8 +1029,12 @@ async def energy_action(what: str, request: Request):
     logact(request, f"Energi: {what} → {v}")
     if what == "limit":
         pct = max(0, min(100, intval(v)))
-        if str(overrides().get("ai_solar_limit_active", "false")).lower() == "true":
-            raise HTTPException(409, "AI:n styr exportbegränsningen just nu (minuspris) – manuell ändring är spärrad")
+        auto = str(overrides().get("solar_auto_export", "true")).lower() != "false"
+        with ENGINE.connect() as c:
+            r = c.execute(text("SELECT price FROM sensor_log WHERE price IS NOT NULL ORDER BY timestamp DESC LIMIT 1")).first()
+        price = r[0] if r else None
+        if auto and price is not None and float(price) < 0:
+            raise HTTPException(409, "Automatiken styr exportgränsen just nu (minuspris). Stäng av automatiken för att styra själv.")
         if not H.set_solaredge_limit(pct):
             raise HTTPException(502, "SolarEdge svarade inte")
         return {"ok": True, "msg": f"SolarEdge-gräns satt till {pct} %"}
@@ -1038,6 +1042,9 @@ async def energy_action(what: str, request: Request):
         f = round(max(-1.0, min(5.0, float(v))), 2)
         set_override("solar_export_price_limit", str(f))
         return {"ok": True, "msg": f"Begränsar export under {f:.2f} kr/kWh"}
+    if what == "auto":
+        set_override("solar_auto_export", "true" if v else "false")
+        return {"ok": True, "msg": "Automatisk exportstyrning " + ("på" if v else "av")}
     if what == "notify":
         set_override("notify_solar_limit", "true" if v else "false")
         return {"ok": True, "msg": "Avisering " + ("på" if v else "av")}

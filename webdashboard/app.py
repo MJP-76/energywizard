@@ -554,13 +554,19 @@ async def api_solar():
         if row is None:
             return {"ok": False, "error": "Ingen data i sensor_log än"}
         price_24h = _price_24h(c)
-        ov = _overrides(c, ("ai_solar_limit_active", "solar_export_price_limit", "notify_solar_limit"))
-    return {"ok": True, "pv_power_w": _n(row.get("pv_power_w")), "solar_today_kwh": _n(row.get("solar_today_kwh")),
+        ov = _overrides(c, ("solar_auto_export", "notify_solar_limit"))
+        # Dagens produktion: växelriktarens egen räknare om den finns, annars uppmätt effekt minut för minut.
+        pv_today = c.execute(text("SELECT sum(pv_power_w) / 60000.0 FROM sensor_log WHERE pv_power_w > 0 AND "
+                                  "timestamp >= date_trunc('day', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm'")).scalar()
+    auto = str(ov.get("solar_auto_export", "true")).lower() != "false"
+    price_now = _n(row.get("price"))
+    return {"ok": True, "pv_power_w": _n(row.get("pv_power_w")),
+            "solar_today_kwh": _n(row.get("solar_today_kwh")) if row.get("solar_today_kwh") is not None else _n(pv_today),
             "solar_forecast_w": _n(row.get("solar_forecast_w")), "solar_limit_pct": _n(row.get("solar_limit_pct")),
             "inverter_status": row.get("inverter_status"), "battery_soc": _n(row.get("battery_soc")),
             "battery_power_w": _n(row.get("battery_power_w")), "net_power_w": _n(row.get("net_power")),
             "price": _n(row.get("price")), "price_24h": price_24h,
-            "ai_limit": ov.get("ai_solar_limit_active") == "true", "export_price_floor": _n(ov.get("solar_export_price_limit"), -1.0),
+            "auto_export": auto, "ai_limit": auto and price_now is not None and price_now < 0,
             "notify": ov.get("notify_solar_limit", "true") == "true"}
 
 
@@ -577,13 +583,20 @@ async def api_economy():
             "SELECT sek_per_kwh FROM elpriser WHERE time_start::date = CURRENT_DATE"
         )).fetchall()
         price_24h = _price_24h(c)
+        import savings
+        import nordpool
+        from datetime import datetime
+        import zoneinfo
+        today = datetime.now(zoneinfo.ZoneInfo("Europe/Stockholm")).date().isoformat()
+        money = savings.money_rows(c, days=40)
+        timing = savings.daily_rows(c, days=40)
     prices = [float(r[0]) for r in today_prices if r[0] is not None]
     avg_price = sum(prices) / len(prices) if prices else None
-    consumption = _n(row.get("accumulated_consumption_kwh"))
-    est_cost = round(consumption * avg_price, 2) if consumption is not None and avg_price is not None else None
+    # Förut: accumulated_consumption_kwh × snittpris - fältet är alltid 0, så kortet visade 0,00 kr.
     return {"ok": True, "price": _n(row.get("price")), "price_min": min(prices) if prices else None,
-            "price_avg": avg_price, "price_max": max(prices) if prices else None,
-            "accumulated_consumption_kwh": consumption, "est_cost_today": est_cost, "price_24h": price_24h}
+            "price_avg": avg_price, "price_max": max(prices) if prices else None, "price_24h": price_24h,
+            "symbol": nordpool.cost_settings()["symbol"], "money_days": money[-31:],
+            "money": savings.money_periods(money, today), "timing": savings.summarize_periods(timing, today)}
 
 
 @app.get("/api/savings")
@@ -869,7 +882,7 @@ async def proxy_home_action(what: str, request: Request):
 async def proxy_energy_action(what: str, request: Request):
     """Solceller-sidan: manuell exportgräns, prisgolv, avisering på/av - ewapp:s
     /api/energy/{what}."""
-    if what not in ("limit", "floor", "notify"):
+    if what not in ("limit", "auto", "notify"):
         return JSONResponse({"detail": "Okänd åtgärd"}, status_code=404)
     body = await request.json()
     return await _ewapp_proxy(f"/api/energy/{what}", body)

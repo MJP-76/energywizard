@@ -444,7 +444,8 @@ class GlobalPriorityManager:
 
         # --- Prio 2: SOLCELLSOPTIMERING (PI-Regulator) ---
         current_solar_limit_pct = state.get('current_solar_limit_pct')
-        if price < 0:
+        solar_auto = state.get('solar_auto_export', True)     # Solceller -> Automatisk exportstyrning (av = användaren styr)
+        if price < 0 and solar_auto:
             # --- AI: Auto-Tuning av PI-parametrar ---
             self.kp, self.ki = learning.get_optimal_pi_params()
             
@@ -474,7 +475,7 @@ class GlobalPriorityManager:
 
             actions["solar_limit_pct"] = new_limit
             actions["log"].append(f"☀️ Prio 2 (SOL-PI): Minuspris. Netto: {avg_net:.0f}W. Fel: {error:.0f}. Justering: {-adjustment_pct:.2f}%. Ny gräns: {new_limit}%.")
-        else:
+        elif solar_auto:
             # Återställ PI-regulatorn och gränsen när det inte är minuspris
             self.pi_integral_error = 0.0
             self.last_pi_time = None

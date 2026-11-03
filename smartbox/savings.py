@@ -86,3 +86,47 @@ def summarize_periods(rows, today):
         "week": _summary([r for r in rows if week_start <= r["day"] <= today]),
         "month": _summary([r for r in rows if r["day"].startswith(month_prefix) and r["day"] <= today]),
     }
+
+
+# ---- Pengar per dag och period (Ekonomi-sidan) ---------------------------------------------------------------------
+# Köpt och såld el minut för minut (sensor_log: en rad per minut, net_power + = köp), värderad med samma formel som
+# motorn (nordpool.sql_buy_cost_expr/sql_sell_income_expr: moms, nätavgift, skatt och påslag enligt inställningarna).
+def _money_sql():
+    import nordpool
+    buy, sell = nordpool.sql_buy_cost_expr("price"), nordpool.sql_sell_income_expr("price")
+    return text(f"""
+        SELECT (timestamp AT TIME ZONE 'Europe/Stockholm')::date AS d,
+               sum(GREATEST(net_power, 0)) / 60000.0 AS bought_kwh,
+               sum(GREATEST(net_power, 0) * {buy}) / 60000.0 AS cost,
+               sum(GREATEST(-net_power, 0)) / 60000.0 AS sold_kwh,
+               sum(GREATEST(-net_power, 0) * {sell}) / 60000.0 AS income
+        FROM sensor_log
+        WHERE net_power IS NOT NULL AND price IS NOT NULL AND timestamp >= now() - make_interval(days => :days)
+        GROUP BY 1 ORDER BY 1""")
+
+
+def money_rows(conn, days=40):
+    """[{day, bought_kwh, cost, sold_kwh, income, net}] - kostnad och intäkt i landets valuta."""
+    out = []
+    for d, bk, cost, sk, inc in conn.execute(_money_sql(), {"days": int(days)}).fetchall():
+        bk, cost, sk, inc = (float(x or 0) for x in (bk, cost, sk, inc))
+        out.append({"day": d.isoformat(), "bought_kwh": round(bk, 2), "cost": round(cost, 2), "sold_kwh": round(sk, 2),
+                    "income": round(inc, 2), "net": round(cost - inc, 2)})
+    return out
+
+
+def money_periods(rows, today):
+    """Idag / 7 dagar / innevarande månad, samma perioder som summarize_periods()."""
+    from datetime import date, timedelta
+    t = date.fromisoformat(today)
+    week_start = (t - timedelta(days=6)).isoformat()
+
+    def tot(rs):
+        s = {k: round(sum(r[k] for r in rs), 2) for k in ("bought_kwh", "cost", "sold_kwh", "income", "net")}
+        s["avg_paid"] = round(s["cost"] / s["bought_kwh"], 3) if s["bought_kwh"] > 0.05 else None
+        s["days"] = len(rs)
+        return s
+    rows = sorted(rows or [], key=lambda r: r["day"])
+    return {"today": tot([r for r in rows if r["day"] == today]),
+            "week": tot([r for r in rows if week_start <= r["day"] <= today]),
+            "month": tot([r for r in rows if r["day"].startswith(today[:7]) and r["day"] <= today])}

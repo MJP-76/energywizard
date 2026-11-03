@@ -43,3 +43,15 @@ def test_procent_doljs_nar_jamforelsekostnaden_ar_nara_noll():
     """Minuspris-dag: vad elen 'hade kostat' kan vara ~0 eller negativt - procent blir då meningslöst."""
     p = summarize_periods([build_day("2026-11-02", 10.0, -0.02, -0.10)], "2026-11-02")
     assert p["today"]["pct"] is None and p["today"]["saved_kr"] == 0.8
+
+
+def test_pengar_per_period():
+    from savings import money_periods
+    rows = [{"day": "2026-10-20", "bought_kwh": 10, "cost": 30, "sold_kwh": 0, "income": 0, "net": 30},
+            {"day": "2026-11-01", "bought_kwh": 20, "cost": 50, "sold_kwh": 5, "income": 4, "net": 46},
+            {"day": "2026-11-03", "bought_kwh": 10, "cost": 25, "sold_kwh": 2, "income": 3, "net": 22}]
+    p = money_periods(rows, "2026-11-03")
+    assert p["today"]["net"] == 22 and p["today"]["avg_paid"] == 2.5
+    assert p["week"]["cost"] == 75 and p["week"]["days"] == 2
+    assert p["month"]["income"] == 7 and p["month"]["days"] == 2
+    assert money_periods([], "2026-11-03")["today"]["avg_paid"] is None

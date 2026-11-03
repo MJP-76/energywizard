@@ -1579,6 +1579,7 @@ while True:
                 'consumed_kwh_this_hour': float(consumed_kwh_this_hour), 'power_limit_kw': current_target_limit,
                 'predicted_cooling_rate': predicted_cooling_rate, 'base_load_profile': dynamic_base_load_profile,
                 'peak_shaving_enabled': cfg.get("peak_shaving_enabled", True), 'solar_is_shaky': solar_is_shaky,
+                'solar_auto_export': str(all_overrides.get("solar_auto_export", "true")).lower() != "false",
                 'indoor_temp': indoor_temp, 'indoor_humidity': ha_temps.get('indoor_humidity'), 'indoor_min': cfg.get("indoor_min", 19.0), 'indoor_max': cfg.get("indoor_max", 22.5),
                 'water_temp': water_temp or 50.0, 'water_target_normal': wt_norm,
                 'brine_out_temp': pump_data.get("brine_out_temp") if pump_data else None,
