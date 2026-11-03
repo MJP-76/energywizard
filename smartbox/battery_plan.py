@@ -257,21 +257,25 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
         if h not in solar_cache:
             try:
                 cloud, _, _, _ = weather.get_weather_at(h)
-                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0 * factor.get(h.hour, 1.0) * solar_mult
+                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0 * factor.get(h.hour, 1.0)
             except Exception:
                 solar_cache[h] = 0.0
         return solar_cache[h]
 
-    slots, last_p = [], None
+    slots, last_p, forecast = [], None, []
+    load_bias = float(settings.get("load_bias") or 1.0)        # plan mot utfall (battery_learning.outcome_bias)
+    solar_bias = float(settings.get("solar_bias") or 1.0)
     end = max(quarters) + timedelta(minutes=15)
     while t < end:
         p = quarters.get(t, quarters.get(t.replace(minute=0), last_p))
         if p is None:
             break
         last_p = p
+        raw_load = (settings.get("load_profile") or {}).get((t.weekday(), t.hour)) or learning.predict_base_load(t, base_profile)
+        raw_solar = solar_at(t)
+        forecast.append((t, raw_load, raw_solar))          # prognosen som den är, före stil och utfallsrättning
         slots.append({"t": t, "buy": nordpool.full_buy_cost(p), "sell": nordpool.full_sell_income(p), "spot": p,
-                      "load_kw": ((settings.get("load_profile") or {}).get((t.weekday(), t.hour))
-                                  or learning.predict_base_load(t, base_profile)) * load_mult, "solar_kw": solar_at(t),
+                      "load_kw": raw_load * load_bias * load_mult, "solar_kw": raw_solar * solar_bias * solar_mult,
                       "ev_kw": ev_kw.get(t, 0.0)})
         t += timedelta(minutes=15)
     if not slots:
@@ -287,6 +291,14 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
             c.execute(text("CREATE TABLE IF NOT EXISTS battery_plan_slots (t_slot TIMESTAMPTZ PRIMARY KEY, action TEXT, "
                            "soc_pct NUMERIC, battery_kw NUMERIC, spot NUMERIC, saving_kr NUMERIC, updated_at TIMESTAMPTZ DEFAULT now())"))
             c.execute(text("DELETE FROM battery_plan_slots"))
+            # Plan mot utfall: den FÖRSTA prognosen per kvart sparas (ungefär ett dygn i förväg) och jämförs sedan
+            # med det uppmätta i battery_learning.learn_from_db.
+            c.execute(text("CREATE TABLE IF NOT EXISTS battery_plan_forecast (t_slot TIMESTAMPTZ PRIMARY KEY, "
+                           "load_kw NUMERIC, solar_kw NUMERIC, made_at TIMESTAMPTZ DEFAULT now())"))
+            c.execute(text("INSERT INTO battery_plan_forecast (t_slot, load_kw, solar_kw) VALUES (:t, :l, :s) "
+                           "ON CONFLICT (t_slot) DO NOTHING"),
+                      [{"t": t_, "l": round(l_, 4), "s": round(s_, 4)} for t_, l_, s_ in forecast])
+            c.execute(text("DELETE FROM battery_plan_forecast WHERE t_slot < now() - interval '30 days'"))
             c.execute(text("INSERT INTO battery_plan_slots (t_slot, action, soc_pct, battery_kw, spot, saving_kr) VALUES (:t, :a, :s, :b, :p, :sv)"),
                       [{"t": row["t"], "a": row["action"], "s": round(100.0 * row["soc_kwh"] / cap, 1), "b": row["battery_kw"],
                         "p": sl["spot"], "sv": r["saving_kr"]} for row, sl in zip(r["rows"], slots)])

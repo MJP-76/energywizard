@@ -87,3 +87,34 @@ def test_medianprofil_for_planen():
     assert p[(0, 7)] == 1.2 and p[(0, 8)] == 2.0                              # medianen bryr sig inte om toppen
     assert median_load_profile(rows, min_days=3) == {(0, 7): 1.2}
     assert apply({}, {"use": {"load_profile": p}})["load_profile"] == p
+
+
+# ---- plan mot utfall ---------------------------------------------------------------------------------------------
+from battery_learning import OUTCOME_MIN_LOAD, apply as _apply, describe as _describe, outcome_bias
+
+
+def test_utfall_kraver_underlag():
+    assert outcome_bias([(1.0, 1.2)] * (OUTCOME_MIN_LOAD - 1), "load")[1] is None
+    ratio, use, n = outcome_bias([(1.0, 1.1)] * OUTCOME_MIN_LOAD, "load")
+    assert ratio == 1.1 and use == 1.1 and n == OUTCOME_MIN_LOAD
+
+
+def test_utfall_inom_granser_och_litet_fel_ror_inget():
+    assert outcome_bias([(1.0, 2.0)] * 400, "load")[1] == 1.25          # taket
+    assert outcome_bias([(1.0, 0.3)] * 400, "solar")[1] == 0.7           # golvet
+    assert outcome_bias([(1.0, 1.02)] * 400, "load")[1] is None          # under 3 %: planen lämnas som den är
+
+
+def test_utfall_sol_bara_soliga_kvartar_och_summor():
+    pairs = [(0.0, 0.4)] * 500 + [(2.0, 1.6)] * 30 + [(0.5, 0.4)] * 30   # natt räknas inte; 3,2+... / summor
+    ratio, use, n = outcome_bias(pairs, "solar")
+    assert n == 60 and ratio == round((1.6 * 30 + 0.4 * 30) / (2.0 * 30 + 0.5 * 30), 3) and use == ratio
+
+
+def test_utfall_anvands_och_forklaras():
+    model = {"learned": {}, "use": {"load_bias": 1.12, "solar_bias": 0.85}}
+    s = _apply({"capacity_kwh": 10}, model)
+    assert s["load_bias"] == 1.12 and s["solar_bias"] == 0.85
+    assert _apply({}, {"use": {}})["load_bias"] == 1.0
+    txt = _describe(model)
+    assert "förbrukningen blev 12 % högre" in txt and "solen blev 15 % lägre" in txt

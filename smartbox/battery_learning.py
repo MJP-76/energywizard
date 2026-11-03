@@ -130,6 +130,28 @@ def median_load_profile(rows, min_days=3):
     return {k: round(_median(v), 3) for k, v in by.items() if len(v) >= min_days}
 
 
+# Plan mot utfall: planens dygnsprognos för förbrukning och sol jämförs med det som sedan mättes.
+# Ett systematiskt fel blir en rättningsfaktor - bara när det finns underlag nog, och inom gränser,
+# så att en enstaka konstig vecka (semester, snö på panelerna) aldrig vänder planen helt.
+OUTCOME_MIN_LOAD = 3 * 96          # minst tre dygns kvartar
+OUTCOME_MIN_SOLAR = 40             # minst 40 soliga kvartar (prognos över 0,1 kW)
+OUTCOME_BOUNDS = {"load": (0.8, 1.25), "solar": (0.7, 1.2)}
+
+
+def outcome_bias(pairs, kind):
+    """pairs = [(prognos_kW, uppmätt_kW)] per kvart. Kvot uppmätt/prognos (summor, inte snitt av kvoter -
+    tål kvartar nära noll). None om underlaget är för litet. Returnerar (kvot, använd_kvot_eller_None, n)."""
+    lo, hi = OUTCOME_BOUNDS[kind]
+    floor = 0.1 if kind == "solar" else 0.0
+    ok = [(float(p), float(a)) for p, a in pairs or [] if p is not None and a is not None and p > floor and a >= 0]
+    need = OUTCOME_MIN_SOLAR if kind == "solar" else OUTCOME_MIN_LOAD
+    if len(ok) < need or sum(p for p, _ in ok) <= 0:
+        return None, None, len(ok)
+    ratio = sum(a for _, a in ok) / sum(p for p, _ in ok)
+    use = round(max(lo, min(hi, ratio)), 3)
+    return round(ratio, 3), (use if abs(use - 1.0) >= 0.03 else None), len(ok)     # under 3 % fel: rör inget
+
+
 def apply(settings, model):
     """Configens batteriinställningar + det inlärda som klarat kontrollerna."""
     out = dict(settings)
@@ -142,6 +164,8 @@ def apply(settings, model):
         out["discharge_kw"] = use.get("discharge_kw")
     out["solar_factor"] = use.get("solar_factor") or {}
     out["load_profile"] = use.get("load_profile") or {}
+    out["load_bias"] = use.get("load_bias") or 1.0
+    out["solar_bias"] = use.get("solar_bias") or 1.0
     return out
 
 
@@ -175,6 +199,11 @@ def describe(model):
         parts.append(f"solprognosen rättad för {len(use['solar_factor'])} timmar")
     if use.get("load_profile"):
         parts.append("husets förbrukning per timme (median)")
+    for key, what in (("load_bias", "förbrukningen"), ("solar_bias", "solen")):
+        if use.get(key):
+            d = (use[key] - 1.0) * 100
+            parts.append(f"planen mot utfallet: {what} blev {abs(d):.0f} % {'högre' if d > 0 else 'lägre'} än prognosen, "
+                         f"planen räknar nu med det")
     need = max(0, MIN_SEGMENTS - min(lr.get("segments_in", 0), lr.get("segments_out", 0)))
     pending = f"Verkningsgraden lärs fortfarande - behöver {need} laddnings- och urladdningspass till." \
         if "efficiency" not in use and need else ""
@@ -220,5 +249,22 @@ def learn_from_db(engine, configured, days=21):
     for i, (ts, net, bat, price) in enumerate(y):
         dt = (float(y[i + 1][0]) - float(ts)) if i + 1 < len(y) else 60.0
         yrows.append((dt, f(net), f(bat), f(price)))
+    try:
+        with engine.connect() as c:
+            pairs = c.execute(text("""SELECT f.load_kw, f.solar_kw, a.load_kw, a.solar_kw FROM battery_plan_forecast f JOIN (
+                    SELECT date_trunc('hour', timestamp) + floor(extract(minute FROM timestamp) / 15) * interval '15 minutes' AS q,
+                           avg(GREATEST(0, COALESCE(house_consumption_w, net_power + COALESCE(pv_power_w, 0)
+                                - COALESCE(battery_power_w, 0))) / 1000.0
+                               - COALESCE(ev_power_kw, 0) - COALESCE(ev_carport_power_kw, 0)) AS load_kw,
+                           avg(pv_power_w) / 1000.0 AS solar_kw
+                    FROM sensor_log WHERE timestamp > now() - interval '14 days' GROUP BY 1) a ON a.q = f.t_slot
+                WHERE f.t_slot > now() - interval '14 days' AND f.t_slot < now() - interval '15 minutes'""")).fetchall()
+    except Exception:                      # tabellen finns först när en plan sparats
+        pairs = []
+    for kind, i in (("load", 0), ("solar", 1)):
+        ratio, use_v, n = outcome_bias([(f(r[i]), f(r[i + 2])) for r in pairs], kind)
+        model["learned"][f"{kind}_outcome_ratio"], model["learned"][f"{kind}_outcome_n"] = ratio, n
+        if use_v is not None:
+            model["use"][f"{kind}_bias"] = use_v
     model["saving_yesterday_kr"] = realized_saving(yrows, nordpool.full_buy_cost, nordpool.full_sell_income) if yrows else None
     return model
