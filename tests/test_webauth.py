@@ -53,3 +53,15 @@ def test_fel_losenord_avvisas(monkeypatch):
     auth = webauth.Auth(salt="test")
     with pytest.raises(Exception):
         _login(auth, {"user": "admin", "password": "fel"})
+
+
+def test_webben_och_appen_har_olika_kakor():
+    """Webben och mobilappen ligger på samma domän med olika nycklar. Samma kaknamn gjorde att inloggning i den
+    ena loggade ut den andra (2026-11-03)."""
+    from fastapi.testclient import TestClient
+    web = webauth.Auth(salt="webdash", cookie="ew_web")
+    app_like = webauth.Auth(salt="ewapp")
+    assert web.cookie != app_like.cookie
+    r = web.logout()
+    cleared = r.headers.get("set-cookie", "")
+    assert "ew_web=" in cleared and "ew=" not in cleared.replace("ew_web=", "")

@@ -44,8 +44,11 @@ def owner_password() -> str:
 
 
 class Auth:
-    def __init__(self, salt: str, family_write_prefixes: tuple = ()):
+    def __init__(self, salt: str, family_write_prefixes: tuple = (), cookie: str = "ew"):
         self._salt = salt
+        # Kakans namn: webben och mobilappen ligger på samma domän med olika nycklar. Med samma namn ("ew") skrev
+        # inloggningen i den ena över den andra, så man loggades ut hela tiden (2026-11-03).
+        self.cookie = cookie
         self.family_write_prefixes = family_write_prefixes
         self._fails: dict = {}
 
@@ -61,7 +64,7 @@ class Auth:
 
     def session(self, request: Request):
         """(roll, användare) ur kakan, eller (None, None)."""
-        v = request.cookies.get("ew", "")
+        v = request.cookies.get(self.cookie, "")
         try:
             exp, role, user, sig = v.split(".", 3)
             if int(exp) > time.time() and role in ("owner", "family", "guest") and hmac.compare_digest(sig, hmac.new(self.secret, f"{exp}.{role}.{user}".encode(), hashlib.sha256).hexdigest()):
@@ -121,13 +124,12 @@ class Auth:
         # SPARA en Secure-kaka över vanlig HTTP (lokal IP:port utan nginx/TLS emellan) -
         # login såg ut att lyckas (200 OK) men nästa anrop blev 401, kakan fanns aldrig.
         is_https = request.headers.get("x-forwarded-proto", "").lower() == "https"
-        r.set_cookie("ew", self.sign(int(time.time()) + days * 86400, role, who), max_age=days * 86400, httponly=True, secure=is_https, samesite="lax", path="/")
+        r.set_cookie(self.cookie, self.sign(int(time.time()) + days * 86400, role, who), max_age=days * 86400, httponly=True, secure=is_https, samesite="lax", path="/")
         return r
 
-    @staticmethod
-    def logout() -> JSONResponse:
+    def logout(self) -> JSONResponse:
         r = JSONResponse({"ok": True})
-        for k in ("ew", "ew2"):
+        for k in (self.cookie, "ew2"):                  # bara den egna kakan - utloggning i webben loggar inte ut appen
             r.delete_cookie(k, path="/")
         return r
 

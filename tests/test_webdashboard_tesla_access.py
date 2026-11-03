@@ -76,13 +76,13 @@ def _run(coro):
 
 
 def test_secure_fel_losenord_ger_401(wd):
-    req = _FakeRequest({"password": "fel"}, {"ew": _owner_cookie(wd)})
+    req = _FakeRequest({"password": "fel"}, {wd.AUTH.cookie: _owner_cookie(wd)})
     r = _run(wd.secure(req))
     assert r.status_code == 401
 
 
 def test_secure_ratt_losenord_satter_ew2_kaka(wd):
-    req = _FakeRequest({"password": "hemligt123"}, {"ew": _owner_cookie(wd)})
+    req = _FakeRequest({"password": "hemligt123"}, {wd.AUTH.cookie: _owner_cookie(wd)})
     r = _run(wd.secure(req))
     assert r.status_code == 200
     assert any(h[0].lower() == b"set-cookie" and b"ew2=" in h[1] for h in r.raw_headers)
@@ -91,21 +91,21 @@ def test_secure_ratt_losenord_satter_ew2_kaka(wd):
 def test_secure_for_manga_fel_ger_429(wd):
     ip = "10.0.0.9"
     for _ in range(5):
-        _run(wd.secure(_FakeRequest({"password": "fel"}, {"ew": _owner_cookie(wd)}, ip=ip)))
-    r = _run(wd.secure(_FakeRequest({"password": "hemligt123"}, {"ew": _owner_cookie(wd)}, ip=ip)))
+        _run(wd.secure(_FakeRequest({"password": "fel"}, {wd.AUTH.cookie: _owner_cookie(wd)}, ip=ip)))
+    r = _run(wd.secure(_FakeRequest({"password": "hemligt123"}, {wd.AUTH.cookie: _owner_cookie(wd)}, ip=ip)))
     assert r.status_code == 429
     wd._secure_fails.pop(ip, None)
 
 
 def test_lock_kraver_inte_secure(wd):
-    req = _FakeRequest({"what": "lock"}, {"ew": _owner_cookie(wd)})
+    req = _FakeRequest({"what": "lock"}, {wd.AUTH.cookie: _owner_cookie(wd)})
     with patch("webdashboard_app.requests.post", return_value=_resp(json_data={"ok": True, "msg": "Bilen låst"})):
         r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 200
 
 
 def test_unlock_utan_ew2_ger_403_secure(wd):
-    req = _FakeRequest({"what": "unlock"}, {"ew": _owner_cookie(wd)})
+    req = _FakeRequest({"what": "unlock"}, {wd.AUTH.cookie: _owner_cookie(wd)})
     r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 403
     assert json.loads(r.body)["detail"] == "secure"
@@ -113,7 +113,7 @@ def test_unlock_utan_ew2_ger_403_secure(wd):
 
 def test_unlock_med_giltig_ew2_proxas_till_ewapp(wd):
     ew2 = _ew2_cookie(wd)
-    req = _FakeRequest({"what": "unlock"}, {"ew": _owner_cookie(wd), "ew2": ew2})
+    req = _FakeRequest({"what": "unlock"}, {wd.AUTH.cookie: _owner_cookie(wd), "ew2": ew2})
     with patch("webdashboard_app.requests.post", return_value=_resp(json_data={"ok": True, "msg": "Bilen upplåst"})) as mock_post:
         r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 200
@@ -122,13 +122,13 @@ def test_unlock_med_giltig_ew2_proxas_till_ewapp(wd):
 
 
 def test_unlock_med_utganget_ew2_ger_403_secure(wd):
-    req = _FakeRequest({"what": "unlock"}, {"ew": _owner_cookie(wd), "ew2": _ew2_cookie(wd, exp_delta=-10)})
+    req = _FakeRequest({"what": "unlock"}, {wd.AUTH.cookie: _owner_cookie(wd), "ew2": _ew2_cookie(wd, exp_delta=-10)})
     r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 403
 
 
 def test_okand_atgard_ger_400(wd):
-    req = _FakeRequest({"what": "nedbrand"}, {"ew": _owner_cookie(wd)})
+    req = _FakeRequest({"what": "nedbrand"}, {wd.AUTH.cookie: _owner_cookie(wd)})
     r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 400
 

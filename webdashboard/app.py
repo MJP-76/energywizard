@@ -49,7 +49,7 @@ ENGINE = create_engine(
 
 # Eget salt ("webdash") -> egen cookie-scope, skild session från ewapp även om PASSWORD
 # är detsamma. family-rollen har inga skriv-vägar än (Fas A har inga formulär alls).
-AUTH = webauth.Auth(salt="webdash", family_write_prefixes=())
+AUTH = webauth.Auth(salt="webdash", family_write_prefixes=(), cookie="ew_web")      # egen kaka, se webauth.Auth
 
 # -- styrkommandon: samma knappar som ewapp, inte dubblerad logik ------------------------
 # webdashboard har ingen egen Tesla/Nissan/SolarEdge/spa-styrningskod - den enda riktiga
