@@ -3,6 +3,11 @@
 [![Sponsra på GitHub](https://img.shields.io/badge/Sponsra-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/murre87)
 [![Tester](https://github.com/murre87/energywizard/actions/workflows/tester.yml/badge.svg)](https://github.com/murre87/energywizard/actions/workflows/tester.yml)
 [![Sajten](https://img.shields.io/badge/sajt-murre87.github.io%2Fenergywizard-22d3a0)](https://murre87.github.io/energywizard/)
+[![Översätt](https://img.shields.io/badge/%C3%B6vers%C3%A4tt-svenska%20%C2%B7%20English%20%C2%B7%20ditt%20spr%C3%A5k-38bdf8)](TRANSLATING.md)
+
+> 🇬🇧 **English:** EnergyWizard is available in English. Pick the language in the setup wizard
+> or under Settings. Want it in your language? See [TRANSLATING.md](TRANSLATING.md). It takes
+> minutes and needs no coding.
 
 **Ett öppet styrsystem som fattar minut-för-minut-beslut för hela huset efter
 elpriset** - inte en punktlösning för en enda sak. Elbilsladdning, värmepump,
@@ -139,6 +144,12 @@ tjänst - `docker compose --profile telemetry-collector up -d` om du vill
 köra din egen).
 
 Vill du inte skicka något alls, sätt `TELEMETRY_OPT_IN=false` i din `.env`.
+
+## 🌍 Översätt
+
+Webben och mobilappen finns på svenska och engelska. Språket väljs i startguiden och kan bytas
+under Inställningar. Vem som helst kan rätta en text eller lägga till ett nytt språk direkt på
+GitHub, utan att programmera: se [TRANSLATING.md](TRANSLATING.md).
 
 ## ❤️ Stöd projektet
 

@@ -1626,9 +1626,10 @@ def sw():
     return FileResponse("static/sw.js", media_type="application/javascript", headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
 
 
-@app.get("/i18n.js")
-def i18n_js():
-    return FileResponse("static/i18n.js", media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+import i18n_routes  # noqa: E402  (delade översättningar i smartbox/i18n/)
+i18n_routes.register(app)
+import web_common  # noqa: E402  (sponsring och språk, samma som webben)
+web_common.register(app, _role)
 
 
 @app.get("/app.js")

@@ -147,7 +147,7 @@ class Auth:
 
 
 # Startguiden: visar om något saknas, och sätter det första lösenordet (bara när inget finns).
-OPEN_PATHS = ("/api/setup/status", "/api/setup/password")
+OPEN_PATHS = ("/api/setup/status", "/api/setup/password", "/api/setup/language")
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",

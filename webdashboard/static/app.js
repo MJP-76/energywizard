@@ -782,6 +782,7 @@ async function api(path, opts) {
 
 function showLogin() {
   hideSetup();
+  mountLangSelect("loginlang", false);
   document.getElementById("login").classList.remove("off");
   document.getElementById("shell").classList.remove("on");
 }
@@ -796,7 +797,39 @@ function renderSidebar() {
   nav.innerHTML = PAGES.map(p =>
     `<button class="navitem${p.id === currentPage ? " on" : ""}" data-page="${p.id}">${p.icon} ${p.name}</button>`
   ).join("");
-  nav.querySelectorAll(".navitem").forEach(b => b.onclick = () => openPage(b.dataset.page));
+  nav.innerHTML += `<a class="navitem sponsor" href="${SPONSOR_URL}" target="_blank" rel="noopener">❤️ Sponsra EnergyWizard</a>`;
+  nav.querySelectorAll(".navitem[data-page]").forEach(b => b.onclick = () => openPage(b.dataset.page));
+}
+
+// ---------- Sponsring: länk överallt + en vänlig ruta en gång i månaden (kan stängas av) ----------
+const SPONSOR_URL = "https://github.com/sponsors/murre87";
+async function showSponsorBanner() {
+  const el = document.getElementById("sponsorbanner");
+  let st;
+  try { st = await api("api/sponsor?lang=" + (window.I18N ? I18N.lang : "sv")); } catch (e) { return; }
+  if (!st || !st.show) { el.hidden = true; return; }
+  el.innerHTML = `<div class="sponsorcard" data-noi18n>
+      <div style="font-size:1.6rem">❤️</div>
+      <div class="txt"><b>${esc(st.title)}</b><div style="margin-top:6px">${esc(st.text)}</div>
+        <div class="btns"><a class="go" href="${esc(st.url)}" target="_blank" rel="noopener">${esc(st.button)}</a>
+        <button class="icobtn" id="sponsorlater">${I18N.lang === "sv" ? "Inte nu" : "Not now"}</button></div></div></div>`;
+  el.hidden = false;
+  const close = () => { el.hidden = true; api("api/sponsor/dismiss", { method: "POST" }).catch(() => {}); };
+  document.getElementById("sponsorlater").onclick = close;
+  el.querySelector("a.go").addEventListener("click", close);
+}
+
+function mountLangSelect(slotId, saveForInstall) {
+  const slot = document.getElementById(slotId);
+  if (!slot || !window.I18N) return;
+  I18N.ready.then(() => {
+    slot.innerHTML = I18N.selectHtml(slotId + "_sel");
+    document.getElementById(slotId + "_sel").onchange = async (e) => {
+      const lang = e.target.value;
+      if (saveForInstall) { try { await postJSON("api/setup/language", { language: lang }); } catch (err) { /* bara den här enheten */ } }
+      I18N.set(lang);
+    };
+  });
 }
 
 async function renderVarmepump() {
@@ -876,6 +909,21 @@ async function renderInstallningar() {
       <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, batteri, spa och laddare. Kryssa i det som stämmer och tryck <b>Spara och starta</b>.</div>
       <button class="icobtn" id="scanbtn" style="margin-top:10px">Skanna mitt Home Assistant</button>
     </div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:1.1rem;font-weight:700">🌍 Språk / Language</div>
+      <div class="note" style="margin-top:4px">Gäller hela installationen och alla enheter som inte valt eget språk.</div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span id="setlang"></span>
+        <a class="icobtn" href="https://github.com/murre87/energywizard/blob/main/TRANSLATING.md" target="_blank" rel="noopener">Hjälp till att översätta</a>
+        <button class="icobtn" id="missingbtn" hidden>Ladda ner texter som saknar översättning</button></div>
+      <div class="note" style="margin-top:8px">Översättningarna är vanliga textfiler på GitHub. Vem som helst kan rätta en text eller lägga till ett nytt språk.</div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:1.1rem;font-weight:700">❤️ Sponsra EnergyWizard</div>
+      <div class="note" style="margin-top:4px">EnergyWizard är gratis och byggs på fritiden. Ett litet bidrag hjälper till att betala för utvecklingen.</div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <a class="icobtn" href="${SPONSOR_URL}" target="_blank" rel="noopener">Sponsra på GitHub</a>
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sponsornotice"> Påminn mig en gång i månaden</label></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="hacard" hidden>
       <div style="font-size:1.1rem;font-weight:700">🏠 Home Assistant</div>
       <div class="note" style="margin-top:4px" id="hainfo"></div>
@@ -890,6 +938,16 @@ async function renderInstallningar() {
     <div id="discoverResults"></div>`;
   document.getElementById("scanbtn").onclick = runDiscovery;
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
+  mountLangSelect("setlang", true);
+  if (window.I18N && I18N.lang !== "sv") {
+    const mb = document.getElementById("missingbtn");
+    mb.hidden = false; mb.onclick = () => I18N.downloadMissing();
+  }
+  api("api/sponsor").then(sp => {
+    const cb = document.getElementById("sponsornotice");
+    cb.checked = sp.enabled;
+    cb.onchange = () => postJSON("api/sponsor/notice", { enabled: cb.checked }).catch(() => { cb.checked = !cb.checked; });
+  }).catch(() => {});
   setupStatus().then(st => {
     if (!st || st.supervisor || st.ha_from_env || st.ha_url === undefined) return;
     document.getElementById("hacard").hidden = false;
@@ -1119,6 +1177,7 @@ async function postJSON(path, body) {
 }
 
 function setupPassword(total) {
+  mountLangSelect("setuplang", true);
   showSetup(1, total, "välj lösenord",
     `<div class="note">Lösenordet skyddar webben och mobilappen. Logga in med det sedan (användarnamn behövs inte).</div>
      <input type="password" id="s_pw" placeholder="Lösenord, minst 8 tecken" autocomplete="new-password" required minlength="8">
@@ -1158,6 +1217,7 @@ async function boot() {
     PAGES = me.pages;
     if (st && me.role === "owner" && !st.ha_ok && !st.supervisor) { setupHA(total, st.ha_url); return; }
     showShell();
+    if (me.role === "owner") showSponsorBanner();
     if (st && me.role === "owner" && !st.devices_chosen) { openPage("installningar"); return; }
     openPage("oversikt");
   } catch (e) { showLogin(); }

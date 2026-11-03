@@ -1,0 +1,162 @@
+// EnergyWizard: språkstöd för webben och mobilappen.
+//
+// Gränssnitten skrivs på svenska. När ett annat språk är valt översätts texten i webbläsaren
+// efter att den ritats, med ordlistan i i18n/<språk>.json ({"svensk text": "översättning"}).
+// Siffror i texten byts mot # i nyckeln, så "Laddar 3,7 kW" hittar "Laddar # kW". Saknas en
+// översättning visas svenskan, och texten sparas i en lista som kan laddas ner i inställningarna
+// (I18N.missing()) - så blir det lätt att hjälpa till att översätta. Se TRANSLATING.md.
+(function () {
+  const here = (document.currentScript && document.currentScript.src) || "";
+  const BASE = here ? here.replace(/i18n\.js(\?.*)?$/, "") : "i18n/";
+  const LS_KEY = "ew_lang";
+  const localPref = () => { try { return localStorage.getItem(LS_KEY) || ""; } catch (e) { return ""; } };
+
+  let lang = localPref() || "sv";
+  let dict = {};
+  let languages = { sv: "Svenska", en: "English" };
+  let serverDefault = "sv";
+  const missingSet = new Set();
+
+  const NUM = /\d+(?:[.,]\d+)?/g;
+  const LEAD = /^[\s\p{Extended_Pictographic}\p{S}\p{P}️‍]+/u;
+  const TRAIL = /[\s:.…!?,;)\]]+$/u;
+  const LOOKS_SV = /[åäöÅÄÖ]|\b(och|inte|för|att|är|på|till|med|eller|när|kvar|idag|imorgon|ladda\w*|batteri\w*|elpris\w*|timm\w*|värme\w*|spara\w*)\b/i;
+
+  // Meningar med namn eller fri text i, som inte går att slå upp ord för ord.
+  const RULES = [
+    [/^God (morgon|natt|kväll), (.+)!$/, (m) => ({ morgon: "Good morning", natt: "Good night", "kväll": "Good evening" })[m[1]] + ", " + m[2] + "!"],
+    [/^Hej, (.+)!$/, (m) => "Hello, " + m[1] + "!"],
+    [/^Inloggad som (.+)$/, (m) => "Logged in as " + (m[1] === "ägare" ? "owner" : m[1])],
+    [/^Visar som (.+)$/, (m) => "Viewing as " + (m[1] === "gäst" ? "guest" : m[1])],
+    [/^Kopplat till (.+)\.$/, (m) => "Connected to " + m[1] + "."],
+    [/^Kontakt med Home Assistant på (.+)\.$/, (m) => "Connected to Home Assistant at " + m[1] + "."],
+    [/^Fick inget svar från (.+)\. Stämmer adressen, och når servern Home Assistant\?$/, (m) => "No answer from " + m[1] + ". Is the address right, and can the server reach Home Assistant?"],
+    [/^Oväntat svar från (.+) \((\d+)\)\. Är det rätt adress till Home Assistant\?$/, (m) => "Unexpected answer from " + m[1] + " (" + m[2] + "). Is it the right address for Home Assistant?"],
+    [/^Kunde inte prata krypterat med (.+)\. Prova http:\/\/ i stället\.$/, (m) => "Could not talk encrypted with " + m[1] + ". Try http:// instead."],
+  ];
+
+  function fill(text, nums) {
+    let i = 0;
+    return text.replace(/#/g, () => {
+      const n = nums[i++];
+      if (n == null) return "#";
+      return lang === "sv" ? n : n.replace(/(\d),(\d)/, "$1.$2");
+    });
+  }
+
+  function lookup(core) {
+    if (dict[core] !== undefined && dict[core] !== "") return dict[core];
+    const nums = core.match(NUM) || [], key = core.replace(NUM, "#");
+    if (dict[key] !== undefined && dict[key] !== "") return fill(dict[key], nums);
+    for (const [re, fn] of RULES) { const m = core.match(re); if (m && lang === "en") return fn(m); }
+    return null;
+  }
+
+  function tr(s) {
+    if (!s || lang === "sv") return s;
+    const lead = (s.match(LEAD) || [""])[0];
+    let rest = s.slice(lead.length);
+    const trail = (rest.match(TRAIL) || [""])[0];
+    const core = rest.slice(0, rest.length - trail.length);
+    if (!core) return s;
+    // hela texten först (med skiljetecknen), sedan kärnan utan dem
+    let r = lookup(rest.trim());
+    if (r !== null) return lead + r + (rest.match(/\s*$/) || [""])[0];
+    r = lookup(core);
+    if (r !== null) return lead + r + trail;
+    // flera meningar eller delar: översätt var för sig
+    for (const sep of [/(?<=[.!?]) (?=[A-ZÅÄÖ])/, / · /, / – /, / - /]) {
+      const parts = core.split(sep);
+      if (parts.length > 1) {
+        const joiner = core.match(sep) ? core.match(sep)[0] || " " : " ";
+        const out = parts.map((p) => tr(p));
+        if (out.some((x, i) => x !== parts[i])) return lead + out.join(joiner) + trail;
+      }
+    }
+    if (LOOKS_SV.test(core) && core.length < 400) missingSet.add(core.replace(NUM, "#"));
+    return s;
+  }
+
+  const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "CODE", "PRE"]);
+  const ATTRS = ["title", "aria-label", "placeholder"];
+  const done = new WeakMap();
+
+  function node(n) {
+    if (n.nodeType === 3) {
+      const p = n.parentElement;
+      if (!p || SKIP.has(p.tagName) || p.closest("[data-noi18n]")) return;
+      const t = n.textContent;
+      if (!/\p{L}{2}/u.test(t) || done.get(n) === t) return;
+      const e = tr(t);
+      done.set(n, e);
+      if (e !== t) n.textContent = e;
+      return;
+    }
+    if (n.nodeType !== 1 || SKIP.has(n.tagName) || n.hasAttribute("data-noi18n")) return;
+    for (const a of ATTRS) {
+      const v = n.getAttribute(a);
+      if (v) { const e = tr(v); if (e !== v) n.setAttribute(a, e); }
+    }
+    for (let c = n.firstChild; c; c = c.nextSibling) node(c);
+  }
+
+  const CFG = { childList: true, subtree: true, characterData: true };
+  let obs = null, pend = false;
+  const queue = new Set();
+  function flush() {
+    pend = false;
+    const q = [...queue]; queue.clear();
+    obs.disconnect();
+    q.forEach((n) => { if (n.isConnected) node(n.nodeType === 3 ? n : n); });
+    obs.observe(document.body, CFG);
+  }
+  function start() {
+    document.documentElement.lang = lang;
+    if (lang === "sv") return;
+    document.title = tr(document.title);
+    node(document.body);
+    obs = new MutationObserver((ms) => {
+      for (const m of ms) { if (m.type === "characterData") queue.add(m.target); else m.addedNodes.forEach((x) => queue.add(x)); }
+      if (!pend) { pend = true; requestAnimationFrame(flush); }
+    });
+    obs.observe(document.body, CFG);
+  }
+
+  const ready = fetch(BASE + "config", { credentials: "same-origin" })
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}))
+    .then((c) => {
+      if (c.languages) languages = c.languages;
+      if (c.default) serverDefault = c.default;
+      if (!localPref()) lang = serverDefault;
+      if (!languages[lang]) lang = "sv";
+      if (lang === "sv") return;
+      return fetch(BASE + lang + ".json").then((r) => (r.ok ? r.json() : {})).then((d) => { dict = d || {}; }).catch(() => {});
+    })
+    .then(() => { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start(); });
+
+  window.I18N = {
+    get lang() { return lang; },
+    get languages() { return languages; },
+    ready,
+    pref: localPref,
+    tr,
+    /** Byter språk på den här enheten och laddar om. */
+    set(p) { try { p && p !== "auto" ? localStorage.setItem(LS_KEY, p) : localStorage.removeItem(LS_KEY); } catch (e) { /* privat läge */ } location.reload(); },
+    /** Väljare för språk (<select>), färdig att stoppa in i en sida. */
+    selectHtml(id) {
+      const opts = Object.entries(languages).map(([k, v]) => `<option value="${k}"${k === lang ? " selected" : ""}>${v}</option>`).join("");
+      return `<select id="${id || "langsel"}" data-noi18n aria-label="Language / Språk">${opts}</select>`;
+    },
+    num: (s) => (lang === "sv" ? s : String(s).replace(/(\d),(\d)/g, "$1.$2")),
+    /** Texter som visats utan översättning (för den som vill hjälpa till). */
+    missing() { return [...missingSet].sort(); },
+    downloadMissing() {
+      const out = {}; this.missing().forEach((k) => { out[k] = ""; });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+      a.download = `saknas-${lang}.json`; a.click();
+    },
+    TRANSLATE_URL: "https://github.com/murre87/energywizard/blob/main/TRANSLATING.md",
+  };
+})();

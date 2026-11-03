@@ -680,6 +680,13 @@ while True:
         # 📝 1-MINUTS-TASK – Samla och Spara data
         # ============================================================
         if current_minute != last_minute:
+            if current_minute == 7:      # en gång i timmen: månadens sponsornotis i HA (om den är på och inte skickad)
+                try:
+                    import sponsor, i18n_routes
+                    if sponsor.send_ha_notice(homeassistant.call_service, i18n_routes.default_language(), now.replace(tzinfo=None)):
+                        print("❤️ Skickade månadens sponsornotis till Home Assistant (kan stängas av i inställningarna).")
+                except Exception as _se:
+                    print(f"⚠️ Sponsornotisen hoppades över: {_se}")
             cfg = settings.get_settings()
             all_overrides = logger.get_all_overrides()
             ai_thoughts = []

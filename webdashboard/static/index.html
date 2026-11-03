@@ -18,8 +18,10 @@
     <input type="password" id="pw" placeholder="Lösenord" autocomplete="current-password" required>
     <div class="err" id="loginerr"></div>
     <button type="submit">Logga in</button>
+    <div class="loginfoot"><span id="loginlang"></span><a href="https://github.com/sponsors/murre87" target="_blank" rel="noopener">❤️ Sponsra</a></div>
   </form>
   <form class="loginbox" id="setupform" style="display:none">
+    <div class="loginfoot" style="margin:-6px 0 0"><span id="setuplang"></span></div>
     <h1 style="margin:0;font-size:1.3rem">⚡ Välkommen till EnergyWizard</h1>
     <div class="note" id="setupstep" style="opacity:.7;font-size:.85rem"></div>
     <div id="setupbody" style="display:grid;gap:12px"></div>
@@ -37,10 +39,12 @@
   </div>
   <nav class="sidebar" id="sidebar"></nav>
   <div id="sidebarbackdrop"></div>
+  <div id="sponsorbanner" hidden></div>
   <main id="main"></main>
 </div>
 <div id="toast"></div>
 
+<script src="i18n/i18n.js"></script>
 <script src="static/app.js"></script>
 </body>
 </html>

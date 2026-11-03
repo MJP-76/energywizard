@@ -464,7 +464,10 @@ async function settingsSheet() {
       `<div class="setrow"><span>Elpriser inkl. moms${v.nordpool_vat_enabled == null ? ' <span class="note">(nuvarande läge okänt)</span>' : ""}</span><button class="sw${v.nordpool_vat_enabled ? " on" : ""}" data-set="nordpool_vat_enabled" data-bool="1">${v.nordpool_vat_enabled == null ? "?" : ""}</button></div>` +
       `<div class="note">Styr Home Assistants egen Nord Pool-integration direkt (radera+återskapa, ingen enkel "ändra ett fält"-knapp finns i HA) - priserna växlar om efter några sekunder. Kan inte visa nuvarande läge förrän du växlat minst en gång härifrån.</div>`,
     notiser: () => `${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`,
-    appen: () => `<div class="seg"><button data-s="tesla" class="${primary() === "tesla" ? "on" : ""}">Huvudbil: Tesla</button><button data-s="nissan" class="${primary() === "nissan" ? "on" : ""}">Huvudbil: Nissan</button></div><div class="seg"><button data-s="glass" class="${LS.get("ew_glass", "1") !== "0" ? "on" : ""}">Glasdesign</button><button data-s="ambient" class="${LS.get("ew_ambient", "1") !== "0" ? "on" : ""}">Dygnsfärger</button></div><div class="seg"><button data-s="simple" class="${LS.get("ew_simple", "") === "1" ? "on" : ""}">Enkel vy (bara huvudbilen)</button>${standalone ? "" : `<button data-s="install">${installEvt ? "Installera appen" : "Lägg till på hemskärmen"}</button>`}</div><div class="seg"><button data-s="reload">Ladda om appen</button></div>`,
+    appen: () => `<div class="seg"><button data-s="tesla" class="${primary() === "tesla" ? "on" : ""}">Huvudbil: Tesla</button><button data-s="nissan" class="${primary() === "nissan" ? "on" : ""}">Huvudbil: Nissan</button></div><div class="seg"><button data-s="glass" class="${LS.get("ew_glass", "1") !== "0" ? "on" : ""}">Glasdesign</button><button data-s="ambient" class="${LS.get("ew_ambient", "1") !== "0" ? "on" : ""}">Dygnsfärger</button></div><div class="seg"><button data-s="simple" class="${LS.get("ew_simple", "") === "1" ? "on" : ""}">Enkel vy (bara huvudbilen)</button>${standalone ? "" : `<button data-s="install">${installEvt ? "Installera appen" : "Lägg till på hemskärmen"}</button>`}</div><div class="seg"><button data-s="reload">Ladda om appen</button></div>
+      <div class="note" style="margin-top:6px">Språk / Language</div><div class="seg" data-noi18n>${Object.entries(I18N.languages).map(([k, v]) => `<button data-s="lang:${k}" class="${I18N.lang === k ? "on" : ""}">${esc(v)}</button>`).join("")}</div>
+      <div class="seg"><a class="mini" href="${I18N.TRANSLATE_URL}" target="_blank" rel="noopener">Hjälp till att översätta</a><a class="mini" href="${SPONSOR_URL}" target="_blank" rel="noopener">❤️ Sponsra EnergyWizard</a></div>
+      ${ER() === "owner" ? `<div class="seg"><button data-s="sponsornotice" class="${SPONSOR && SPONSOR.enabled ? "on" : ""}">Påminn mig en gång i månaden</button></div>` : ""}`,
     konto: () => `${ROLE === "owner" ? `<div class="seg"><button data-a="viewas" data-v="" class="${!VIEWAS ? "on" : ""}">Jag (admin)</button><button data-a="viewas" data-v="family" class="${VIEWAS === "family" ? "on" : ""}">Visa som Elin</button><button data-a="viewas" data-v="guest" class="${VIEWAS === "guest" ? "on" : ""}">Visa som gäst</button></div>` : ""}${ER() !== "owner" ? `<div class="note">${ER() === "guest" ? "Gästläge: du kan titta på allt men inte ändra." : "Dina inställningar är bara bil, schema och ljus."}</div>` : ""}<button class="mini" data-a="log">Visa familjelogg</button><div class="note" style="text-align:center">Inloggad som ${esc(ME === "owner" ? "ägare" : ME)}</div><div class="seg"><button data-s="logout">Logga ut</button></div>`,
   }[setSec]();
   sheet(`<h3>Inställningar</h3>${tabs}${body}`);
@@ -474,7 +477,8 @@ async function settingsSheet() {
     if (x) { const k = x.dataset.set; let val; if (x.dataset.bool) val = !SET.values[k]; else { const r = SET.rules[k]; val = Math.round((SET.values[k] + parseFloat(x.dataset.d)) / r[3]) * r[3]; val = Math.max(r[1], Math.min(r[2], val)); } try { const r = await api("settings", { key: k, value: val }); SET.values[k] = r.value; settingsSheet(); } catch (er) { toast(er.message); } return; }
     const y = e.target.closest("[data-s]"); if (!y) return; const s = y.dataset.s;
     if (s.startsWith("sec:")) { setSec = s.slice(4); settingsSheet(); return; }
-    if (s.startsWith("lang:")) { I18N.set(s.slice(5)); return; }
+    if (s.startsWith("lang:")) { const l = s.slice(5); if (ER() === "owner") { try { await api("setup/language", { language: l }); } catch {} } I18N.set(l); return; }
+    if (s === "sponsornotice") { try { const r = await api("sponsor/notice", { enabled: !(SPONSOR && SPONSOR.enabled) }); SPONSOR = { ...(SPONSOR || {}), enabled: r.enabled }; } catch (er) { toast(er.message); } settingsSheet(); return; }
     if (s === "glass" || s === "ambient") { LS.set("ew_" + s, LS.get("ew_" + s, "1") !== "0" ? "0" : "1"); applyLook(); }
     if (s === "tesla" || s === "nissan") LS.set("ew_primary", s); if (s === "simple") LS.set("ew_simple", LS.get("ew_simple", "") === "1" ? "" : "1");
     if (s === "install") { installApp(); return; }
@@ -616,5 +620,19 @@ function maybeInstallPrompt() {
   setTimeout(later, 1500);
 }
 window.addEventListener("beforeinstallprompt", () => { if (document.getElementById("instp")) setTimeout(drawInstallPrompt, 0); });
+// ---- sponsring: länk i inställningarna + en vänlig ruta en gång i månaden till ägaren (kan stängas av) ----------------------------
+const SPONSOR_URL = "https://github.com/sponsors/murre87";
+let SPONSOR = null;
+async function maybeSponsor() {
+  if (document.getElementById("lf") || document.getElementById("instp")) { setTimeout(maybeSponsor, 5000); return; }
+  try { const r = await fetch("api/sponsor?lang=" + I18N.lang); if (!r.ok) return; SPONSOR = await r.json(); } catch (e) { return; }
+  if (!SPONSOR.show) return;
+  const o = document.createElement("div"); o.id = "sponsp"; document.body.appendChild(o);
+  o.innerHTML = `<div class="instbox" role="dialog" aria-modal="true" data-noi18n><button class="instx" aria-label="×">×</button><div style="font-size:2rem">❤️</div><h3>${esc(SPONSOR.title)}</h3><p>${esc(SPONSOR.text)}</p><a class="instgo" href="${esc(SPONSOR.url)}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none">${esc(SPONSOR.button)}</a></div>`;
+  const close = () => { o.remove(); fetch("api/sponsor/dismiss", { method: "POST" }).catch(() => {}); };
+  o.querySelector(".instx").onclick = close;
+  o.querySelector(".instgo").addEventListener("click", close);
+}
+setTimeout(maybeSponsor, 6000);
 maybeInstallPrompt();
 start();

@@ -133,3 +133,16 @@ main > *:first-child { animation:fadeUp .3s ease both; }
   .sidebar.open { transform:translateX(0); }
   #sidebarbackdrop.open { display:block; position:fixed; inset:60px 0 0 0; z-index:4; background:rgba(0,0,0,.5); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
 }
+
+/* Språk och sponsring */
+.loginfoot { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:.85rem; }
+.loginfoot a { color:var(--mut); text-decoration:none; }
+.loginfoot a:hover { color:var(--acc); }
+.loginfoot select, .langselect { font-size:14px; padding:6px 10px; border-radius:10px; border:1px solid var(--line); background:var(--card2); color:var(--txt); }
+.navitem.sponsor { margin-top:14px; color:#db61a2; }
+#sponsorbanner { position:fixed; right:16px; bottom:16px; max-width:min(440px, calc(100vw - 32px)); z-index:50; }
+#sponsorbanner .sponsorcard { margin:0; background:var(--bg); box-shadow:var(--shadow); -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px); }
+.sponsorcard { display:flex; gap:14px; align-items:flex-start; padding:16px 18px; margin:0 0 16px; border-radius:18px; border:1px solid rgba(219,97,162,.35); background:linear-gradient(135deg, rgba(219,97,162,.12), rgba(34,211,160,.08)); }
+.sponsorcard .txt { flex:1; line-height:1.45; }
+.sponsorcard .btns { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.sponsorcard a.go { background:#db61a2; color:#fff; padding:8px 14px; border-radius:10px; text-decoration:none; font-weight:700; }
