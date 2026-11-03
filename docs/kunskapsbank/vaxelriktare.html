@@ -44,6 +44,8 @@
         <td>ja, via integrationens tjänster (gräns mot nätet i %)</td><td>overifierat</td></tr>
     <tr><td>Fronius GEN24/Symo</td><td>HA:s inbyggda Modbus</td>
         <td>ja, register WMaxLimPct/WMaxLim_Ena</td><td>overifierat, registren omdiskuterade</td></tr>
+    <tr><td>Ferroamp EnergyHub</td><td>lokal Modbus TCP, <code>ferroamp_modbus</code></td>
+        <td>ja, nätets exportgräns i W med återläsning; batteriets laddning/urladdning separat</td><td>overifierat, kräver aktivt val i YAML</td></tr>
     <tr><td>Övriga (Solis, GoodWe, Deye m.fl.)</td><td>märkets HA-integration</td>
         <td>om den har en gräns i % eller W</td><td>prova entitetsväljaren</td></tr>
   </table>
@@ -101,6 +103,13 @@
   i <code>configuration.yaml</code>, och Modbus TCP påslaget i växelriktaren.
   Förvalet använder 40232/40236 från HA-communityns tråd. Uppgifterna där går isär
   för viss firmware, men adresserna går att ändra i <code>house_config.yaml</code>.</p>
+
+  <h3>Ferroamp EnergyHub</h3>
+  <p>Drivrutinen <code>ferroamp_modbus</code> läser batteri och sol direkt via Modbus TCP.
+  Exportgränsen gäller hela systemets nätutmatning, inte bara solproduktionen. Styrning är
+  av som standard. Batteristyrning kräver dessutom att standardlägets återgång har verifierats
+  på den egna firmware-versionen; håll och vila saknar verifierad motsvarighet.
+  Se <a href="https://github.com/murre87/energywizard/blob/main/docs/ferroamp-energyhub.md">kontrollmappning och konfiguration</a>.</p>
 
   <p>Exempel för varje märke finns i <code>config/house_config.example.yaml</code>.</p>
 </article>

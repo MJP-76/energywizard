@@ -18,6 +18,7 @@ import yaml
 import homeassistant
 from drivers.battery import BatteryDriver, NullBatteryDriver
 from drivers.battery_generic import GenericBatteryDriver
+from drivers.battery_ferroamp import FerroampBatteryDriver
 from drivers.car import NullCarDriver
 from drivers.car_generic import GenericEvCarDriver, NissanCarDriver, TeslaCarDriver
 from drivers.charger import NullChargerDriver
@@ -31,6 +32,7 @@ from drivers.heatpump_nibe_local import NibeLocalHeatPumpDriver
 from drivers.heatpump_thermia import ThermiaHusdataHeatPumpDriver
 from drivers.solar import NullSolarDriver, SolarDriver
 from drivers.solar_generic import GenericNumberSolarDriver
+from drivers.solar_ferroamp import FerroampSolarDriver
 from drivers.solar_huawei import HuaweiSolarServiceDriver
 from drivers.solar_modbus_register import ModbusRegisterSolarDriver
 from drivers.solar_solaredge import SolarEdgeSolarDriver
@@ -58,9 +60,10 @@ HEAT_PUMP_DRIVER_REGISTRY = {
     "heishamon": HeishaMonHeatPumpDriver,
 }
 SOLAR_DRIVER_REGISTRY = {"solaredge": SolarEdgeSolarDriver, "generic_number": GenericNumberSolarDriver,
-                         "huawei_solar": HuaweiSolarServiceDriver, "modbus_register": ModbusRegisterSolarDriver}
+                         "huawei_solar": HuaweiSolarServiceDriver, "modbus_register": ModbusRegisterSolarDriver,
+                         "ferroamp_modbus": FerroampSolarDriver}
 SPA_DRIVER_REGISTRY = {"gecko": GeckoSpaDriver, "balboa": BalboaSpaDriver, "switch": SwitchSpaDriver, "shelly": SwitchSpaDriver}
-BATTERY_DRIVER_REGISTRY = {"generic": GenericBatteryDriver}
+BATTERY_DRIVER_REGISTRY = {"generic": GenericBatteryDriver, "ferroamp_modbus": FerroampBatteryDriver}
 
 # Easees två fysiska boxar har var sin läsfunktion i homeassistant.py (ingen generisk
 # "läs valfri Easee-box"-funktion finns) - charger-configen pekar ut vilken via
@@ -220,6 +223,9 @@ def build_solar_driver(cfg: dict) -> SolarDriver:
         return HuaweiSolarServiceDriver(entities=sol.get("entities", {}))
     if driver_cls is ModbusRegisterSolarDriver:
         return ModbusRegisterSolarDriver(entities=sol.get("entities", {}), modbus=sol.get("modbus", {}))
+    if driver_cls is FerroampSolarDriver:
+        return FerroampSolarDriver(modbus=sol.get("modbus"), control_enabled=sol.get("control_enabled", False),
+                                  max_export_w=sol.get("max_export_w"))
     return driver_cls()
 
 
@@ -243,4 +249,10 @@ def build_battery_driver(cfg: dict) -> BatteryDriver:
         return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=bat.get("entities", {}),
                                     modes=bat.get("modes", {}), power_invert=bat.get("power_invert", False),
                                     keepalive_s=bat.get("keepalive_s"))
+    if driver_cls is FerroampBatteryDriver:
+        return FerroampBatteryDriver(modbus=bat.get("modbus"),
+                                     control_enabled=str(bat.get("control", "samarbete")).strip().lower() == "styr",
+                                     default_mode_verified=bat.get("default_mode_verified", False),
+                                     max_power_w=bat.get("max_power_w", 5000),
+                                     reserve_soc=bat.get("reserve_soc", 20), max_soc=bat.get("max_soc", 100))
     return driver_cls()
