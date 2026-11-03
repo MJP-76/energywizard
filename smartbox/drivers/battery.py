@@ -39,6 +39,11 @@ class BatteryDriver(ABC):
         """Utför en avsikt (se INTENTS). False om den inte stöds eller inte gick att skicka."""
         return False
 
+    def refresh(self, now: float | None = None) -> bool:
+        """Anropas varje varv: skriver om en pågående laddning/urladdning för växelriktare vars
+        fjärrstyrning släpper av sig själv efter en tidsgräns (t.ex. Solis RC). Standard: inget."""
+        return False
+
 
 # Märkesoberoende avsikter (battery_control.py fattar besluten, drivrutinen översätter):
 INTENTS = {

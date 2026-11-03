@@ -47,6 +47,7 @@
     <tr><td>Solax Gen4-6 (<a href="https://github.com/wills106/homeassistant-solax-modbus">Solax Modbus</a>)</td><td>✅</td><td>✅ all five modes</td></tr>
     <tr><td>Growatt (Solax Modbus)</td><td>✅</td><td>✅ auto, hold, charge, discharge</td></tr>
     <tr><td>FoxESS local (<a href="https://github.com/nathanmarlor/foxess_modbus">foxess_modbus</a>)</td><td>✅</td><td>✅ auto, hold, charge, discharge + power</td></tr>
+    <tr><td>Solis hybrid, e.g. S6-EH3P (<a href="https://github.com/Pho3niX90/solis_modbus">solis_modbus</a>), with BYD, Dyness, Pylontech etc.</td><td>✅</td><td>✅ auto, charge, discharge + power</td></tr>
     <tr><td>FoxESS cloud (<a href="https://github.com/macxq/foxess-ha">foxess-ha</a>)</td><td>✅</td><td>auto and hold</td></tr>
     <tr><td>Felicity Solar (<a href="https://github.com/partach/ha_felicity">ha_felicity</a>)</td><td>✅</td><td>no, the integration's own scheduler does it (see below)</td></tr>
     <tr><td>SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron, Pylontech and others</td><td>✅</td><td>if you map the modes yourself (example at the bottom)</td></tr>
@@ -108,6 +109,19 @@
   your house, and the house's <strong>consumption per weekday and hour</strong>. Learned values are only used when
   there is enough data and they are physically plausible. Every day it also works out what the battery
   <strong>actually saved</strong> yesterday.</p>
+
+  <h3>Solis (with BYD, Dyness and others)</h3>
+  <p>With <a href="https://github.com/Pho3niX90/solis_modbus">Pho3niX90/solis_modbus</a> (S6-EH1P, S6-EH3P and other hybrids)
+  the entity picker fills in control by itself: the <em>RC Force Charge/Discharge</em> dropdown and the power numbers in
+  watts. The battery behind it (BYD HVS, Dyness, Pylontech …) is always controlled through the inverter.</p>
+  <ul>
+    <li><strong>Auto</strong> sets <code>None</code> back, so the inverter runs the mode you chose in <em>Storage Mode</em>,
+      which EnergyWizard never changes.</li>
+    <li>Solis remote control lets go after a timeout (<em>RC Timeout</em>, 5 minutes by default), so EnergyWizard re-sends
+      the command every three minutes while charging or discharging. If EnergyWizard stops, the inverter returns to its
+      own mode.</li>
+    <li>Solis has no clean "hold" mode, so the plan uses auto there. Not yet run against a real inverter.</li>
+  </ul>
 
   <h3>Felicity Solar</h3>
   <p>With <a href="https://github.com/partach/ha_felicity">partach/ha_felicity</a> (T-REX 5K, 6K, 10K, 25K and 50K over

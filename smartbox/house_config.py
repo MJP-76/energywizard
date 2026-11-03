@@ -241,5 +241,6 @@ def build_battery_driver(cfg: dict) -> BatteryDriver:
     driver_cls = BATTERY_DRIVER_REGISTRY.get(bat.get("driver"), NullBatteryDriver)
     if driver_cls is GenericBatteryDriver:
         return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=bat.get("entities", {}),
-                                    modes=bat.get("modes", {}), power_invert=bat.get("power_invert", False))
+                                    modes=bat.get("modes", {}), power_invert=bat.get("power_invert", False),
+                                    keepalive_s=bat.get("keepalive_s"))
     return driver_cls()

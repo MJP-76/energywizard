@@ -1001,6 +1001,8 @@ def _build_house_config_yaml(sel: dict) -> str:
                    "  reserve_soc: 20      # sparas alltid till strömavbrott (%)",
                    "  priority_soc: 50     # över detta får elbilen solöverskottet före batteriet (%)",
                    "  max_power_w: 5000    # FYLL I - batteriets max ladd-/urladdningseffekt (W)"]
+        if gs.get("keepalive_s"):
+            lines.append(f"  keepalive_s: {int(gs['keepalive_s'])}     # skriv om laddkommandot så här ofta (växelriktarens fjärrstyrning släpper annars)")
         if modes:
             lines.append(f"  modes:               # förifyllt för {gs.get('preset') or 'din integration'} - kontrollera mot HA")
             for intent, opt in modes.items():

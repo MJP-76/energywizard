@@ -167,6 +167,25 @@ def _battery_control_preset(ents):
         return {"name": "felicity_monitor", "entities": {}, "modes": {},
                 "note": "Styrs av ha_felicity:s egen EMS. EnergyWizard läser bara. Kontrollera effektens tecken "
                         "(+ ska vara laddning, annars power_invert: true)."}
+    # Solis hybrid (S6-EH1P/EH3P m.fl.) via Pho3niX90/solis_modbus: "RC Force Charge/Discharge" (register 43135)
+    # med alternativen None / Solis RC Force Battery Charge / Solis RC Force Battery Discharge, och effekten i W
+    # (43136/43129). Läst i integrationens källa 2026-11-03 (sensor_data/select_sensors.py, hybrid_sensors.py).
+    # Fjärrstyrningen släpper efter RC Timeout (43282, standard 5 min) - därför keepalive_s. "Storage Mode"
+    # (växelriktarens eget läge, sparas i flash) rörs aldrig: auto = None = det läge användaren valt.
+    # Ingen ren "håll"-motsvarighet finns, så den utelämnas hellre än gissas.
+    rc = _find(ents, "select", re.compile(r"rc force charge/discharge$", re.I))
+    if rc:
+        r = rc["e"]
+        out = {"name": "solis_modbus", "entities": {}, "keepalive_s": 180,
+               "modes": {"auto": {r: "None"}, "charge": {r: "Solis RC Force Battery Charge"},
+                         "discharge": {r: "Solis RC Force Battery Discharge"}}}
+        cp = _find(ents, "number", re.compile(r"rc force battery charge power$", re.I))
+        dp = _find(ents, "number", re.compile(r"rc force battery discharge power$", re.I))
+        if cp:
+            out["entities"]["charge_power"] = cp["e"]
+        if dp:
+            out["entities"]["discharge_power"] = dp["e"]
+        return out
     # Solax Gen4-6: "Charger Use Mode" + "Manual Mode Select"
     use = _find(ents, "select", re.compile(r"charger use mode$", re.I))
     manual = _find(ents, "select", re.compile(r"manual mode select$", re.I))
@@ -458,6 +477,8 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                 battery["control_preset"] = preset["name"]
                 if preset.get("note"):
                     battery["note"] = preset["note"]
+                if preset.get("keepalive_s"):
+                    battery["generic_suggestion"]["keepalive_s"] = preset["keepalive_s"]
         break
 
     return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "power_meter": power_meter, "battery": battery}

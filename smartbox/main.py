@@ -1671,6 +1671,7 @@ while True:
                                             if (_battery["model"] or {}).get("saving_yesterday_kr") is not None else "")) if _battery["model"] else None,
                     }, battery_cfg, battery_driver.supported_intents())
                     gpm_actions["log"].append(f"🔋 (BATTERI): {_bdec['reason']}")
+                    battery_driver.refresh()       # håller en pågående tvångsladdning vid liv (Solis RC m.fl.)
                     if battery_control.should_apply(_bdec, _battery["last"], _battery["at"], now):
                         if battery_driver.apply_intent(_bdec["intent"], _bdec.get("power_w")):
                             _battery.update(last=_bdec, at=now)

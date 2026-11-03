@@ -47,6 +47,7 @@
     <tr><td>Solax Gen4-6 (<a href="https://github.com/wills106/homeassistant-solax-modbus">Solax Modbus</a>)</td><td>✅</td><td>✅ alla fem lägen</td></tr>
     <tr><td>Growatt (Solax Modbus)</td><td>✅</td><td>✅ auto, håll, ladda, ladda ur</td></tr>
     <tr><td>FoxESS lokalt (<a href="https://github.com/nathanmarlor/foxess_modbus">foxess_modbus</a>)</td><td>✅</td><td>✅ auto, håll, ladda, ladda ur + effekt</td></tr>
+    <tr><td>Solis hybrid, t.ex. S6-EH3P (<a href="https://github.com/Pho3niX90/solis_modbus">solis_modbus</a>), med BYD, Dyness, Pylontech m.fl.</td><td>✅</td><td>✅ auto, ladda, ladda ur + effekt</td></tr>
     <tr><td>FoxESS via molnet (<a href="https://github.com/macxq/foxess-ha">foxess-ha</a>)</td><td>✅</td><td>auto och håll</td></tr>
     <tr><td>Felicity Solar (<a href="https://github.com/partach/ha_felicity">ha_felicity</a>)</td><td>✅</td><td>nej, integrationens egen styrning sköter det (se nedan)</td></tr>
     <tr><td>SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron, Pylontech m.fl.</td><td>✅</td><td>om du kopplar lägena själv (exempel längst ner)</td></tr>
@@ -149,6 +150,20 @@
       kan bara läsa (batterinivå, effekt, sol). Den räcker för <code>samarbete</code>.</li>
   </ul>
   <p>En FoxESS-laddbox (t.ex. A7300P/L07P) styrs via OCPP, som andra OCPP-laddare.</p>
+
+  <h3>Solis (med BYD, Dyness m.fl.)</h3>
+  <p>Med <a href="https://github.com/Pho3niX90/solis_modbus">Pho3niX90/solis_modbus</a> (S6-EH1P, S6-EH3P och andra
+  hybrider) fyller entitetsväljaren i styrningen själv: rullgardinen <em>RC Force Charge/Discharge</em> och effektreglagen
+  i watt. Batteriet bakom (BYD HVS, Dyness, Pylontech …) styrs alltid via växelriktaren. En egen BYD-integration kan
+  visa celldata, men den laddar inte batteriet.</p>
+  <ul>
+    <li><strong>Auto</strong> sätter tillbaka <code>None</code>, så växelriktaren kör det läge du själv valt i
+      <em>Storage Mode</em>. EnergyWizard ändrar aldrig Storage Mode.</li>
+    <li>Solis fjärrstyrning släpper efter en tidsgräns (<em>RC Timeout</em>, standard 5 minuter). EnergyWizard skriver
+      därför om kommandot var tredje minut medan det laddar eller laddar ur. Stannar EnergyWizard går växelriktaren
+      själv tillbaka till sitt eget läge.</li>
+    <li>Solis har inget rent "håll"-läge, så planen använder auto där. Inte provat mot en riktig växelriktare än.</li>
+  </ul>
 
   <h3>Felicity Solar</h3>
   <p>Kör du <a href="https://github.com/partach/ha_felicity">partach/ha_felicity</a> (T-REX 5K, 6K, 10K, 25K och 50K

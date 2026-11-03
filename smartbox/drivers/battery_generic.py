@@ -59,8 +59,13 @@ class GenericBatteryDriver(BatteryDriver):
     """Default för batterier utan egen drivrutin. Alla entiteter valfria - supports_control()
     är bara True om en mode_select-entitet OCH minst en lägesmappning finns."""
     def __init__(self, capacity_kwh: float | None = None, entities: dict | None = None, modes: dict | None = None,
-                 power_invert: bool = False):
+                 power_invert: bool = False, keepalive_s: float | None = None):
         self.capacity_kwh = capacity_kwh
+        # battery.keepalive_s: växelriktare vars tvångsladdning släpper efter en tidsgräns (Solis RC Timeout,
+        # standard 5 min) får kommandot omskrivet så här ofta medan det laddar/laddar ur. Dör EnergyWizard
+        # släpper växelriktaren själv - det är det säkra hållet.
+        self._keepalive = float(keepalive_s) if keepalive_s else None
+        self._last = None                       # (avsikt, effekt, tid) för senaste lyckade skrivning
         self._invert = bool(power_invert)       # battery.power_invert: true om sensorn visar + vid URladdning
         self._e = entities or {}
         self._modes = {k: v for k, v in (modes or {}).items() if k in INTENTS and v}
@@ -113,7 +118,23 @@ class GenericBatteryDriver(BatteryDriver):
                 pass
         return round(value, 3) if unit == "kw" else int(round(value))
 
-    def apply_intent(self, intent: str, power_w: float | None = None) -> bool:
+    def refresh(self, now: float | None = None) -> bool:
+        import time as _t
+        if not self._keepalive or not self._last or self._last[0] not in ("charge", "discharge"):
+            return False
+        now = _t.time() if now is None else now
+        if now - self._last[2] < self._keepalive:
+            return False
+        return self.apply_intent(self._last[0], self._last[1], now=now)
+
+    def apply_intent(self, intent: str, power_w: float | None = None, now: float | None = None) -> bool:
+        import time as _t
+        ok = self._apply(intent, power_w)
+        if ok:
+            self._last = (intent, power_w, _t.time() if now is None else now)
+        return ok
+
+    def _apply(self, intent: str, power_w: float | None = None) -> bool:
         option = self._modes.get(intent)
         if not option or (not isinstance(option, dict) and not self._e.get("mode_select")):
             return False

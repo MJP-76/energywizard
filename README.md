@@ -114,7 +114,7 @@ integrationernas källkod och väntar på en betatestare med riktig hårdvara.
 | Delsystem | Stöds |
 |---|---|
 | 🌡️ **Värmepump** | ✅ Thermia via Husdata · ✅ alla med `climate`-entitet i HA · NIBE S-serien (lokalt API) · NIBE/Bosch/Atlantic/Daikin via myUplink · Panasonic Aquarea via HeishaMon |
-| 🔋 **Husbatteri** | styr: Solax Gen4-6 och Growatt (Solax Modbus), FoxESS (lokalt och moln) · läser: Felicity, SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron m.fl. Planeringsstil i fem steg och val om batteriet får sälja till nätet. |
+| 🔋 **Husbatteri** | styr: Solax Gen4-6 och Growatt (Solax Modbus), Solis (solis_modbus, t.ex. med BYD), FoxESS (lokalt och moln) · läser: Felicity, SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron m.fl. Planeringsstil i fem steg och val om batteriet får sälja till nätet. |
 | ☀️ **Solceller** | ✅ SolarEdge · Huawei SUN2000 · Growatt · Sungrow · Fronius · generisk exportgräns (Solis, Solplanet, Sigenergy m.fl.) |
 | 🚗 **Elbil** | ✅ Tesla · ✅ Nissan · generisk (valfri HA-entitet) |
 | 🔌 **Laddbox** | ✅ Easee · OCPP (t.ex. Charge Amps, cFos, FoxESS) · generisk (`switch`/`number`) |
