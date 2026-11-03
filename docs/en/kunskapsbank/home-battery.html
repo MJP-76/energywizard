@@ -48,6 +48,7 @@
     <tr><td>Growatt (Solax Modbus)</td><td>✅</td><td>✅ auto, hold, charge, discharge</td></tr>
     <tr><td>FoxESS local (<a href="https://github.com/nathanmarlor/foxess_modbus">foxess_modbus</a>)</td><td>✅</td><td>✅ auto, hold, charge, discharge + power</td></tr>
     <tr><td>Solis hybrid, e.g. S6-EH3P (<a href="https://github.com/Pho3niX90/solis_modbus">solis_modbus</a>), with BYD, Dyness, Pylontech etc.</td><td>✅</td><td>✅ auto, charge, discharge + power</td></tr>
+    <tr><td>Fronius Gen24 (<a href="https://github.com/redpomodoro/fronius_modbus">fronius_modbus</a>), e.g. with BYD HVS</td><td>✅</td><td>✅ all but idle + power</td></tr>
     <tr><td>FoxESS cloud (<a href="https://github.com/macxq/foxess-ha">foxess-ha</a>)</td><td>✅</td><td>auto and hold</td></tr>
     <tr><td>Felicity Solar (<a href="https://github.com/partach/ha_felicity">ha_felicity</a>)</td><td>✅</td><td>no, the integration's own scheduler does it (see below)</td></tr>
     <tr><td>SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron, Pylontech and others</td><td>✅</td><td>if you map the modes yourself (example at the bottom)</td></tr>
@@ -122,6 +123,14 @@
       own mode.</li>
     <li>Solis has no clean "hold" mode, so the plan uses auto there. Not yet run against a real inverter.</li>
   </ul>
+
+  <h3>Fronius Gen24 with BYD HVS</h3>
+  <p>With <a href="https://github.com/redpomodoro/fronius_modbus">redpomodoro/fronius_modbus</a> the entity picker fills in
+  <em>Storage Control Mode</em>: Auto, Block Discharging (hold), Charge from Grid and Discharge to Grid, plus the power in watts.
+  Enable Modbus and allow control in the inverter's web page. The built-in Fronius integration can only read.</p>
+  <p>The <strong>BYD battery</strong> is always charged through the inverter. <a href="https://github.com/bbr111/byd_hvs">bbr111/byd_hvs</a>
+  and <a href="https://github.com/redpomodoro/byd_battery_box">redpomodoro/byd_battery_box</a> give good read-outs but control nothing.
+  With both a BYD integration and Solis or Fronius, the entity picker picks the inverter, since that is what can control.</p>
 
   <h3>Felicity Solar</h3>
   <p>With <a href="https://github.com/partach/ha_felicity">partach/ha_felicity</a> (T-REX 5K, 6K, 10K, 25K and 50K over

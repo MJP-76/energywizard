@@ -80,7 +80,7 @@ code and waits for a beta tester with real hardware.
 | Area | Supported |
 |---|---|
 | 🌡️ **Heat pump** | ✅ Thermia via Husdata · ✅ anything with a `climate` entity in HA · NIBE S series (local API) · NIBE/Bosch/Atlantic/Daikin via myUplink · Panasonic Aquarea via HeishaMon |
-| 🔋 **Home battery** | controls: Solax Gen4-6 and Growatt (Solax Modbus), Solis (solis_modbus, e.g. with BYD), FoxESS (local and cloud) · reads: Felicity, SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron and others. Five planning styles and a choice whether the battery may sell to the grid. |
+| 🔋 **Home battery** | controls: Solax Gen4-6 and Growatt (Solax Modbus), Solis (solis_modbus) and Fronius Gen24 (fronius_modbus), e.g. with BYD HVS, FoxESS (local and cloud) · reads: Felicity, SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron and others. Five planning styles and a choice whether the battery may sell to the grid. |
 | ☀️ **Solar** | ✅ SolarEdge · Huawei SUN2000 · Growatt · Sungrow · Fronius · generic export limit (Solis, Solplanet, Sigenergy and others) |
 | 🚗 **EV** | ✅ Tesla · ✅ Nissan · generic (any HA entity) |
 | 🔌 **Charger** | ✅ Easee · OCPP (e.g. Charge Amps, cFos, FoxESS) · generic (`switch`/`number`) |

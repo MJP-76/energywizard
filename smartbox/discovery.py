@@ -46,7 +46,10 @@ OCPP_SESSION_LIMIT = re.compile(r"session_current_limit$", re.I)
 OCPP_STATION_MAX = re.compile(r"maximum_current$", re.I)
 # "tesla" ensamt är INTE med här (krockar med CAR_MAKERS - Powerwall kräver "powerwall"
 # uttryckligen i texten för att skiljas från en Tesla-bil).
-BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|solax battery|victron battery|felicity", re.I)
+# Stationärt husbatteri, inte en bil: BYD gör både och, och BYD:s batteriintegrationer (bbr111/byd_hvs,
+# redpomodoro/byd_battery_box) har tillverkaren "BYD" - förut hamnade BYD HVS bland bilarna (2026-11-03).
+STATIONARY_BATTERY = re.compile(r"battery[- ]?box|\bhv[sm]\b|\blv[sl]\b|\bbmu?\b|\bbms\b|cell ?(volt|temp)|soc diagnosis", re.I)
+BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|byd hv|battery[- ]?box|solax battery|victron battery|felicity", re.I)
 # Nätimport/elmätare: ett hus kan ha Tibber Pulse, en smartmätare (HAN/P1-port) eller
 # båda samtidigt - inte antingen-eller (Emils egen poäng, 2026-10-30). Förslaget blir en
 # power_meter:-sektion (homeassistant.configure_power_meter): en Tibber Pulse med spänning +
@@ -186,6 +189,23 @@ def _battery_control_preset(ents):
         if dp:
             out["entities"]["discharge_power"] = dp["e"]
         return out
+    # Fronius Gen24 (Primo/Symo) via redpomodoro/fronius_modbus, t.ex. med BYD HVS: "Storage Control Mode"
+    # (Auto, Charge from Grid, Discharge to Grid, Block Discharging ...) och effekten i W (Grid charge/discharge
+    # power). Läst i integrationens källa 2026-11-03 (const.py STORAGE_EXT_CONTROL_MODE). Läget ligger kvar tills
+    # något annat väljs - EnergyWizard sätter Auto vid start och avstängning, som för alla batterier.
+    scm = _find(ents, "select", re.compile(r"storage control mode$", re.I))
+    if scm:
+        s = scm["e"]
+        out = {"name": "fronius_modbus", "entities": {"mode_select": s},
+               "modes": {"auto": "Auto", "hold": "Block Discharging", "charge": "Charge from Grid",
+                         "discharge": "Discharge to Grid"}}
+        gc = _find(ents, "number", re.compile(r"grid charge power$", re.I))
+        gd = _find(ents, "number", re.compile(r"grid discharge power$", re.I))
+        if gc:
+            out["entities"]["charge_power"] = gc["e"]
+        if gd:
+            out["entities"]["discharge_power"] = gd["e"]
+        return out
     # Solax Gen4-6: "Charger Use Mode" + "Manual Mode Select"
     use = _find(ents, "select", re.compile(r"charger use mode$", re.I))
     manual = _find(ents, "select", re.compile(r"manual mode select$", re.I))
@@ -253,7 +273,9 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         if _has(maker, PHONE_MAKERS):
             continue
         tracker = next((x for x in ents if x["e"].startswith("device_tracker.")), None)
-        is_car = (tracker is not None) or _has(maker, CAR_MAKERS) or _has(ents[0].get("mo"), CAR_MAKERS)
+        stationary = tracker is None and any(_has(f"{x.get('n') or ''} {x.get('dn') or ''} {x.get('mo') or ''}", STATIONARY_BATTERY)
+                                             for x in ents)
+        is_car = not stationary and ((tracker is not None) or _has(maker, CAR_MAKERS) or _has(ents[0].get("mo"), CAR_MAKERS))
         if not is_car:
             continue
         plugged = next((x for x in ents if x["e"].startswith("binary_sensor.") and (x.get("dc") == "plug" or _has(x.get("n"), re.compile(r"plugged|ansluten", re.I)))), None)
@@ -430,7 +452,7 @@ def discover_house(entities: list[dict] | None = None) -> dict:
     # är en bil (viktig avgränsning - en bils batteriprocent ska aldrig feltolkas som
     # ett husbatteri). Ingen märkesspecifik drivrutin finns eller planeras (Predbat
     # underhåller redan den kompatibiliteten) - föreslår alltid "generic".
-    battery = None
+    battery, battery_candidates = None, []
     for device_id, ents in by_device.items():
         if device_id in car_device_ids:
             continue
@@ -479,6 +501,10 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                     battery["note"] = preset["note"]
                 if preset.get("keepalive_s"):
                     battery["generic_suggestion"]["keepalive_s"] = preset["keepalive_s"]
-        break
+        battery_candidates.append(battery)
+    # Flera träffar (t.ex. Solis/Fronius-växelriktaren OCH en BYD-integration som bara läser): välj den som går att
+    # styra - batteriet laddas alltid via växelriktaren. Annars den första, som förut.
+    battery = next((b for b in battery_candidates if (b.get("generic_suggestion") or {}).get("modes")),
+                   battery_candidates[0] if battery_candidates else None)
 
     return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "power_meter": power_meter, "battery": battery}
