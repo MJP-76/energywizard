@@ -22,11 +22,28 @@ The optimizer, house priorities and existing `cycle_cost` remain unchanged.
 | EV/heat pump/spa | Separate HA/local drivers coordinated by the house engine | Those drivers remain in charge; this addition does not configure EnergyHub OCPP or control other loads through it |
 | Grid import and metering | HA-connected meter, e.g. Tibber Pulse/P1 | Keep the existing meter. No new direct meter driver, import-limit writer or ACE/phase-balancing control is added |
 
-The reference operational flow prefers Modbus for forced power and export boundaries,
-uses MQTT telemetry and has an MQTT command fallback. This implementation instead reads
-telemetry directly over Modbus and reports a failed Modbus operation without silently
-switching protocols. Command acceptance is not proof that the requested power is physically
+Telemetry and control both use Modbus. A failed Modbus operation is reported without
+silently switching to MQTT. Command acceptance is not proof that requested power is physically
 delivered: battery limits, temperature and other system controllers can constrain it.
+
+## Why hold and idle are not implemented
+
+EnergyWizard defines `hold` as preventing discharge while still allowing solar charging.
+A fixed zero-power request would block charging as well, so it cannot implement that intent.
+No separate, verified solar-charge-only register sequence is provided by this driver.
+
+`idle` must prevent both charging and discharging. An exact zero reference is not assumed
+to remain in forced power mode on every firmware version. A small nonzero discharge
+request would still move energy, consume the reserve over time and fail the strict idle
+contract. The driver therefore neither emulates idle nor substitutes near-zero discharge.
+
+Only `auto`, `charge` and `discharge` are advertised to the planner. Direct `hold`/`idle`
+calls return false without writing. When a house rule requests either unsupported intent,
+the existing controller falls back to `auto`, which returns control to the inverter after
+default-mode release has been verified. This does not guarantee no discharge: EV isolation,
+reserve holding and solar-allocation behavior depend on the native inverter configuration.
+Native SOC limits must remain in place. Supporting hold/idle later requires firmware-specific
+evidence of actual power behavior, not just successful register readback.
 
 ## Wire mapping and limitations
 

@@ -128,6 +128,15 @@ def test_unsupported_intents_never_send_commands(hub, intent):
     assert not hub.writes
 
 
+@pytest.mark.parametrize("state", [{"soc": 20}, {"soc": 60, "ev_charging_grid": True},
+                                    {"soc": 60, "ev_solar_active": True}])
+def test_house_rules_fall_back_to_auto_for_unsupported_hold_and_idle(hub, state):
+    from battery_control import decide
+    decision = decide(state, {"control": "styr"}, battery().supported_intents())
+    assert decision["intent"] == "auto"
+    assert not hub.writes
+
+
 @pytest.mark.parametrize("value", [-1, 0, float("nan"), float("inf"), "bad", True])
 def test_invalid_power_never_writes(hub, value):
     assert not battery().apply_intent("charge", value)
