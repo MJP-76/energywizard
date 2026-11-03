@@ -69,7 +69,7 @@ def test_forsta_losenordet_loggar_in_och_kan_inte_sattas_igen(env):
     r = _run(wd.api_setup_password(_Req({"password": "kort"})))
     assert r.status_code == 400
     r = _run(wd.api_setup_password(_Req({"password": "hemligt123"})))
-    assert r.status_code == 200 and "ew=" in r.headers.get("set-cookie", "")
+    assert r.status_code == 200 and f"{wd.AUTH.cookie}=" in r.headers.get("set-cookie", "")
     assert webauth.owner_password() == "hemligt123"
     assert oct(os.stat(ew_settings.PATH).st_mode & 0o777) == "0o600"
     # Ingen annan på nätet kan byta det efteråt
@@ -96,7 +96,7 @@ def test_status_ar_oppen_men_ha_kraver_agaren(env):
 
 
 def _owner(wd):
-    return {"ew": wd.AUTH.sign(int(time.time()) + 3600, "owner", "owner")}
+    return {wd.AUTH.cookie: wd.AUTH.sign(int(time.time()) + 3600, "owner", "owner")}
 
 
 def test_ha_testas_innan_det_sparas(env):

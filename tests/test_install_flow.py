@@ -85,7 +85,7 @@ def wd():
 
 
 def _cookie(wd, role="owner"):
-    return {"ew": wd.AUTH.sign(int(time.time()) + 3600, role, role)}
+    return {wd.AUTH.cookie: wd.AUTH.sign(int(time.time()) + 3600, role, role)}
 
 
 SEL = {"cars": [], "heat_pump": None, "solar": None, "spa": None, "battery": None}

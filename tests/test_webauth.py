@@ -58,7 +58,6 @@ def test_fel_losenord_avvisas(monkeypatch):
 def test_webben_och_appen_har_olika_kakor():
     """Webben och mobilappen ligger på samma domän med olika nycklar. Samma kaknamn gjorde att inloggning i den
     ena loggade ut den andra (2026-11-03)."""
-    from fastapi.testclient import TestClient
     web = webauth.Auth(salt="webdash", cookie="ew_web")
     app_like = webauth.Auth(salt="ewapp")
     assert web.cookie != app_like.cookie
