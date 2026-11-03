@@ -914,6 +914,10 @@ def _build_house_config_yaml(sel: dict) -> str:
             lines += ["  entities:"]
             for key, val in (hp.get("entities") or {}).items():
                 lines.append(f"    {key}: {val}")
+        elif hp_driver == "heishamon":
+            lines += ["  host: 192.168.1.XXX  # FYLL I - HeishaMon-kortets IP (dess webbsida visar /json)",
+                      "  base_shift: 0       # din vanliga kurvförskjutning (-5..5); EnergyWizard flyttar relativt den",
+                      "  indoor_from_z1: false  # true bara om zon 1 har en rumsgivare"]
         else:
             lines += ["  connection:", "    modbus_host: 192.168.1.XXX  # FYLL I - värmepumpens IP/gateway, kan inte upptäckas automatiskt",
                        "    modbus_port: 502", "    unit_id: 1"]

@@ -25,6 +25,7 @@ from drivers.charger_easee import EaseeChargerDriver
 from drivers.charger_generic import GenericChargerDriver
 from drivers.heatpump import HeatPumpDriver, NullHeatPumpDriver
 from drivers.heatpump_generic import GenericClimateHeatPumpDriver
+from drivers.heatpump_heishamon import HeishaMonHeatPumpDriver
 from drivers.heatpump_myuplink import MyUplinkHeatPumpDriver
 from drivers.heatpump_nibe_local import NibeLocalHeatPumpDriver
 from drivers.heatpump_thermia import ThermiaHusdataHeatPumpDriver
@@ -52,6 +53,9 @@ HEAT_PUMP_DRIVER_REGISTRY = {
     # refresh_token) från .env (MYUPLINK_*), samma "driftsspecifikt" princip som
     # NIBE_LOCAL_* ovan. ALDRIG verifierad mot ett riktigt myUplink-konto.
     "myuplink": MyUplinkHeatPumpDriver,
+    # Panasonic Aquarea via HeishaMon, lokalt över HTTP (host i house_config.yaml). ALDRIG verifierad mot en riktig
+    # pump, bara mot HeishaMons källkod; se drivers/heatpump_heishamon.py.
+    "heishamon": HeishaMonHeatPumpDriver,
 }
 SOLAR_DRIVER_REGISTRY = {"solaredge": SolarEdgeSolarDriver, "generic_number": GenericNumberSolarDriver,
                          "huawei_solar": HuaweiSolarServiceDriver, "modbus_register": ModbusRegisterSolarDriver}
@@ -164,6 +168,9 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
         return GenericClimateHeatPumpDriver(entity_id=hp.get("entities", {}).get("climate"))
     if driver_cls is MyUplinkHeatPumpDriver:
         return MyUplinkHeatPumpDriver(entities=hp.get("entities", {}))
+    if driver_cls is HeishaMonHeatPumpDriver:
+        return HeishaMonHeatPumpDriver(host=hp.get("host"), base_shift=hp.get("base_shift", 0),
+                                       indoor_from_z1=hp.get("indoor_from_z1", False))
     return driver_cls()
 
 

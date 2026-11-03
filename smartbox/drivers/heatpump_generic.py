@@ -36,6 +36,12 @@ class GenericClimateHeatPumpDriver(HeatPumpDriver):
             "operating_mode": homeassistant._get_raw_state(self._entity),
         }
 
+    # HA:s hvac-lägen -> Matter-lika lägen (drivers.heatpump.MODES); dry/fan_only har ingen motsvarighet
+    _HA_MODES = {"off": "off", "heat": "heat", "cool": "cool", "auto": "auto", "heat_cool": "auto"}
+
+    def _state_extra(self, sensors: dict) -> dict:
+        return {"mode": self._HA_MODES.get(sensors.get("operating_mode"))}
+
     def set_room_temp(self, target_c: float) -> bool:
         if not self._entity:
             return False

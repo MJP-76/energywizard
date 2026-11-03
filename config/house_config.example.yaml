@@ -37,6 +37,15 @@ heat_pump:
 #     modbus_host: 192.168.1.50
 #     modbus_port: 502
 #     unit_id: 1
+#
+# Panasonic Aquarea via HeishaMon (lokalt, HTTP). Kurvförskjutning (±5) och tidsbegränsad paus stöds;
+# rumsbörvärde finns inte - pumpen styr på kurva. Aldrig provad mot en riktig pump.
+# heat_pump:
+#   enabled: true
+#   driver: heishamon
+#   host: 192.168.1.60
+#   base_shift: 0            # din vanliga förskjutning i kurvläge; nollställs hit vid varje start
+#   indoor_from_z1: false    # true om zon 1 har rumsgivare (då blir Z1_Temp innetemperatur)
 
 # --- Solceller (valfri) ---
 solar:

@@ -192,6 +192,8 @@ if not car_drivers and isinstance(heat_pump_driver, house_config.NullHeatPumpDri
 # 🚀 UPPSTARTSKONTROLL
 # ============================================================
 print("🤖 Kontrollerar initialt tillstånd för värmepumpen...")
+if heat_pump_driver.reset_curve_offset():          # Matter-lagret: en förskjutning från före omstarten ska aldrig ligga kvar
+    print("✅ Värmekurvans förskjutning nollställd vid start.")
 initial_pump_data = heat_pump_driver.read_sensors()
 if initial_pump_data:
     if initial_pump_data.get("operating_mode") == 0:
@@ -797,6 +799,7 @@ while True:
             current_kwh = None
 
             # Asynkron inhämtning av pump och pris
+            heat_pump_driver.tick()                         # släpper en tidsbegränsad paus (Matter-lagret) när tiden gått ut
             async def fetch_heavy_data():
                 return await asyncio.gather(
                     asyncio.to_thread(heat_pump_driver.read_sensors),
