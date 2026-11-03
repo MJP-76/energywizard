@@ -1047,8 +1047,7 @@ async function mountPriceSettings() {
         ${field("psell", `Ersättning vid försäljning (${sym}/kWh)`, d.sell_extra, "Utöver spotpriset, t.ex. nätnytta")}
       </div>
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="psellvat"${d.sell_vat ? " checked" : ""}> Moms på såld el (oftast nej för privatpersoner)</label>
-      ${d.country !== "SE" ? `<div class="note" style="margin-top:10px">Priserna läses från Home Assistants Nordpool-integration (elprisetjustnu.se har bara Sverige).
-        Installera den för ${esc(d.area)} och ange sensorn: <input id="pent" value="${esc(d.ha_entity)}" style="width:200px;max-width:100%"></div>` : ""}
+      <div id="pricesrc" style="margin-top:12px"></div>
       <div class="stat" style="margin-top:12px;padding:10px 12px">Exempel: spotpris 1,00 ${sym} (exkl. moms) blir
         <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
       <button class="icobtn" id="psave" style="margin-top:10px">Spara</button>`;
@@ -1062,13 +1061,41 @@ async function mountPriceSettings() {
       const v = (id) => (document.getElementById(id) || {}).value;
       try {
         await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
-          sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked, ha_entity: v("pent") || "" });
+          sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked });
         toast("Sparat - priser och kostnader räknas om inom en minut");
         mountPriceSettings();
       } catch (e) { toast(e.message); }
     };
   };
   draw();
+  mountPriceSource("pricesrc", d.country);
+}
+
+// Priskälla: en prissensor i Home Assistant (Nord Pool, ENTSO-e, EPEX Spot, Energi Data Service, Octopus, Amber ...)
+// eller standard (elprisetjustnu.se, bara Sverige). Visas både under Inställningar och i entitetsväljaren.
+async function mountPriceSource(slotId, country) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  slot.innerHTML = `<div class="note">Letar efter prissensorer i Home Assistant…</div>`;
+  let d;
+  try { d = await api("api/price-entities"); } catch (e) { slot.innerHTML = ""; return; }
+  const opts = [`<option value="">${country && country !== "SE" ? "Ingen vald" : "Standard: elprisetjustnu.se (Sverige)"}</option>`]
+    .concat(d.entities.map((e) => `<option value="${esc(e.entity_id)}"${e.entity_id === d.selected ? " selected" : ""}>${esc(e.name)} · ${esc(e.integration)}${e.unit ? " · " + esc(e.unit) : ""}</option>`));
+  slot.innerHTML = `
+    <label style="display:flex;flex-direction:column;gap:4px"><span class="note">Priskälla (spotpriset per kvart/timme)</span>
+      <select id="psrc" style="max-width:100%">${opts.join("")}</select></label>
+    <div class="note" style="margin-top:4px">${d.entities.length ? `${d.entities.length} prissensor${d.entities.length > 1 ? "er" : ""} hittades i Home Assistant.`
+      : `Ingen prissensor hittades. Installera t.ex. <a href="https://github.com/custom-components/nordpool" target="_blank" rel="noopener">Nord Pool</a>,
+        <a href="https://github.com/JaccoR/hass-entso-e" target="_blank" rel="noopener">ENTSO-e</a> (hela Europa),
+        Energi Data Service (Danmark) eller Octopus Energy (Storbritannien) i Home Assistant och skanna igen.`}</div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="psrcvat"${d.includes_vat ? " checked" : ""}>
+      Priset i sensorn är redan inklusive moms (Nord Pool och Octopus brukar vara det, ENTSO-e och EPEX inte)</label>
+    <button class="icobtn" id="psrcsave" style="margin-top:8px">Använd priskällan</button>`;
+  document.getElementById("psrcsave").onclick = async () => {
+    try { await postJSON("api/price-source", { ha_entity: document.getElementById("psrc").value, includes_vat: document.getElementById("psrcvat").checked });
+      toast("Priskällan sparad - priserna hämtas om inom en minut"); }
+    catch (e) { toast(e.message); }
+  };
 }
 
 async function mountBatteryPlanSettings() {
@@ -1361,10 +1388,15 @@ async function runDiscovery() {
   if (!(d.grid_meters || []).length) html += `<div class="note" style="margin-top:6px">Ingen hittades.</div>`;
   html += `</div>`;
 
+  html += `<div class="card" style="margin-bottom:16px"><h2>💶 Elpris</h2>
+    <div class="note">Varifrån spotpriset hämtas. Utanför Sverige: välj ditt lands prissensor i Home Assistant. Moms och avgifter ställer du in under Elpris och avgifter.</div>
+    <div id="discprice" style="margin-top:8px"></div></div>`;
+
   html += `<button class="icobtn" id="savebtn" style="margin-top:6px;display:none">Spara och starta</button>
     <button class="icobtn" id="genbtn" style="margin-top:6px">Ladda ner house_config.yaml</button>
     <div class="note" id="savemsg" style="margin-top:6px"></div>`;
   results.innerHTML = html;
+  mountPriceSource("discprice");
   document.getElementById("genbtn").onclick = () => generateConfig(false);
   document.getElementById("savebtn").onclick = () => generateConfig(true);
   // Spara direkt bara i installationer där install.sh gjort filen skrivbar; annars bara nedladdning.

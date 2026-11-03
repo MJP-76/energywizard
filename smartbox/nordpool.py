@@ -90,7 +90,15 @@ def cost_settings() -> dict:
 
 def price_source() -> str:
     """elprisetjustnu.se har bara Sverige. Andra länder läser HA:s Nordpool-integration om inget annat är valt."""
-    if "PRICE_SOURCE" in os.environ or cost_settings()["country"] == "SE":
+    if "PRICE_SOURCE" in os.environ:
+        return PRICE_SOURCE
+    try:
+        import ew_settings
+        if ew_settings.get("price_ha_entity"):          # vald prissensor i HA (Inställningar / installationen)
+            return "ha_nordpool"
+    except Exception:
+        pass
+    if cost_settings()["country"] == "SE":
         return PRICE_SOURCE
     return "ha_nordpool"
 
@@ -100,8 +108,11 @@ def _vat_factor() -> float:
 
 
 def prices_include_vat() -> bool:
-    """True om elpriser.sek_per_kwh redan är momsinklusive (Nordpool-integrationen i HA)."""
-    return price_source() == "ha_nordpool"
+    """True om elpriser.sek_per_kwh redan är momsinklusive. Prissensorer i HA: enligt inställningen
+    (Nord Pool i HA har moms som standard, ENTSO-e/EPEX oftast inte, Octopus/Amber alltid)."""
+    if price_source() != "ha_nordpool":
+        return False
+    return str(_setting("price_includes_vat", "PRICE_INCLUDES_VAT", "true")).lower() not in ("0", "false", "nej", "no")
 
 
 def full_buy_cost(spot: float) -> float:
@@ -178,54 +189,139 @@ def fetch_api_and_save(date_obj):
     return False
 
 
+# ---- Prissensorer i Home Assistant, oavsett land (2026-11-03) ---------------------------------------------------------
+# Integrationerna lägger ut dygnets priser i olika attribut och format. parse_price_attributes() känner igen:
+#   Nord Pool (HACS)        raw_today/raw_tomorrow: [{start, end, value}]
+#   Energi Data Service     raw_today/raw_tomorrow: [{hour, price}]                      (Danmark)
+#   ENTSO-e                 prices / prices_today / prices_tomorrow: [{time, price}]      (hela Europa)
+#   EPEX Spot               data: [{start_time, end_time, price_per_kwh | price_eur_per_mwh}]
+#   Octopus Energy          rates: [{start, end, value_inc_vat}]   (event ..._current_day_rates + ..._next_day_rates)
+#   Amber Electric          forecasts: [{start_time, end_time, per_kwh}]                   (Australien)
+#   Tibber via REST-sensor  today/tomorrow: [{startsAt, total}]
+#   tidsstämpel -> pris     {"2026-11-03T00:00:00+01:00": 1.23, ...}                     (t.ex. tjeckiska OTE)
+# Enheten läses ur unit_of_measurement: /MWh delas med 1000, öre/cent/pence per kWh delas med 100.
+PRICE_LIST_ATTRS = ("raw_today", "raw_tomorrow", "prices_today", "prices_tomorrow", "prices", "data", "rates",
+                    "forecasts", "today", "tomorrow")
+_START_KEYS = ("start", "start_time", "startsAt", "time", "hour", "from", "date")
+_VALUE_KEYS = ("value", "price", "price_per_kwh", "per_kwh", "value_inc_vat", "total", "price_eur_per_mwh", "price_ct_per_kwh")
+
+
+def _parse_ts(v):
+    try:
+        t = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=SWE_TZ)
+
+
+def _unit_divisor(unit: str, key: str = "") -> float:
+    u = f"{unit or ''} {key}".lower()
+    if "mwh" in u:
+        return 1000.0
+    if any(x in u for x in ("öre", "ore/", "cent", "ct", "pence", "p/kwh", "c/kwh")):
+        return 100.0
+    return 1.0
+
+
+def parse_price_attributes(attrs: dict, unit: str = "") -> list:
+    """[(start, end, pris per kWh)] ur en prissensors attribut, sorterat och utan dubbletter. Tomt om inget känns igen."""
+    points = {}
+    for name in PRICE_LIST_ATTRS:
+        items = (attrs or {}).get(name)
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            sk = next((k for k in _START_KEYS if it.get(k) is not None), None)
+            vk = next((k for k in _VALUE_KEYS if isinstance(it.get(k), (int, float))), None)
+            start = _parse_ts(it.get(sk)) if sk else None
+            if start is None or vk is None:
+                continue
+            end = _parse_ts(it.get("end") or it.get("end_time"))
+            points[start] = (end, float(it[vk]) / _unit_divisor(unit, vk))
+    if not points:                                   # tidsstämpel -> pris (ett attribut med en dict)
+        for v in (attrs or {}).values():
+            if isinstance(v, dict) and v and all(isinstance(x, (int, float)) for x in v.values()):
+                for k, x in v.items():
+                    t = _parse_ts(k)
+                    if t is not None:
+                        points[t] = (None, float(x) / _unit_divisor(unit))
+    starts = sorted(points)
+    out = []
+    for i, t in enumerate(starts):
+        end, price = points[t]
+        if end is None:
+            step = (starts[i + 1] - t) if i + 1 < len(starts) else (t - starts[i - 1] if i else timedelta(hours=1))
+            end = t + min(step, timedelta(hours=1))
+        out.append((t, end, price))
+    return out
+
+
+def recognize_price_entity(state: dict):
+    """Namn på integrationen om en HA-entitet ser ut att vara en prissensor med dygnets priser, annars None."""
+    a = state.get("attributes") or {}
+    if not parse_price_attributes(a, a.get("unit_of_measurement", "")):
+        return None
+    e = state.get("entity_id", "")
+    if "raw_today" in a and any("hour" in (x or {}) for x in a.get("raw_today") or []):
+        return "Energi Data Service"
+    if "raw_today" in a:
+        return "Nord Pool"
+    if "rates" in a or "octopus" in e:
+        return "Octopus Energy"
+    if "forecasts" in a:
+        return "Amber Electric"
+    if "data" in a:
+        return "EPEX Spot"
+    if "prices" in a or "prices_today" in a:
+        return "ENTSO-e"
+    return "prissensor"
+
+
+def _price_entities():
+    e = _setting("price_ha_entity", "NORDPOOL_HA_ENTITY", NORDPOOL_HA_ENTITY)
+    out = [e]
+    if e.endswith("_current_day_rates"):              # Octopus: morgondagen ligger i en egen entitet
+        out.append(e[: -len("_current_day_rates")] + "_next_day_rates")
+    return out
+
+
 def fetch_ha_nordpool_and_save(date_obj):
-    """Hämtar priser från Home Assistants egen nordpool-integration (sensor.nordpool,
-    attributen raw_today/raw_tomorrow) istället för att anropa elprisetjustnu.se.
+    """Hämtar dygnets priser ur en prissensor i Home Assistant (vilken integration som helst som
+    parse_price_attributes() känner igen; standard sensor.nordpool) i stället för elprisetjustnu.se.
 
     Samma kontrakt som fetch_api_and_save: True/False, samma INSERT/ON CONFLICT-mönster
     så nedströms-konsumenter (get_price_info, get_price_at) inte märker varifrån raderna
-    kom. Priserna kommer i 15-minutersupplösning från HA - get_price_info hanterar redan
-    båda upplösningarna.
-    """
+    kom."""
     import homeassistant
     date_str = date_obj.strftime("%Y-%m-%d")
     try:
-        entity = _setting("price_ha_entity", "NORDPOOL_HA_ENTITY", NORDPOOL_HA_ENTITY)
-        r = requests.get(
-            f"{homeassistant._BASE}/states/{entity}",
-            headers=homeassistant._HEADERS, timeout=10, verify=homeassistant._VERIFY,
-        )
-        if r.status_code != 200:
-            print(f"❌ HA nordpool-sensorn ({entity}) svarade {r.status_code}.")
-            return False
-        attrs = r.json().get("attributes", {})
-        raw_today = attrs.get("raw_today") or []
-        raw_tomorrow = attrs.get("raw_tomorrow") or []
-
-        wanted = [
-            item for item in (raw_today + raw_tomorrow)
-            if datetime.fromisoformat(item["start"]).astimezone(SWE_TZ).date() == date_obj.date()
-        ]
+        rows = []
+        for entity in _price_entities():
+            r = requests.get(f"{homeassistant._BASE}/states/{entity}", headers=homeassistant._HEADERS, timeout=10,
+                             verify=homeassistant._VERIFY)
+            if r.status_code != 200:
+                print(f"❌ HA-prissensorn ({entity}) svarade {r.status_code}.")
+                continue
+            attrs = r.json().get("attributes", {})
+            rows += parse_price_attributes(attrs, attrs.get("unit_of_measurement", ""))
+        wanted = [(s.isoformat(), e.isoformat(), v) for s, e, v in rows if s.astimezone(SWE_TZ).date() == date_obj.date()]
         if not wanted:
-            print(f"⚠️ HA nordpool-sensorn har inga priser för {date_str} (ännu).")
+            print(f"⚠️ HA-prissensorn har inga priser för {date_str} (ännu).")
             return False
-
-        records = [
-            (item["start"], item["end"], item["value"])
-            for item in wanted
-        ]
         with get_db() as conn:
             with conn.cursor() as cur:
                 cur.executemany("""
                     INSERT INTO elpriser (time_start, time_end, sek_per_kwh)
                     VALUES (%s, %s, %s)
                     ON CONFLICT (time_start) DO NOTHING
-                """, records)
+                """, wanted)
             conn.commit()
-        print(f"📥 Laddade ner {len(records)} rader för {date_str} från HA nordpool-integrationen.")
+        print(f"📥 Laddade ner {len(wanted)} rader för {date_str} från Home Assistant ({', '.join(_price_entities())}).")
         return True
     except Exception as e:
-        print(f"❌ Fel vid HA nordpool-hämtning för {date_str}: {e}")
+        print(f"❌ Fel vid hämtning från HA-prissensorn för {date_str}: {e}")
     return False
 
 
@@ -236,6 +332,9 @@ def _fetch_and_save(date_obj):
     if price_source() == "ha_nordpool":
         if fetch_ha_nordpool_and_save(date_obj):
             return True
+        if cost_settings()["country"] != "SE":          # elprisetjustnu.se har bara svenska priser - fel land vore värre
+            print("⚠️ HA-prissensorn misslyckades - försöker igen nästa cykel.")
+            return False
         print("⚠️ HA nordpool-källan misslyckades, faller tillbaka till elprisetjustnu.se.")
         return fetch_api_and_save(date_obj)
     return fetch_api_and_save(date_obj)

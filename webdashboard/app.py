@@ -307,6 +307,47 @@ async def price_settings_get():
                         "sell": round((1 + c["vat_pct"] / 100 if c["sell_vat"] else 1.0) + c["sell_extra"], 4)}}
 
 
+@app.get("/api/price-entities")
+async def price_entities():
+    """Prissensorer i Home Assistant med dygnets priser (Nord Pool, ENTSO-e, EPEX Spot, Energi Data Service, Octopus,
+    Amber ...), för valet av priskälla i installationen och under Inställningar."""
+    import nordpool
+    try:
+        r = requests.get(f"{homeassistant._BASE}/states", headers=homeassistant._HEADERS, timeout=20, verify=homeassistant._VERIFY)
+        r.raise_for_status()
+        states = r.json()
+    except Exception as e:
+        return {"ok": False, "error": f"Kunde inte läsa Home Assistant: {e}", "entities": []}
+    out = []
+    for st in states:
+        e = st.get("entity_id", "")
+        if not (e.startswith("sensor.") or e.startswith("event.")) or e.endswith("_next_day_rates"):
+            continue
+        kind = nordpool.recognize_price_entity(st)
+        if kind:
+            a = st.get("attributes") or {}
+            n = len(nordpool.parse_price_attributes(a, a.get("unit_of_measurement", "")))
+            out.append({"entity_id": e, "name": a.get("friendly_name") or e, "integration": kind,
+                        "unit": a.get("unit_of_measurement") or "", "points": n})
+    return {"ok": True, "entities": out, "selected": ew_settings.get("price_ha_entity") or "",
+            "includes_vat": nordpool.prices_include_vat() if ew_settings.get("price_ha_entity") else
+            str(ew_settings.get("price_includes_vat", True)).lower() not in ("0", "false")}
+
+
+@app.post("/api/price-source")
+async def price_source_set(request: Request):
+    """Väljer prissensor i HA (tom = standard: elprisetjustnu.se i Sverige) och om priset i den är inklusive moms."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra priskällan"}, status_code=403)
+    body = await request.json()
+    ent = str(body.get("ha_entity") or "").strip()
+    if ent and not re.fullmatch(r"(sensor|event)\.[a-z0-9_]+", ent):
+        return JSONResponse({"error": "Ogiltig entitet"}, status_code=400)
+    ew_settings.update(price_ha_entity=ent or None, price_includes_vat=bool(body.get("includes_vat", True)))
+    return {"ok": True}
+
+
 @app.post("/api/price-settings")
 async def price_settings_set(request: Request):
     role, _ = AUTH.session(request)
@@ -334,8 +375,9 @@ async def price_settings_set(request: Request):
             return JSONResponse({"error": f"{field} utanför rimligt intervall"}, status_code=400)
         upd[key] = v
     upd["price_sell_vat"] = bool(body.get("sell_vat"))
-    ent = str(body.get("ha_entity") or "").strip()
-    upd["price_ha_entity"] = ent if re.fullmatch(r"sensor\.[a-z0-9_]+", ent) else None
+    if "ha_entity" in body:
+        ent = str(body.get("ha_entity") or "").strip()
+        upd["price_ha_entity"] = ent if re.fullmatch(r"(sensor|event)\.[a-z0-9_]+", ent) else None
     ew_settings.update(**upd)
     return {"ok": True}
 
