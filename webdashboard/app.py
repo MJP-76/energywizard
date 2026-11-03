@@ -560,7 +560,13 @@ async def installs(request: Request):
     if not TELEMETRY_STATS_URL or role != "owner":
         return {"ok": False, "configured": False}
     try:
-        r = requests.get(TELEMETRY_STATS_URL, timeout=10, headers={"X-Stats-Token": TELEMETRY_STATS_TOKEN})
+        import hashlib
+        try:
+            hid = house_config.load_house_config(HOUSE_CONFIG_FILE).get("house_id", "")
+        except Exception:
+            hid = ""
+        me = hashlib.sha256((hid or "unknown").encode()).hexdigest()[:16]      # samma som smartbox/telemetry.py
+        r = requests.get(TELEMETRY_STATS_URL, timeout=10, headers={"X-Stats-Token": TELEMETRY_STATS_TOKEN}, params={"me": me})
         r.raise_for_status()
         return {"ok": True, "configured": True, **r.json()}
     except (requests.RequestException, ValueError) as e:

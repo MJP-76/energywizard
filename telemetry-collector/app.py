@@ -168,8 +168,15 @@ def _is_real_house(h: str) -> bool:
     return len(h) == 16 and all(c in "0123456789abcdef" for c in h)
 
 
+def _norm(rest: str) -> str:
+    """'easee@Easee' -> 'easee': märket är samma som drivrutinens namn och ska inte ge en egen rad."""
+    drv, _, brand = rest.partition("@")
+    b = brand.lower().replace(" ", "")
+    return drv if brand and (b.startswith(drv.lower()) or drv.lower().startswith(b)) else rest
+
+
 @app.get("/api/stats")
-async def stats(request: Request):
+async def stats(request: Request, me: str = ""):
     """Sammanställning för Emils dashboard: antal aktiva installationer och vilken utrustning de kör.
     Bara räknetal per kategori/drivrutin/märke - inga husidentifierare."""
     from datetime import timedelta
@@ -190,8 +197,18 @@ async def stats(request: Request):
         versions[version or "okänd"] = versions.get(version or "okänd", 0) + 1
         for d in drivers:                     # enheter, inte hus: två Easee-boxar i samma hus räknas som 2
             cat, _, rest = d.partition(":")
+            rest = _norm(rest)
             equipment.setdefault(cat, {})
             equipment[cat][rest] = equipment[cat].get(rest, 0) + 1
+    # Per installation, anonymt (Hus 1, 2 ... i den ordning de dök upp) - inga husidentiteter i svaret.
+    # me = anroparens eget hash (webben räknar fram det ur sin house_id) markerar "ditt hus".
+    houses = []
+    for i, h in enumerate(sorted(latest, key=lambda x: first.get(x, "")), start=1):
+        devs = {}
+        for d in latest[h][1]:
+            cat, _, rest = d.partition(":")
+            devs.setdefault(cat, []).append(_norm(rest))
+        houses.append({"label": f"Hus {i}", "since": (first.get(h) or "")[:10], "mine": bool(me) and h == me, "devices": devs})
     week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     return {
         "active": len(latest),
@@ -201,6 +218,7 @@ async def stats(request: Request):
         "without_devices": sum(1 for _, d in latest.values() if not d),
         "equipment": {cat: dict(sorted(v.items(), key=lambda kv: -kv[1])) for cat, v in sorted(equipment.items())},
         "versions": versions,
+        "houses": houses,
     }
 
 

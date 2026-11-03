@@ -1210,7 +1210,20 @@ async function renderInstalls() {
   const d = await api("api/installs").catch(() => null);
   if (!d || !d.configured) { main.innerHTML = `<div class="placeholder">Inte tillgängligt.</div>`; return; }
   const vers = Object.entries(d.versions || {}).map(([v, n]) => `<div style="display:flex;justify-content:space-between;padding:3px 0"><span>${esc(v)}</span><b>${n}</b></div>`).join("");
-  main.innerHTML = installsCard(d) + (vers ? `<div class="card"><div style="font-weight:700;margin-bottom:6px">🏷️ Versioner</div>${vers}</div>` : "");
+  const catName = Object.fromEntries(INSTALL_CATS.map(([k, ico, n]) => [k, `${ico} ${n}`]));
+  const labelOf = (k) => { const [drv, brand] = k.split("@"); return brand ? `${esc(brand)} <span class="note">(${esc(DRIVER_NAMES[drv] || drv)})</span>` : esc(DRIVER_NAMES[drv] || drv); };
+  const houses = (d.houses || []).map((h) => {
+    const rows = Object.entries(h.devices).map(([cat, list]) => {
+      const counts = {}; list.forEach((x) => counts[x] = (counts[x] || 0) + 1);
+      return `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;padding:3px 0"><span class="note" style="min-width:150px">${catName[cat] || esc(cat)}</span>
+        <span>${Object.entries(counts).map(([k, n]) => labelOf(k) + (n > 1 ? ` × ${n}` : "")).join(", ")}</span></div>`;
+    }).join("");
+    return `<div class="card" style="padding:12px${h.mine ? ";border-color:var(--acc)" : ""}"><div style="font-weight:700;margin-bottom:4px">${h.label}${h.mine ? " · ditt hus" : ""}
+      <span class="note" style="font-weight:400">sedan ${esc(h.since)}</span></div>${rows || `<div class="note">Har inte valt några enheter än.</div>`}</div>`;
+  }).join("");
+  main.innerHTML = installsCard(d) + (houses ? `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">🏠 Per installation</div>
+      <div class="note" style="margin-top:4px">Anonymt: numrerade i den ordning de kom, aldrig vem eller var.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin-top:10px">${houses}</div></div>` : "") + (vers ? `<div class="card"><div style="font-weight:700;margin-bottom:6px">🏷️ Versioner</div>${vers}</div>` : "");
 }
 
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).

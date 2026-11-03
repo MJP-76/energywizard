@@ -80,3 +80,15 @@ def test_statistiken_kraver_nyckel_nar_den_ar_satt(monkeypatch):
     assert client.get("/api/stats", headers={"X-Stats-Token": "fel"}).status_code == 403
     assert client.get("/api/stats", headers={"X-Stats-Token": "hemlig"}).status_code == 200
     monkeypatch.delenv("STATS_TOKEN")
+
+
+def test_per_installation_anonymt_och_easee_ihop(monkeypatch):
+    client, _ = _client(monkeypatch)
+    a, b = "0123456789abcdef", "fedcba9876543210"
+    client.post("/ingest/drivers", json={"house": a, "version": "v", "drivers": ["charger:easee", "charger:easee", "car:tesla@Tesla"]})
+    client.post("/ingest/drivers", json={"house": b, "version": "v", "drivers": ["charger:easee@Easee", "battery:generic@Solis"]})
+    s = client.get("/api/stats", params={"me": a}).json()
+    assert s["equipment"]["charger"] == {"easee": 3}
+    assert [h["label"] for h in s["houses"]] == ["Hus 1", "Hus 2"] and s["houses"][0]["mine"] and not s["houses"][1]["mine"]
+    assert s["houses"][1]["devices"]["battery"] == ["generic@Solis"]
+    assert a not in str(s) and b not in str(s)
