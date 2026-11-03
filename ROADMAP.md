@@ -10,6 +10,19 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 ## Övervägs, väntar på fler verkliga hus att verifiera mot
 
+Från genomgången av [FTW](https://github.com/srcfl/ftw) 2026-11-03 (AGPL-3.0-only, får återanvändas med källhänvisning;
+optimeraren Energyplan är stängd och används inte):
+
+- **Flera batterier och växelriktare samtidigt.** Idag ett batteri och en solcellsdrivrutin. Fördela effekten efter
+  laddnivå och kapacitet, med gemensam säkringsgräns (FTW: multi-battery allocation). Efterfrågat av #78 (tre GoodWe +
+  Ferroamp) och #86 (två Solax).
+- **Inbyggd OCPP-server.** Laddboxar (Charge Amps, Zaptec, Alfen ...) kopplas direkt till EnergyWizard utan OCPP-integration
+  i HA (FTW: OCPP 1.6J + 2.0.1). Stort jobb, men sänker tröskeln.
+- **Mjuka effektändringar (slew rate).** Batteriets effekt ändras gradvis i stället för i hopp; säkringsskyddet får
+  fortfarande agera direkt.
+- **Verifieringsnivå per drivrutin.** "Körs i N hem" bredvid varje märke på webben och i README, automatiskt ur
+  telemetrin (FTW märker sina drivrutiner verifierad/inte verifierad på hårdvara).
+
 - **Värmepumpar: styrning via Matter-lagret (pausat 2026-11-03, Emils beslut).** Gränssnittet finns
   redan (`drivers/heatpump.py`: läge, effekt, COP, fel, kurva ±n med tak ±5, paus med tidsgräns,
   nollställning vid start) och HeishaMon (Panasonic) använder det. Motorn styr dock fortfarande

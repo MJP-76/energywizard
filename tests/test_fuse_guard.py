@@ -163,3 +163,14 @@ def test_gpm_betalt_for_att_importera_respekterar_modellens_tak():
         "peak_shaving_enabled": False,
     })
     assert actions["tesla_limit_a"] <= 7
+
+
+# ---- elmätaren svarar inte ----------------------------------------------------------------------------------------
+
+def test_utan_matdata_far_bilen_aldrig_hela_sakringen():
+    from fuse_guard import stale_ev_cap_a, STALE_EV_MAX_A
+    assert stale_ev_cap_a(25, 0.5) == STALE_EV_MAX_A                 # lugnt hus: taket, inte 25 A
+    assert stale_ev_cap_a(16, 3.0) == 6                              # 16 - (3000/230*0,5 + 3) = 6,5 -> 6
+    assert stale_ev_cap_a(16, 6.0) == 0                              # stort hus på liten säkring: ingen laddning
+    assert stale_ev_cap_a(25, 1.0, margin_a=2) == STALE_EV_MAX_A
+    assert stale_ev_cap_a(20, None) == STALE_EV_MAX_A

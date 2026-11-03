@@ -1512,7 +1512,14 @@ while True:
                     for _k, _key in enumerate(("current_l1", "current_l2", "current_l3")):
                         _ev_phase_a[_k] += float(_cd.get(_key) or 0)
             ev_fuse_cap_a = fuse_model.ev_cap_a(_fuse_cfg["fuse_a"], _ev_phase_a, margin_a=_fuse_cfg["margin_a"])
-            if ev_fuse_cap_a is not None:
+            if ev_fuse_cap_a is None and (avg_hl1 is None or avg_hl2 is None or avg_hl3 is None):
+                # Elmätaren svarar inte: husets ström är okänd (räknades förut som 0 A = hela säkringen till bilen).
+                # Ladda vidare, men försiktigt - inspirerat av FTW:s regel för gammal mätardata, se fuse_guard.py.
+                _base_kw = learning.predict_base_load(now, dynamic_base_load_profile)
+                ev_fuse_cap_a = fuse_guard.stale_ev_cap_a(_fuse_cfg["fuse_a"], _base_kw, _fuse_cfg["margin_a"])
+                ai_thoughts.append(f"⚡ Elmätaren svarar inte: bilarna får högst {ev_fuse_cap_a} A tills mätdata finns igen "
+                                   f"(husets last uppskattad till {_base_kw:.1f} kW).")
+            elif ev_fuse_cap_a is not None:
                 _filt = fuse_model.filtered_a()
                 ai_thoughts.append(f"⚡ Säkringsmodell: termisk ström {'/'.join(f'{x:.1f}' for x in _filt)} A, bilarna får {ev_fuse_cap_a} A"
                                    + (" (håller, nyss strypt)" if fuse_model.in_recovery() else "") + ".")

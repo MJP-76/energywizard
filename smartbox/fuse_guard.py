@@ -19,10 +19,10 @@ Byggd mot FTW:s dokumenterade säkerhetsmodell (github.com/srcfl/ftw, docs/safet
   - En fas som EXPORTERAR (negativ ström från Tibber) stryps aldrig för - mindre bil-last
     skulle bara öka exporten. Den räknas utan sin värme vid ökning/start.
 
-Avsteg från FTW, medvetet: FTW ser gammal mätardata som ett skäl att stoppa all laddning.
-Här faller `ev_cap_a()` istället tillbaka på None (= gpm.py använder den gamla formeln), så
-ett Tibber-avbrott inte stoppar nattens laddning. Det är samma beteende som innan modellen
-fanns - inte sämre, men inte heller FTW:s striktare nivå.
+Avsteg från FTW, medvetet: FTW ser gammal mätardata som ett skäl att stoppa all laddning. Här
+laddar bilen vidare, så att ett Tibber-avbrott inte stoppar nattens laddning - men försiktigt
+(stale_ev_cap_a): högst STALE_EV_MAX_A, och husets last uppskattas ur den inlärda förbrukningen
+med marginal. Förut räknades okänd husström som 0 A, och bilen fick då hela säkringen (2026-11-03).
 
 Rena funktioner/klass utan I/O - testas i tests/test_fuse_guard.py.
 """
@@ -35,6 +35,17 @@ TRIP_FACTOR = 1.2          # en enskild avläsning över 1,2 × märkvärdet str
 RECOVERY_S = 20.0          # ingen ökning inom så här lång tid efter en strypning
 STALE_S = 60.0             # äldre mätdata än så här = modellen svarar inte (None)
 EV_RUNNING_A = 1.0         # bilen räknas som laddande om den drar minst så här på någon fas
+STALE_EV_MAX_A = 10        # utan färsk mätdata: aldrig mer än så här per fas till bilarna
+STALE_PHASE_SHARE = 0.5    # ... och värsta fasen antas bära hälften av husets uppskattade last
+STALE_MARGIN_A = 3.0       # ... plus en fast marginal
+
+
+def stale_ev_cap_a(fuse_a, base_load_kw, margin_a=0.0, volt=230.0):
+    """Tak för bilarna när elmätaren inte svarar: säkringen minus en försiktig uppskattning av husets värsta
+    fas (inlärd baslast, STALE_PHASE_SHARE av den på en fas, + STALE_MARGIN_A), och aldrig över STALE_EV_MAX_A."""
+    house_a = max(0.0, float(base_load_kw or 0.0)) * 1000.0 / float(volt) * STALE_PHASE_SHARE + STALE_MARGIN_A
+    room = float(fuse_a) - max(0.0, float(margin_a or 0.0)) - house_a
+    return int(max(0, min(STALE_EV_MAX_A, math.floor(room))))
 
 
 class FuseThermalModel:
