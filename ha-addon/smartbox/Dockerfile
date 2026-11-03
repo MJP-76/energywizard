@@ -15,8 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Commit-id:t gör att byggcachen inte återanvänder en gammal klon (sätts av CI, tomt annars).
 ARG ENERGYWIZARD_COMMIT=
-RUN echo "EnergyWizard ${ENERGYWIZARD_REF} ${ENERGYWIZARD_COMMIT}" && git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
-        https://github.com/murre87/energywizard /src
+# Repot att klona: standard är projektet självt; CI sätter forkens adress för pull requests från forkar
+# (grenen finns bara där, annars misslyckas kloningen).
+ARG ENERGYWIZARD_REPO=https://github.com/murre87/energywizard
+RUN echo "EnergyWizard ${ENERGYWIZARD_REPO} ${ENERGYWIZARD_REF} ${ENERGYWIZARD_COMMIT}" && git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
+        "${ENERGYWIZARD_REPO}" /src
 
 # Samma layout som docker-compose-driften: ewapp och webdashboard gör
 # sys.path.insert(0, "/smartbox") och importerar motorns moduler därifrån

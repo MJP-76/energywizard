@@ -48,6 +48,7 @@ jobs:
         run: |
           docker build \
             --build-arg ENERGYWIZARD_REF="${{ github.head_ref || github.ref_name }}" \
+            --build-arg ENERGYWIZARD_REPO="${{ github.event.pull_request.head.repo.clone_url || format('https://github.com/{0}', github.repository) }}" \
             -t ew-addon ha-addon/smartbox
       - name: Röktest - starta som Supervisor skulle (options.json + /config)
         run: |
