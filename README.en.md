@@ -96,7 +96,8 @@ Home Assistant. For brand-specific control, see `smartbox/drivers/*.py` for the 
 ## Telemetry (on by default, easy to turn off)
 
 Sends only: a hashed house identifier (`sha256(house_id)`), which driver categories are active (e.g.
-`solar:solaredge` - no entity ids or sensor values), error types from critical errors in the main loop (the
+`solar:solaredge` - no entity ids or sensor values) and the brand from Home Assistant's device registry
+(e.g. `battery:generic@FoxESS`), once a day, error types from critical errors in the main loop (the
 exception class name, never the message), a version hash and a timestamp. Nothing else - no price data, no sensor
 history, no location. See `smartbox/telemetry.py` for exactly what is sent. To send nothing at all, set
 `TELEMETRY_OPT_IN=false` in your `.env`.

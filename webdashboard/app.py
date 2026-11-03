@@ -32,6 +32,8 @@ import pump
 
 WATCHTOWER_URL = os.environ.get("WATCHTOWER_URL", "http://host.docker.internal:8090")
 WATCHTOWER_TOKEN = os.environ.get("WATCHTOWER_API_TOKEN", "")
+# Bara på utvecklarens egen installation: telemetrisamlarens sammanställning (antal aktiva + utrustning).
+TELEMETRY_STATS_URL = os.environ.get("TELEMETRY_STATS_URL", "").strip()
 # /v1/check gör en riktig registry-koll (tar ~5s) - cachas här så "System"-sidan
 # inte startar om den varje gång sidan öppnas.
 _wt_cache = {"ts": 0, "data": None}
@@ -389,6 +391,19 @@ async def updates(request: Request, force: bool = False):
         "total": len(containers),
         "pending": sorted(pending),
     }
+
+
+@app.get("/api/installs")
+async def installs(request: Request):
+    """System-sidan: hur många som kör EnergyWizard och med vilken utrustning (från telemetrisamlaren)."""
+    if not TELEMETRY_STATS_URL:
+        return {"ok": False, "configured": False}
+    try:
+        r = requests.get(TELEMETRY_STATS_URL, timeout=10)
+        r.raise_for_status()
+        return {"ok": True, "configured": True, **r.json()}
+    except (requests.RequestException, ValueError) as e:
+        return {"ok": False, "configured": True, "error": f"Kunde inte nå telemetrisamlaren: {e}"}
 
 
 def _latest_row(c):

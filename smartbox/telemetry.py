@@ -7,7 +7,10 @@ nätverksanrop görs ens.
 Vad som skickas när den är PÅ (och bara det):
   - en anonymiserad husidentifierare (sha256(house_id), inte house_id i klartext)
   - vilka drivrutinklasser som är aktiva (klassnamn, t.ex. "GenericSolarDriver" -
-    inga entity-id:n, inga sensorvärden, inga adresser/IP:n)
+    inga entity-id:n, inga sensorvärden, inga adresser/IP:n), och för varje
+    kategori tillverkarens namn enligt Home Assistants enhetsregister (t.ex.
+    "FoxESS"), så att generiska drivrutiner också säger vilket märke de styr
+  - en gång per dygn, så att samlaren kan räkna aktiva installationer
   - fel: modul + feltyp (exceptionens klassnamn, ALDRIG str(exception) - kan
     innehålla sensorvärden eller sökvägar)
   - tidsstämpel och git-commit-hash (grov versionsindikator)
@@ -29,7 +32,11 @@ import requests
 
 # På som standard - TELEMETRY_OPT_IN=false (eller "0"/"no") stänger av helt.
 OPT_IN = os.environ.get("TELEMETRY_OPT_IN", "true").strip().lower() not in ("false", "0", "no")
-ENDPOINT = os.environ.get("TELEMETRY_ENDPOINT", "https://energywizzard.profitalgos.com/telemetry").strip().rstrip("/")
+# Tom sträng = standard: docker-compose skickar TELEMETRY_ENDPOINT= (tom) när .env saknar raden, och då
+# skickades ingenting alls (upptäckt 2026-11-03 - Emils eget hus syntes aldrig i samlaren).
+ENDPOINT = (os.environ.get("TELEMETRY_ENDPOINT", "").strip() or "https://energywizzard.profitalgos.com/telemetry").rstrip("/")
+SNAPSHOT_EVERY = timedelta(hours=24)        # daglig signal: samlaren räknar "aktiva" som hörda de senaste 3 dygnen
+_last_snapshot: datetime | None = None
 
 _ERROR_SEEN: dict[str, datetime] = {}  # (modul, feltyp) -> senast skickad, i minnet räcker - processen kör kontinuerligt
 
@@ -39,6 +46,9 @@ def _hashed_house_id(house_id: str) -> str:
 
 
 def _software_version() -> str:
+    v = os.environ.get("APP_VERSION", "").strip()          # satt av bildbygget; git finns inte i bilden
+    if v and v != "dev":
+        return v[:40]
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=3, cwd=Path(__file__).parent)
         return r.stdout.strip() or "unknown"
@@ -46,34 +56,75 @@ def _software_version() -> str:
         return "unknown"
 
 
-def _driver_summary(cfg: dict) -> list[str]:
-    """Kategoriska drivrutinsnamn, t.ex. ["heatpump:husdata", "car:tesla",
-    "solar:solaredge"] - bara klassnamn/kategorier ur configen, inga entity-id:n."""
+def _first_entity(section: dict) -> str | None:
+    for v in (section.get("entities") or {}).values():
+        if isinstance(v, str) and "." in v:
+            return v
+    return None
+
+
+def _brand(section: dict, maker_fn) -> str:
+    """Tillverkaren (HA:s enhetsregister) för sektionens första entitet - bara märkesnamnet, aldrig entiteten."""
+    e = _first_entity(section)
+    if not e or maker_fn is None:
+        return ""
+    try:
+        m = (maker_fn(e) or "").strip()
+    except Exception:
+        return ""
+    m = "".join(ch for ch in m if ch.isalnum() or ch in " -_.")[:40].strip()
+    return f"@{m}" if m else ""
+
+
+def _ha_maker(entity_id: str) -> str:
+    import re
+    import homeassistant
+    if not homeassistant.configured() or not re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", entity_id or ""):
+        return ""
+    template = "{{ device_attr(device_id('%s'), 'manufacturer') or '' }}" % entity_id
+    r = requests.post(f"{homeassistant._BASE}/template", headers=homeassistant._HEADERS, timeout=5,
+                      verify=homeassistant._VERIFY, json={"template": template})
+    r.raise_for_status()
+    return r.text.strip()
+
+
+def _driver_summary(cfg: dict, maker_fn=None) -> list[str]:
+    """Kategoriska drivrutinsnamn, t.ex. ["heatpump:husdata", "car:tesla", "battery:generic@FoxESS"] -
+    bara klassnamn/kategorier ur configen och märkesnamn ur HA:s enhetsregister, inga entity-id:n."""
     out = []
-    if cfg.get("heat_pump", {}).get("enabled"):
-        out.append(f"heatpump:{cfg['heat_pump'].get('driver', '?')}")
-    if cfg.get("solar", {}).get("enabled"):
-        out.append(f"solar:{cfg['solar'].get('driver', '?')}")
-    if cfg.get("spa", {}).get("enabled"):
-        out.append(f"spa:{cfg['spa'].get('driver', '?')}")
-    if cfg.get("battery", {}).get("enabled"):
-        out.append(f"battery:{cfg['battery'].get('driver', '?')}")
+    for key, cat in (("heat_pump", "heatpump"), ("solar", "solar"), ("spa", "spa"), ("battery", "battery")):
+        sec = cfg.get(key, {}) or {}
+        if sec.get("enabled"):
+            out.append(f"{cat}:{sec.get('driver', '?')}{_brand(sec, maker_fn)}")
     for ev in cfg.get("evs", []) or []:
-        out.append(f"car:{ev.get('driver', '?')}")
+        out.append(f"car:{ev.get('driver', '?')}{_brand(ev, maker_fn)}")
     for ch in cfg.get("chargers", []) or []:
-        out.append(f"charger:{ch.get('driver', '?')}")
+        out.append(f"charger:{ch.get('driver', '?')}{_brand(ch, maker_fn)}")
     return out
 
 
+def maybe_send_daily(cfg: dict, now: datetime | None = None) -> None:
+    """Anropas varje varv i huvudloopen: skickar översikten igen när ett dygn gått (signalen "aktiv")."""
+    global _last_snapshot
+    now = now or datetime.now(timezone.utc)
+    if not (OPT_IN and ENDPOINT) or (_last_snapshot is not None and now - _last_snapshot < SNAPSHOT_EVERY):
+        return
+    _last_snapshot = now                              # sätts direkt: en långsam HA ska inte ge flera trådar
+    import threading
+    threading.Thread(target=send_driver_snapshot, args=(cfg,), daemon=True, name="telemetry-daily").start()
+
+
 def send_driver_snapshot(cfg: dict) -> None:
-    """Skickas en gång vid uppstart - vilka drivrutinkategorier som är aktiva."""
+    """Skickas vid uppstart och sedan en gång per dygn - vilka drivrutinkategorier som är aktiva."""
+    global _last_snapshot
     if not (OPT_IN and ENDPOINT):
         return
+    _last_snapshot = datetime.now(timezone.utc)
     try:
         payload = {
             "house": _hashed_house_id(cfg.get("house_id", "")),
             "version": _software_version(),
-            "drivers": _driver_summary(cfg),
+            "drivers": _driver_summary(cfg, _ha_maker),
             "ts": datetime.now(timezone.utc).isoformat(),
         }
         requests.post(f"{ENDPOINT}/ingest/drivers", json=payload, timeout=5)

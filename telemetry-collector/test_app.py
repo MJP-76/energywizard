@@ -53,3 +53,18 @@ def test_mejlfel_kraschar_inte_ingest(monkeypatch):
     with patch("app.smtplib.SMTP", side_effect=RuntimeError("timeout")):
         r = client.post("/ingest/drivers", json={"house": "hus-x", "version": "x", "drivers": []})
     assert r.status_code == 200
+
+
+def test_stats_raknar_aktiva_och_utrustning_utan_husidentiteter(monkeypatch):
+    client, _ = _client(monkeypatch)
+    a, b = "0123456789abcdef", "fedcba9876543210"
+    client.post("/ingest/drivers", json={"house": a, "version": "v1", "drivers": ["heatpump:thermia_husdata", "battery:generic@FoxESS"]})
+    client.post("/ingest/drivers", json={"house": a, "version": "v2", "drivers": ["heatpump:thermia_husdata", "battery:generic@FoxESS"]})
+    client.post("/ingest/drivers", json={"house": b, "version": "v2", "drivers": ["battery:generic@FoxESS", "car:tesla"]})
+    client.post("/ingest/drivers", json={"house": "testverify", "version": "x", "drivers": ["car:nissan"]})
+    s = client.get("/api/stats").json()
+    assert s["active"] == 2 and s["total_known"] == 2 and s["new_last_7d"] == 2
+    assert s["equipment"]["battery"] == {"generic@FoxESS": 2}
+    assert s["equipment"]["heatpump"] == {"thermia_husdata": 1} and "nissan" not in str(s)
+    assert s["versions"] == {"v2": 2}
+    assert a not in str(s) and b not in str(s)

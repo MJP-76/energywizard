@@ -135,7 +135,8 @@ Se [ROADMAP.md](ROADMAP.md) för vad som är nästa rimliga steg och varför.
 
 Skickar bara: en hashad, oåterkallelig husidentifierare (`sha256(house_id)`,
 inte house_id i klartext), vilka drivrutinkategorier som är aktiva (t.ex.
-`solar:solaredge` - inga entity-id:n eller sensorvärden), feltyper vid
+`solar:solaredge` - inga entity-id:n eller sensorvärden) och märket enligt Home
+Assistants enhetsregister (t.ex. `battery:generic@FoxESS`), en gång per dygn, feltyper vid
 kritiska fel i huvudloopen (exceptionens klassnamn, aldrig feltexten), en
 grov versionsindikator (git-commit-hash) och en tidsstämpel. Inget annat -
 ingen elprisdata, ingen sensorhistorik, ingen plats. Går till den centrala,

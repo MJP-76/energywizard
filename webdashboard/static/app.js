@@ -906,6 +906,37 @@ async function renderSystem() {
   const main = document.getElementById("main");
   main.innerHTML = `<div class="placeholder">Laddar…</div>`;
   await loadUpdates(false);
+  const d = await api("api/installs").catch(() => null);
+  if (d && d.configured) main.insertAdjacentHTML("afterbegin", installsCard(d));
+}
+
+// Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
+const INSTALL_CATS = [["heatpump", "🌡️", "Värmepump"], ["spa", "🛁", "Spabad"], ["solar", "☀️", "Solceller / växelriktare"],
+  ["battery", "🔋", "Husbatteri"], ["charger", "🔌", "Laddbox"], ["car", "🚗", "Elbil"]];
+const DRIVER_NAMES = { thermia_husdata: "Thermia (Husdata)", generic_climate: "climate i HA", nibe_local: "NIBE S (lokalt)",
+  myuplink: "myUplink", heishamon: "Panasonic (HeishaMon)", solaredge: "SolarEdge", generic_number: "exportgräns i HA",
+  huawei_solar: "Huawei", modbus_register: "Modbus-register", gecko: "Gecko", balboa: "Balboa", switch: "relä/brytare",
+  shelly: "Shelly", generic: "generisk", easee: "Easee", tesla: "Tesla", nissan: "Nissan", generic_ev: "generisk elbil" };
+function installsCard(d) {
+  if (!d.ok) return `<div class="card" style="margin-bottom:16px">👥 ${esc(d.error || "")}</div>`;
+  const label = (k) => { const [drv, brand] = k.split("@"); return brand ? `${esc(brand)} <span class="note">(${esc(DRIVER_NAMES[drv] || drv)})</span>` : esc(DRIVER_NAMES[drv] || drv); };
+  const cats = INSTALL_CATS.map(([key, ico, name]) => {
+    const items = Object.entries((d.equipment || {})[key] || {});
+    const body = items.length ? items.map(([k, n]) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0"><span>${label(k)}</span><b>${n}</b></div>`).join("")
+      : `<div class="note">–</div>`;
+    return `<div class="card" style="padding:12px"><div style="font-weight:700;margin-bottom:6px">${ico} ${name}</div>${body}</div>`;
+  }).join("");
+  return `<div class="card" style="margin-bottom:16px">
+      <div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
+      <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px">
+        <div><div style="font-size:2rem;font-weight:800">${d.active}</div><div class="note">aktiva (hörda senaste ${d.active_days} dygnen)</div></div>
+        <div><div style="font-size:2rem;font-weight:800">${d.total_known}</div><div class="note">totalt sedan start</div></div>
+        <div><div style="font-size:2rem;font-weight:800">${d.new_last_7d}</div><div class="note">nya senaste veckan</div></div>
+      </div>
+      ${d.without_devices ? `<div class="note" style="margin-top:8px">${d.without_devices} har inte valt några enheter än.</div>` : ""}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px;margin-top:14px">${cats}</div>
+      <div class="note" style="margin-top:10px">Från telemetrin: bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte.</div>
+    </div>`;
 }
 
 async function loadUpdates(force) {

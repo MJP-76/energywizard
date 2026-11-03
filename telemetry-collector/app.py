@@ -150,6 +150,48 @@ async def recent(limit: int = 50):
     })
 
 
+ACTIVE_DAYS = 3          # smartbox skickar översikten varje dygn: hörd inom 3 dygn = aktiv
+
+
+def _is_real_house(h: str) -> bool:
+    """Riktiga hus är sha256-prefix (16 hextecken); testposter ("testverify", "smtptest") räknas inte."""
+    return len(h) == 16 and all(c in "0123456789abcdef" for c in h)
+
+
+@app.get("/api/stats")
+async def stats():
+    """Sammanställning för Emils dashboard: antal aktiva installationer och vilken utrustning de kör.
+    Bara räknetal per kategori/drivrutin/märke - inga husidentifierare."""
+    from datetime import timedelta
+    since = (datetime.now(timezone.utc) - timedelta(days=ACTIVE_DAYS)).isoformat()
+    with _db() as c:
+        known = [r[0] for r in c.execute("SELECT house FROM known_houses")]
+        rows = c.execute(
+            "SELECT house, version, drivers FROM driver_snapshots WHERE received_at >= ? ORDER BY id", (since,)).fetchall()
+        first = {r[0]: r[1] for r in c.execute("SELECT house, first_seen FROM known_houses")}
+    latest = {}
+    for house, version, drivers in rows:
+        if _is_real_house(house):
+            latest[house] = (version, [d for d in (drivers or "").split(",") if d])
+    equipment, versions = {}, {}
+    for version, drivers in latest.values():
+        versions[version or "okänd"] = versions.get(version or "okänd", 0) + 1
+        for d in set(drivers):
+            cat, _, rest = d.partition(":")
+            equipment.setdefault(cat, {})
+            equipment[cat][rest] = equipment[cat].get(rest, 0) + 1
+    week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    return {
+        "active": len(latest),
+        "active_days": ACTIVE_DAYS,
+        "total_known": sum(1 for h in known if _is_real_house(h)),
+        "new_last_7d": sum(1 for h, f in first.items() if _is_real_house(h) and f >= week),
+        "without_devices": sum(1 for _, d in latest.values() if not d),
+        "equipment": {cat: dict(sorted(v.items(), key=lambda kv: -kv[1])) for cat, v in sorted(equipment.items())},
+        "versions": versions,
+    }
+
+
 @app.get("/api/ping")
 async def ping():
     return {"ok": True}

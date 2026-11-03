@@ -175,6 +175,9 @@ services:
       # containrar på NUC:en - watchtower delar docker-nät med den här stacken.
       - WATCHTOWER_API_TOKEN=${WATCHTOWER_API_TOKEN}
       - WATCHTOWER_URL=http://watchtower:8080
+      # Bara på utvecklarens server: telemetrisamlarens sammanställning visas på System-sidan (antal aktiva +
+      # utrustning). Tom = inget kort. T.ex. http://telemetry-collector:8504/api/stats
+      - TELEMETRY_STATS_URL=${TELEMETRY_STATS_URL:-}
       - HOUSE_CONFIG_PATH=/house_config.yaml
       - HOUSE_CONFIG_WRITABLE=${HOUSE_CONFIG_WRITABLE:-}
 

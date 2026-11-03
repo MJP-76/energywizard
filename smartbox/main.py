@@ -800,6 +800,7 @@ while True:
 
             # Asynkron inhämtning av pump och pris
             heat_pump_driver.tick()                         # släpper en tidsbegränsad paus (Matter-lagret) när tiden gått ut
+            telemetry.maybe_send_daily(house_cfg)           # daglig "aktiv"-signal (no-op om telemetrin är av)
             async def fetch_heavy_data():
                 return await asyncio.gather(
                     asyncio.to_thread(heat_pump_driver.read_sensors),

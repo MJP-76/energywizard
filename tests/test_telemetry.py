@@ -40,11 +40,41 @@ def test_opt_in_false_stanger_av_helt(monkeypatch):
     mock_post.assert_not_called()
 
 
-def test_tom_endpoint_skickar_inget_aven_om_pa(monkeypatch):
-    t = _reload(monkeypatch, opt_in="true", endpoint="")
+def test_tom_endpoint_betyder_standardadressen(monkeypatch):
+    """docker-compose skickar TELEMETRY_ENDPOINT= (tom) när .env saknar raden - då ska standarden gälla,
+    annars tystnar alla compose-installationer (så var det fram till 2026-11-03). Av = TELEMETRY_OPT_IN=false."""
+    t = _reload(monkeypatch, opt_in="", endpoint="")
+    assert t.OPT_IN is True and t.ENDPOINT == "https://energywizzard.profitalgos.com/telemetry"
     with patch("telemetry.requests.post") as mock_post:
         t.send_driver_snapshot({"house_id": "mitt-hus"})
-    mock_post.assert_not_called()
+    mock_post.assert_called_once()
+
+
+def test_marke_fran_enhetsregistret_men_aldrig_entiteten(monkeypatch):
+    t = _reload(monkeypatch)
+    cfg = {"battery": {"enabled": True, "driver": "generic", "entities": {"soc": "sensor.foxess_bat_soc"}},
+           "heat_pump": {"enabled": True, "driver": "thermia_husdata"},
+           "chargers": [{"driver": "generic", "entities": {"switch": "switch.zap_laddning"}}]}
+    makers = {"sensor.foxess_bat_soc": "FoxESS", "switch.zap_laddning": "Zaptec <script>"}
+    out = t._driver_summary(cfg, makers.get)
+    assert out == ["heatpump:thermia_husdata", "battery:generic@FoxESS", "charger:generic@Zaptec script"]
+    assert not any("sensor." in x or "switch." in x for x in out)
+    assert t._driver_summary(cfg, lambda e: (_ for _ in ()).throw(RuntimeError())) == \
+        ["heatpump:thermia_husdata", "battery:generic", "charger:generic"]
+
+
+def test_daglig_signal_en_gang_per_dygn(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    t = _reload(monkeypatch)
+    started = []
+    monkeypatch.setattr(t, "send_driver_snapshot", lambda cfg: started.append(1))
+    now = datetime(2026, 11, 3, 12, tzinfo=timezone.utc)
+    import threading
+    monkeypatch.setattr(threading, "Thread", lambda target, args, **k: type("T", (), {"start": lambda self: target(*args)})())
+    t.maybe_send_daily({}, now)
+    t.maybe_send_daily({}, now + timedelta(hours=23))
+    t.maybe_send_daily({}, now + timedelta(hours=24))
+    assert len(started) == 2
 
 
 def test_driver_snapshot_skickar_bara_tillatna_falt(monkeypatch):
