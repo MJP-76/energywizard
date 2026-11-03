@@ -188,7 +188,7 @@ async def stats(request: Request):
     equipment, versions = {}, {}
     for version, drivers in latest.values():
         versions[version or "okänd"] = versions.get(version or "okänd", 0) + 1
-        for d in set(drivers):
+        for d in drivers:                     # enheter, inte hus: två Easee-boxar i samma hus räknas som 2
             cat, _, rest = d.partition(":")
             equipment.setdefault(cat, {})
             equipment[cat][rest] = equipment[cat].get(rest, 0) + 1

@@ -228,8 +228,10 @@ function planStripHtml(d, now) {
   }).join("");
   const goals = (d.car_goals || []).map((g) => {
     const day = new Date(g.at).toDateString() === now.toDateString() ? "" : "imorgon ";
-    return `<div class="stat" style="padding:8px 12px;flex:1;min-width:140px"><div class="note">🚗 ${esc(g.car.charAt(0).toUpperCase() + g.car.slice(1))}</div>
-      <div style="font-weight:700">${g.soc != null ? g.soc + " % " : ""}klar ${day}${hhmm(g.at)}</div></div>`;
+    const off = g.plugged === false;
+    return `<div class="stat" style="padding:8px 12px;flex:1;min-width:140px${off ? ";opacity:.6" : ""}"><div class="note">🚗 ${esc(g.car.charAt(0).toUpperCase() + g.car.slice(1))}${off ? " · 🔌 inte ansluten" : ""}</div>
+      <div style="font-weight:700">${off ? `Mål ${g.soc != null ? g.soc + " % " : ""}${day}${hhmm(g.at)}` : `${g.soc != null ? g.soc + " % " : ""}klar ${day}${hhmm(g.at)}`}</div>
+      ${off ? `<div class="note">Laddar när kabeln sätts i</div>` : ""}</div>`;
   }).join("");
   return `<div class="note" style="margin-bottom:8px">De närmaste 12 timmarna</div>${rows || `<div class="note">Inget planerat.</div>`}
     <div class="note" style="position:relative;height:16px;font-size:.75rem">${ticks}</div>
@@ -237,11 +239,15 @@ function planStripHtml(d, now) {
 }
 
 function planCardHtml(d) {
-  const rows = d.items.slice(0, 8).map((i) => `
-    <div style="display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line)${i.active ? ";font-weight:600" : ""}">
-      <div style="flex:0 0 158px;white-space:nowrap;font-variant-numeric:tabular-nums">${i.active ? `<span class="badge on" style="margin-right:6px">Nu</span>` : ""}${esc(i.when)}</div>
-      <div><div>${esc(i.title)}</div><div class="note">${esc(i.detail)}</div></div>
-    </div>`).join("");
+  // Tid och text sida vid sida när det får plats, annars tiden ovanför (förut bröts texten i en smal kolumn).
+  const row = (i, hidden) => `
+    <div class="planrow"${hidden ? " hidden" : ""} style="display:flex;flex-wrap:wrap;column-gap:14px;row-gap:2px;padding:9px 0;border-top:1px solid var(--line)${i.active ? ";font-weight:600" : ""}">
+      <div style="flex:0 0 auto;min-width:150px;white-space:nowrap;font-variant-numeric:tabular-nums">${i.active ? `<span class="badge on" style="margin-right:6px">Nu</span>` : ""}${esc(i.when)}</div>
+      <div style="flex:1 1 240px;min-width:0"><div>${esc(i.title)}</div><div class="note">${esc(i.detail)}</div></div>
+    </div>`;
+  const SHOW = 4;
+  const rows = d.items.slice(0, 12).map((i, k) => row(i, k >= SHOW)).join("")
+    + (d.items.length > SHOW ? `<button class="icobtn" style="margin-top:8px" onclick="this.parentElement.querySelectorAll('.planrow[hidden]').forEach(r=>r.hidden=false);this.remove()">Visa alla (${Math.min(d.items.length, 12)})</button>` : "");
   return `
     <div class="card">
       <h2>🗓️ Planen framåt</h2>
@@ -418,7 +424,8 @@ async function renderOversikt() {
       <div class="note" style="margin-top:4px">💸 ${fmtKrOre(d.price)}/kWh · 🌡️ Inne ${fmt(d.indoor_temp, 1, "°C")} (mål ${d.indoor_target.toFixed(0)}) · 🌳 Ute ${fmt(d.outdoor_temp, 1, "°C")}</div>
     </div>
     <div id="flowslot" style="margin-bottom:16px"></div>
-    <div class="grid" style="margin-bottom:16px"><div id="savingsslot"></div><div id="planslot"></div></div>
+    <div id="planslot" style="margin-bottom:16px"></div>
+    <div id="savingsslot" style="margin-bottom:16px"></div>
     <div class="card" style="margin-bottom:16px"><span class="note">⚡ Aktuell effekttariff: ${tariff}</span></div>
     <div class="grid" style="margin-bottom:16px">
       ${metricCard("⚡", "Elpris just nu", fmtKrOre(d.price) + "/kWh")}
@@ -1063,7 +1070,7 @@ function installsCard(d) {
       </div>
       ${d.without_devices ? `<div class="note" style="margin-top:8px">${d.without_devices} har inte valt några enheter än.</div>` : ""}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px;margin-top:14px">${cats}</div>
-      <div class="note" style="margin-top:10px">Från telemetrin: bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte.</div>
+      <div class="note" style="margin-top:10px">Antal enheter, från telemetrin: bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte, och en installation syns med sina enheter först när den valt dem i startguiden.</div>
     </div>`;
 }
 

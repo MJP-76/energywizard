@@ -594,7 +594,21 @@ async def api_plan():
     clock_prices = [{"t": r[0].isoformat(), "spot": round(float(r[1]), 4), "total": round(nordpool.full_buy_cost(float(r[1])), 4)}
                     for r in prices if r[1] is not None and now - timedelta(minutes=15) <= r[0] < now + timedelta(hours=24)]
     return {"ok": True, **brief, "solar_days": sun, "now": now.isoformat(), "prices": clock_prices,
-            "car_goals": _car_goals(sched, now)}
+            "car_goals": _with_plugged(_car_goals(sched, now))}
+
+
+def _with_plugged(goals):
+    """Lägger till om bilen är ansluten (evs[].entities.plugged_in i house_config): ett mål är bara en plan om
+    kabeln sitter i. None = okänt (ingen sådan entitet)."""
+    try:
+        evs = {e.get("id"): e for e in (house_config.load_house_config(HOUSE_CONFIG_FILE).get("evs") or [])}
+    except Exception:
+        evs = {}
+    for g in goals:
+        ent = ((evs.get(g["car"]) or {}).get("entities") or {}).get("plugged_in")
+        st = homeassistant._get_raw_state(ent) if ent else None
+        g["plugged"] = None if st in (None, "unknown", "unavailable") else str(st).lower() in ("on", "true", "home", "1")
+    return goals
 
 
 def _car_goals(sched, now):

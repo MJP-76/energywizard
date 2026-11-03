@@ -58,6 +58,9 @@ def test_marke_fran_enhetsregistret_men_aldrig_entiteten(monkeypatch):
     makers = {"sensor.foxess_bat_soc": "FoxESS", "switch.zap_laddning": "Zaptec <script>"}
     out = t._driver_summary(cfg, makers.get)
     assert out == ["heatpump:thermia_husdata", "battery:generic@FoxESS", "charger:generic@Zaptec script"]
+    nested = t._driver_summary({"evs": [{"driver": "tesla", "charger": {"driver": "easee", "physical": "carport"}},
+                                        {"driver": "nissan", "charger": {"driver": "easee", "physical": "lite"}}]}, None)
+    assert nested == ["car:tesla", "charger:easee", "car:nissan", "charger:easee"]
     assert not any("sensor." in x or "switch." in x for x in out)
     assert t._driver_summary(cfg, lambda e: (_ for _ in ()).throw(RuntimeError())) == \
         ["heatpump:thermia_husdata", "battery:generic", "charger:generic"]

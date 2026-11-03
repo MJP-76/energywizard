@@ -65,6 +65,8 @@ def test_stats_raknar_aktiva_och_utrustning_utan_husidentiteter(monkeypatch):
     s = client.get("/api/stats").json()
     assert s["active"] == 2 and s["total_known"] == 2 and s["new_last_7d"] == 2
     assert s["equipment"]["battery"] == {"generic@FoxESS": 2}
+    client.post("/ingest/drivers", json={"house": b, "version": "v2", "drivers": ["charger:easee", "charger:easee", "car:tesla"]})
+    assert client.get("/api/stats").json()["equipment"]["charger"] == {"easee": 2}
     assert s["equipment"]["heatpump"] == {"thermia_husdata": 1} and "nissan" not in str(s)
     assert s["versions"] == {"v2": 2}
     assert a not in str(s) and b not in str(s)

@@ -98,6 +98,8 @@ def _driver_summary(cfg: dict, maker_fn=None) -> list[str]:
             out.append(f"{cat}:{sec.get('driver', '?')}{_brand(sec, maker_fn)}")
     for ev in cfg.get("evs", []) or []:
         out.append(f"car:{ev.get('driver', '?')}{_brand(ev, maker_fn)}")
+        if isinstance(ev.get("charger"), dict) and ev["charger"].get("driver"):      # laddboxen ligger under bilen
+            out.append(f"charger:{ev['charger']['driver']}{_brand(ev['charger'], maker_fn)}")
     for ch in cfg.get("chargers", []) or []:
         out.append(f"charger:{ch.get('driver', '?')}{_brand(ch, maker_fn)}")
     return out
