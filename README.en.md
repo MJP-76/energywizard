@@ -64,6 +64,9 @@ Then open `http://your-computer:8503`. The setup wizard does the rest (pick **En
 
 No file needs editing. Everything is stored in `~/energywizard/data`, and EnergyWizard updates itself.
 
+🕶️ **Want to try it safely first?** Turn on **Shadow mode** under Settings. EnergyWizard then calculates and plans as usual
+next to your current system, but sends nothing to your devices, and shows a list of what it *would* have done.
+
 Prefer doing it yourself? `docker-compose.enkel.yml` is enough - save it as `docker-compose.yml` and run
 `docker compose up -d`. Or without compose:
 

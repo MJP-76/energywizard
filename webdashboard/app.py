@@ -267,6 +267,29 @@ async def api_battery_plan_settings_save(request: Request):
     return {"ok": True, **upd}
 
 
+@app.get("/api/shadow")
+async def shadow_get():
+    """Skuggläget (smartbox/shadow.py): på/av och vad EnergyWizard hade gjort de senaste dygnen."""
+    import shadow
+    try:
+        with ENGINE.connect() as c:
+            rows = c.execute(text("SELECT ts AT TIME ZONE 'Europe/Stockholm', what, detail FROM shadow_actions "
+                                  "ORDER BY ts DESC LIMIT 60")).fetchall()
+    except Exception:          # tabellen finns först när något loggats
+        rows = []
+    return {"ok": True, "active": shadow.active(), "forced_by_env": os.environ.get("SHADOW_MODE", "").lower() in ("1", "true", "ja", "yes"),
+            "actions": [{"ts": str(r[0])[:16], "what": r[1], "detail": r[2]} for r in rows]}
+
+
+@app.post("/api/shadow")
+async def shadow_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan slå på eller av skuggläget"}, status_code=403)
+    ew_settings.update(shadow_mode=bool((await request.json()).get("active")) or None)
+    return {"ok": True}
+
+
 _PRICE_KEYS = ("price_country", "price_area", "price_vat_pct", "price_buy_extra", "price_sell_extra", "price_sell_vat",
                "price_currency", "price_ha_entity")
 

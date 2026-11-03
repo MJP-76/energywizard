@@ -1,7 +1,27 @@
 import os
 import time
 import re
-import requests
+import requests as _requests_real
+
+
+class _GuardedRequests:
+    """requests, men anrop till HA:s /api/services/ (allt som ändrar något i huset) stoppas och loggas i skuggläget
+    (shadow.py). Läsning, mallar och EnergyWizards egna sensorer (/api/states/sensor.smartbox_*) går som vanligt."""
+    def __getattr__(self, name):
+        return getattr(_requests_real, name)
+
+    @staticmethod
+    def post(url, *args, **kwargs):
+        if "/services/" in str(url):
+            import shadow
+            if shadow.active():
+                body = kwargs.get("json") or {}
+                shadow.record(str(url).split("/services/", 1)[1], ", ".join(f"{k}={v}" for k, v in body.items()))
+                return shadow.FakeResponse()
+        return _requests_real.post(url, *args, **kwargs)
+
+
+requests = _GuardedRequests()
 import urllib3
 import traceback
 

@@ -460,6 +460,12 @@ async function renderOversikt() {
   mountFlow("flowslot");
   mountSavings("savingsslot");
   mountPlan("planslot");
+  api("api/shadow").then((sh) => {                       // skuggläget syns alltid överst, så ingen tror att huset styrs
+    if (!sh || !sh.active || document.getElementById("shadowbanner")) return;
+    main.insertAdjacentHTML("afterbegin", `<div class="card" id="shadowbanner" style="margin-bottom:16px;border-color:var(--warn)">
+      🕶️ <b>Skuggläge:</b> EnergyWizard visar vad den hade gjort men styr ingenting. <a href="#" id="shadowgo">Se vad den hade gjort</a></div>`);
+    document.getElementById("shadowgo").onclick = (e) => { e.preventDefault(); openPage("installningar"); };
+  }).catch(() => {});
   mountTimeline("timelineslot");
 }
 
@@ -998,6 +1004,25 @@ const BAT_STYLES = {
   bold: ["Djärv", "Planerar nära prognosen och använder batteriet mer."],
   very_bold: ["Mycket djärv", "Planerar på prognosen som den är. Tjänar mest när den stämmer och kostar mer när den slår fel."],
 };
+// Skuggläge (smartbox/shadow.py): brytare + vad EnergyWizard hade gjort.
+async function mountShadow() {
+  let d;
+  try { d = await api("api/shadow"); } catch (e) { return; }
+  const t = document.getElementById("shadowtoggle"), list = document.getElementById("shadowlist");
+  if (!t) return;
+  t.checked = d.active;
+  t.disabled = d.forced_by_env;
+  t.onchange = async () => {
+    try { await postJSON("api/shadow", { active: t.checked }); toast(t.checked ? "Skuggläge på - EnergyWizard styr ingenting" : "Skuggläge av - EnergyWizard styr igen"); mountShadow(); }
+    catch (e) { t.checked = !t.checked; toast(e.message); }
+  };
+  list.innerHTML = (d.forced_by_env ? `<div class="note">Påslaget med SHADOW_MODE i miljön.</div>` : "")
+    + (d.actions.length ? `<div class="note" style="margin-bottom:6px">Hade gjort (senaste först):</div>` + d.actions.slice(0, 30).map((a) =>
+      `<div style="display:flex;flex-wrap:wrap;column-gap:12px;padding:6px 0;border-top:1px solid var(--line)"><span class="note" style="min-width:120px">${esc(a.ts)}</span>
+        <span style="flex:1 1 220px;min-width:0;overflow-wrap:anywhere"><b>${esc(a.what)}</b> <span class="note">${esc(a.detail || "")}</span></span></div>`).join("")
+      : d.active ? `<div class="note">Inget ännu - åtgärder dyker upp här när EnergyWizard hade velat ändra något.</div>` : "");
+}
+
 // Elpris och avgifter per land (smartbox/nordpool.py cost_settings): land, elområde, moms, avgifter.
 async function mountPriceSettings() {
   let d;
@@ -1194,6 +1219,15 @@ async function renderInstallningar() {
       <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, batteri, spa och laddare. Kryssa i det som stämmer och tryck <b>Spara och starta</b>.</div>
       <button class="icobtn" id="scanbtn" style="margin-top:10px">Skanna mitt Home Assistant</button>
     </div>
+    <div class="card" style="margin-bottom:16px" id="shadowcard">
+      <div class="togglerow" style="align-items:flex-start;gap:14px"><div>
+        <div style="font-size:1.1rem;font-weight:700">🕶️ Skuggläge</div>
+        <div class="note" style="margin-top:4px;line-height:1.5">Kör EnergyWizard bredvid ditt nuvarande system: allt räknas, planeras och visas som vanligt,
+          men <b>ingenting skickas</b> till värmepump, laddbox, batteri, växelriktare eller spabad. Här nedan ser du vad den hade gjort.
+          Bra för att prova säkert innan du låter EnergyWizard ta över.</div></div>
+        <label class="switch" style="flex:0 0 auto"><input type="checkbox" id="shadowtoggle"><span class="slider"></span></label></div>
+      <div id="shadowlist" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="pricecard" hidden>
       <div style="font-size:1.1rem;font-weight:700">💶 Elpris och avgifter</div>
       <div class="note" style="margin-top:4px">Gör spotpriset till din verkliga kostnad. Nätavgift, energiskatt och påslag står på elräkningen.</div>
@@ -1240,6 +1274,7 @@ async function renderInstallningar() {
   mountLangSelect("setlang", true);
   mountBatteryPlanSettings();
   mountPriceSettings();
+  mountShadow();
   if (window.I18N && I18N.lang !== "sv") {
     const mb = document.getElementById("missingbtn");
     mb.hidden = false; mb.onclick = () => I18N.downloadMissing();

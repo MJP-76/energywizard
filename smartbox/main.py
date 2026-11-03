@@ -66,7 +66,7 @@ def ha_toggle_switch(entity_id, turn_on=True):
     service = "turn_on" if turn_on else "turn_off"
     url = f"{homeassistant._BASE}/services/switch/{service}"
     try:
-        requests.post(url, headers=homeassistant._HEADERS, json={"entity_id": entity_id}, timeout=5,
+        homeassistant.requests.post(url, headers=homeassistant._HEADERS, json={"entity_id": entity_id}, timeout=5,
                       verify=homeassistant._VERIFY)
     except Exception as e:
         print(f"HA Switch Toggle Error: {e}")

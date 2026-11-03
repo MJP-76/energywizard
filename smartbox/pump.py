@@ -157,6 +157,10 @@ def read_sensors():
 
 def _write_holding(reg_addr, value, retries=3):
     """Hjälpfunktion för att skriva till ett Modbus Holding-register med retries."""
+    import shadow
+    if shadow.active():                       # skuggläge: pumpen rörs inte, åtgärden loggas
+        shadow.record("Thermia (Husdata) register", f"{reg_addr} = {value}")
+        return True
     for attempt in range(retries):
         client = _get_client()
         if client:

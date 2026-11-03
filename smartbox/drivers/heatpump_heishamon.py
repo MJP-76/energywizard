@@ -59,6 +59,10 @@ class HeishaMonHeatPumpDriver(HeatPumpDriver):
     def _command(self, name: str, value) -> bool:
         if not self._host:
             return False
+        import shadow
+        if shadow.active():
+            shadow.record("HeishaMon", f"{name}={value}")
+            return True
         try:
             r = self._http.get(self._url("/command"), params={name: value}, timeout=_TIMEOUT)
             r.raise_for_status()

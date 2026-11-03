@@ -144,6 +144,13 @@ class MyUplinkHeatPumpDriver(HeatPumpDriver):
         return out
 
     def _write_point(self, write_key: str, value) -> bool:
+        import shadow
+        if shadow.active():
+            shadow.record("myUplink", f"{write_key}={value}")
+            return True
+        return self._write_point_real(write_key, value)
+
+    def _write_point_real(self, write_key: str, value) -> bool:
         pid = self._entities.get(write_key)
         if not pid:
             self._warn_unsupported(self._WRITE_FIELDS[write_key],

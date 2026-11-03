@@ -79,6 +79,9 @@ curl -fsSL https://raw.githubusercontent.com/murre87/energywizard/main/install.s
 
 Ingen fil behöver redigeras. Allt sparas i `~/energywizard/data`, och EnergyWizard uppdaterar sig själv.
 
+🕶️ **Vill du prova säkert först?** Slå på **Skuggläge** under Inställningar. Då räknar och planerar EnergyWizard som vanligt
+bredvid ditt nuvarande system, men skickar ingenting till prylarna, och du ser en lista över vad den *hade* gjort.
+
 Vill du hellre göra det själv räcker det med `docker-compose.enkel.yml`, som du sparar som
 `docker-compose.yml` och startar med `docker compose up -d`. Eller utan compose:
 
