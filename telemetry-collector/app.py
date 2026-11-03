@@ -135,7 +135,9 @@ async def ingest_error(request: Request):
 
 
 @app.get("/api/recent")
-async def recent(limit: int = 50):
+async def recent(request: Request, limit: int = 50):
+    if not _token_ok(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     limit = max(1, min(limit, 500))
     with _db() as c:
         drivers = c.execute(
@@ -150,6 +152,14 @@ async def recent(limit: int = 50):
     })
 
 
+STATS_TOKEN = os.environ.get("STATS_TOKEN", "").strip()   # satt: /api/stats och /api/recent kräver X-Stats-Token
+
+
+def _token_ok(request: Request) -> bool:
+    import hmac
+    return not STATS_TOKEN or hmac.compare_digest(request.headers.get("X-Stats-Token", ""), STATS_TOKEN)
+
+
 ACTIVE_DAYS = 3          # smartbox skickar översikten varje dygn: hörd inom 3 dygn = aktiv
 
 
@@ -159,10 +169,12 @@ def _is_real_house(h: str) -> bool:
 
 
 @app.get("/api/stats")
-async def stats():
+async def stats(request: Request):
     """Sammanställning för Emils dashboard: antal aktiva installationer och vilken utrustning de kör.
     Bara räknetal per kategori/drivrutin/märke - inga husidentifierare."""
     from datetime import timedelta
+    if not _token_ok(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     since = (datetime.now(timezone.utc) - timedelta(days=ACTIVE_DAYS)).isoformat()
     with _db() as c:
         known = [r[0] for r in c.execute("SELECT house FROM known_houses")]

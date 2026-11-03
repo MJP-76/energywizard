@@ -1027,8 +1027,15 @@ async function renderSystem() {
   const main = document.getElementById("main");
   main.innerHTML = `<div class="placeholder">Laddar…</div>`;
   await loadUpdates(false);
+}
+
+async function renderInstalls() {
+  const main = document.getElementById("main");
+  main.innerHTML = `<div class="placeholder">Laddar…</div>`;
   const d = await api("api/installs").catch(() => null);
-  if (d && d.configured) main.insertAdjacentHTML("afterbegin", installsCard(d));
+  if (!d || !d.configured) { main.innerHTML = `<div class="placeholder">Inte tillgängligt.</div>`; return; }
+  const vers = Object.entries(d.versions || {}).map(([v, n]) => `<div style="display:flex;justify-content:space-between;padding:3px 0"><span>${esc(v)}</span><b>${n}</b></div>`).join("");
+  main.innerHTML = installsCard(d) + (vers ? `<div class="card"><div style="font-weight:700;margin-bottom:6px">🏷️ Versioner</div>${vers}</div>` : "");
 }
 
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
@@ -1300,6 +1307,8 @@ function openPage(id) {
     renderVarmepump();
   } else if (id === "system") {
     renderSystem();
+  } else if (id === "installationer") {
+    renderInstalls();
   } else if (id === "installningar") {
     renderInstallningar();
   } else if (id === "elbil") {

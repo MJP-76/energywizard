@@ -68,3 +68,13 @@ def test_stats_raknar_aktiva_och_utrustning_utan_husidentiteter(monkeypatch):
     assert s["equipment"]["heatpump"] == {"thermia_husdata": 1} and "nissan" not in str(s)
     assert s["versions"] == {"v2": 2}
     assert a not in str(s) and b not in str(s)
+
+
+def test_statistiken_kraver_nyckel_nar_den_ar_satt(monkeypatch):
+    monkeypatch.setenv("STATS_TOKEN", "hemlig")
+    client, _ = _client(monkeypatch)
+    assert client.get("/api/stats").status_code == 403
+    assert client.get("/api/recent").status_code == 403
+    assert client.get("/api/stats", headers={"X-Stats-Token": "fel"}).status_code == 403
+    assert client.get("/api/stats", headers={"X-Stats-Token": "hemlig"}).status_code == 200
+    monkeypatch.delenv("STATS_TOKEN")

@@ -34,6 +34,8 @@ WATCHTOWER_URL = os.environ.get("WATCHTOWER_URL", "http://host.docker.internal:8
 WATCHTOWER_TOKEN = os.environ.get("WATCHTOWER_API_TOKEN", "")
 # Bara på utvecklarens egen installation: telemetrisamlarens sammanställning (antal aktiva + utrustning).
 TELEMETRY_STATS_URL = os.environ.get("TELEMETRY_STATS_URL", "").strip()
+TELEMETRY_STATS_TOKEN = os.environ.get("TELEMETRY_STATS_TOKEN", "").strip()       # samma som samlarens STATS_TOKEN
+INSTALLS_PAGE = {"id": "installationer", "name": "Installationer", "icon": "👥", "built": True}
 # /v1/check gör en riktig registry-koll (tar ~5s) - cachas här så "System"-sidan
 # inte startar om den varje gång sidan öppnas.
 _wt_cache = {"ts": 0, "data": None}
@@ -267,7 +269,10 @@ async def api_battery_plan_settings_save(request: Request):
 @app.get("/api/me")
 async def me(request: Request):
     role, user = AUTH.session(request)
-    return {"role": role, "user": user, "pages": [p for p in PAGES if p["built"]]}
+    pages = [p for p in PAGES if p["built"]]
+    if TELEMETRY_STATS_URL and role == "owner":       # bara utvecklarens egen server, bara ägaren
+        pages.insert(len(pages) - 1, INSTALLS_PAGE)
+    return {"role": role, "user": user, "pages": pages}
 
 
 @app.get("/api/ping")
@@ -396,10 +401,11 @@ async def updates(request: Request, force: bool = False):
 @app.get("/api/installs")
 async def installs(request: Request):
     """System-sidan: hur många som kör EnergyWizard och med vilken utrustning (från telemetrisamlaren)."""
-    if not TELEMETRY_STATS_URL:
+    role, _ = AUTH.session(request)
+    if not TELEMETRY_STATS_URL or role != "owner":
         return {"ok": False, "configured": False}
     try:
-        r = requests.get(TELEMETRY_STATS_URL, timeout=10)
+        r = requests.get(TELEMETRY_STATS_URL, timeout=10, headers={"X-Stats-Token": TELEMETRY_STATS_TOKEN})
         r.raise_for_status()
         return {"ok": True, "configured": True, **r.json()}
     except (requests.RequestException, ValueError) as e:
