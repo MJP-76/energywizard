@@ -40,7 +40,10 @@ CHARGER_MAKERS = re.compile(r"easee|zaptec|wallbox|charge ?amps|garo|ctek|go-?e|
 # ett märke - entitets-ID:t, inte enhetens tillverkartext, är den pålitliga signalen.
 # Matchar alltså mot entity_id-suffix, inte mot CHARGER_MAKERS/_candidate().
 OCPP_SWITCH_SUFFIX = re.compile(r"charge_control$", re.I)
-OCPP_NUMBER_SUFFIX = re.compile(r"maximum_current$", re.I)
+OCPP_NUMBER_SUFFIX = re.compile(r"(maximum_current|session_current_limit)$", re.I)
+# Sessionens gräns, inte laddboxens bestående tak (maximum_current) - se drivers/charger_generic.py.
+OCPP_SESSION_LIMIT = re.compile(r"session_current_limit$", re.I)
+OCPP_STATION_MAX = re.compile(r"maximum_current$", re.I)
 # "tesla" ensamt är INTE med här (krockar med CAR_MAKERS - Powerwall kräver "powerwall"
 # uttryckligen i texten för att skiljas från en Tesla-bil).
 BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|solax battery|victron battery", re.I)
@@ -354,8 +357,22 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                 suggested = {"switch": switch_e["e"]}
                 if status_e:
                     suggested["status"] = status_e["e"]
-                number_e = next((e for e in ents if e["e"].startswith("number.")
-                                  and _has(e.get("n"), re.compile("current|ström|limit|gräns", re.I))), None)
+                if is_ocpp:
+                    # OCPP: sessionens strömgräns - ALDRIG laddboxens bestående maximum_current (SpotNav-lärdom).
+                    number_e = next((e for e in ents if e["e"].startswith("number.") and OCPP_SESSION_LIMIT.search(e["e"])), None)
+                    imp = next((e for e in ents if e["e"].startswith("sensor.") and re.search(r"current_import$", e["e"])), None)
+                    if imp:
+                        suggested["current_import"] = imp["e"]
+                    sw = next((e for e in ents if e["e"].startswith("switch.") and OCPP_SWITCH_SUFFIX.search(e["e"])), None)
+                    if sw:
+                        suggested["switch"] = sw["e"]
+                    st = next((e for e in ents if e["e"].startswith("sensor.") and re.search(r"status_connector$", e["e"])), None)
+                    if st:
+                        suggested["status"] = st["e"]
+                else:
+                    number_e = next((e for e in ents if e["e"].startswith("number.")
+                                      and _has(e.get("n"), re.compile("current|ström|limit|gräns", re.I))
+                                      and not OCPP_STATION_MAX.search(e["e"])), None)
                 if number_e:
                     suggested["current_limit"] = number_e["e"]
                 charger["generic_suggestion"] = {"driver": "generic", "entities": suggested}

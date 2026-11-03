@@ -61,7 +61,7 @@ def _cost(grid_kw, buy, sell):
     return e * buy if e > 0 else e * sell
 
 
-def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff):
+def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycle_cost=0.0):
     """Kör en given avsiktsserie och returnerar (kostnad, rader). Används för baslinjen."""
     eff_c = eff_d = math.sqrt(eff)
     soc, cost, rows = soc0, 0.0, []
@@ -72,15 +72,17 @@ def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff):
             b = 0.0
         soc, b = _step(soc, b, reserve, max_kwh, eff_c, eff_d)
         grid = net + b
-        c = _cost(grid, s["buy"], s["sell"])
+        c = _cost(grid, s["buy"], s["sell"]) + cycle_cost * max(0.0, -b) * DT_H
         cost += c
         rows.append({"t": s["t"], "action": a, "soc_kwh": soc, "battery_kw": b, "grid_kw": grid, "cost": c})
     return cost, rows
 
 
 def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, discharge_kw,
-             eff=0.9, allowed=ACTIONS, step_kwh=None, switch_cost=0.10):
+             eff=0.9, allowed=ACTIONS, step_kwh=None, switch_cost=0.10, cycle_cost=0.0):
     """slots: [{'t', 'buy', 'sell', 'load_kw', 'solar_kw', 'ev_kw'}] (kvartar, i tidsordning).
+    cycle_cost: kr per urladdad kWh - batteriets slitage (cellernas pris / livslängd i kWh). Planen
+    laddar då bara ur när prisskillnaden täcker förluster OCH slitage.
     switch_cost: kr per lägesbyte - håller planen sammanhängande (färre skrivningar till
     växelriktarens flashminne) i stället för att jaga varje öre mellan kvartspriserna.
     Returnerar {'rows': [...], 'cost': kr, 'baseline_cost': kr (bara auto), 'saving_kr': kr}."""
@@ -120,7 +122,7 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
                         continue
                     b = 0.0
                 new, b = _step(soc, b, min(lo, soc), hi if soc <= hi else soc, eff_c, eff_d)
-                row.append((idx(new), b, net + b, _cost(net + b, s["buy"], s["sell"])))
+                row.append((idx(new), b, net + b, _cost(net + b, s["buy"], s["sell"]) + cycle_cost * max(0.0, -b) * DT_H))
             trans.append(row)
         cur = [[INF] * A for _ in range(n_states)]
         ch = [[None] * A for _ in range(n_states)]
@@ -153,7 +155,8 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
         rows.append({"t": s["t"], "action": a, "soc_kwh": nxt * step, "battery_kw": round(b, 3),
                      "grid_kw": round(grid, 3), "cost": c, "buy": s["buy"]})
         i, prev = nxt, k
-    base_cost, base_rows = simulate(slots, soc0_kwh, ["auto"] * len(slots), capacity_kwh, lo, hi, charge_kw, discharge_kw, eff)
+    base_cost, base_rows = simulate(slots, soc0_kwh, ["auto"] * len(slots), capacity_kwh, lo, hi, charge_kw, discharge_kw, eff,
+                                    cycle_cost)
     # Rättvis jämförelse: värdera energin kvar vid slutet lika i båda.
     end_plan = rows[-1]["soc_kwh"] if rows else soc0_kwh
     end_base = base_rows[-1]["soc_kwh"] if base_rows else soc0_kwh
@@ -238,7 +241,8 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
             break
         last_p = p
         slots.append({"t": t, "buy": nordpool.full_buy_cost(p), "sell": nordpool.full_sell_income(p), "spot": p,
-                      "load_kw": learning.predict_base_load(t, base_profile), "solar_kw": solar_at(t),
+                      "load_kw": (settings.get("load_profile") or {}).get((t.weekday(), t.hour))
+                                 or learning.predict_base_load(t, base_profile), "solar_kw": solar_at(t),
                       "ev_kw": ev_kw.get(t, 0.0)})
         t += timedelta(minutes=15)
     if not slots:
@@ -246,7 +250,7 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
     r = optimize(slots, soc_pct / 100.0 * cap, cap, settings["reserve_soc"] / 100.0 * cap, settings["max_soc"] / 100.0 * cap,
                  settings.get("charge_kw") or settings["max_power_w"] / 1000.0,
                  settings.get("discharge_kw") or settings["max_power_w"] / 1000.0, eff=settings.get("efficiency", 0.9),
-                 allowed=supported)
+                 allowed=supported, cycle_cost=settings.get("cycle_cost", 0.30))
     try:
         with engine.begin() as c:
             c.execute(text("CREATE TABLE IF NOT EXISTS battery_plan_slots (t_slot TIMESTAMPTZ PRIMARY KEY, action TEXT, "

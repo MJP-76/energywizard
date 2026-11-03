@@ -60,7 +60,25 @@ def test_charger_read_state():
         mock_ha._get_raw_state.return_value = "charging"
         mock_ha._get_numeric_state.return_value = 10.0
         state = GenericChargerDriver(id="x", entities={"status": "sensor.s", "current_limit": "number.n"}).read_state()
-    assert state == {"status": "charging", "current_a": 10.0, "phases": None}
+    assert state == {"status": "charging", "status_raw": "charging", "current_a": 10.0, "phases": None}
+
+
+def test_charger_ocpp_status_normaliseras():
+    from drivers.charger_generic import normalize_status
+    assert [normalize_status(s) for s in ("Available", "Preparing", "Charging", "SuspendedEVSE", "SuspendedEV", "Faulted")] == \
+        ["disconnected", "awaiting_start", "charging", "paused", "completed", "offline"]
+
+
+def test_charger_6a_golv_0a_stanger_av_och_skrivspar():
+    drv = GenericChargerDriver(id="x", entities={"switch": "switch.s", "current_limit": "number.n"})
+    with patch("drivers.charger_generic.homeassistant") as ha:
+        ha.set_number.return_value = True
+        assert drv.set_limit_a(4) is True                      # under 6 A -> 6 A
+        ha.set_number.assert_called_once_with("number.n", 6)
+        assert drv.set_limit_a(10) is False                     # inom 10 s: väntar
+        assert drv.set_limit_a(0) is True                       # 0 A = stäng av, inte gräns 0
+        ha.set_switch.assert_called_once_with("switch.s", False)
+    assert ha.set_number.call_count == 1
 
 
 # ---------- Värmepump (GenericClimateHeatPumpDriver -> homeassistant.py) ----------

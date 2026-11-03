@@ -87,3 +87,15 @@ def test_planvyn_och_tidslinjen_visar_batteriet():
     i_now = d["hours"].index(q.isoformat())
     assert lane["text"][i_now] == "Laddade 2.0 kW" and lane["text"][i_now + 3] == "Planerat: laddar ur"
     assert not any(l["key"] == "batteri" for l in build(now, {}, {}, {}, {}, {})["lanes"])
+
+
+def test_slitage_gor_sma_prisskillnader_olonsamma():
+    """Liten skillnad (0,30 -> 0,60 kr spot): utan slitage lönar sig en cykel, med 0,50 kr/kWh slitage inte."""
+    prices = [0.30] * 16 + [0.60] * 16
+    utan = optimize(_slots(prices), 2.0, 10.0, 2.0, 10.0, 3.0, 3.0, eff=0.95, cycle_cost=0.0)
+    med = optimize(_slots(prices), 2.0, 10.0, 2.0, 10.0, 3.0, 3.0, eff=0.95, cycle_cost=0.50)
+    assert "charge" in [x["action"] for x in utan["rows"]]
+    assert "charge" not in [x["action"] for x in med["rows"]]
+    # Stor skillnad lönar sig fortfarande trots slitage
+    stor = optimize(_slots(CHEAP_THEN_DEAR), 2.0, 10.0, 2.0, 10.0, 3.0, 3.0, cycle_cost=0.50)
+    assert "charge" in [x["action"] for x in stor["rows"]] and stor["saving_kr"] > 5

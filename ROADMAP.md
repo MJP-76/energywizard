@@ -89,16 +89,17 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
     8 tester (`tests/test_planned_load.py`). Aldrig kört mot en riktig
     Predbat-installation: ingen betatestare med batteri + Predbat än.
 
-- **OCPP-laddare via Home Assistants egen OCPP-integration - kod+regex klar,
-  overifierad mot riktig laddare.** [lbbrhzn/ocpp](https://github.com/lbbrhzn/ocpp)
-  (HACS, mogen, stödjer 1.6J/2.0.1/2.1) kör OCPP-servern inuti Home Assistant
-  och exponerar en `switch` (`*_charge_control`) + `number`
-  (`*_maximum_current`) - samma entitetsformer `GenericChargerDriver` redan
-  läser/skriver. `smartbox/discovery.py` matchar nu entitets-ID:ets suffix
-  (inte märkestext - laddarens egen tillverkarsträng, inte "OCPP", syns i HA)
-  och föreslår `generic`-drivrutinen automatiskt, med ett nytt regressionstest
-  (`tests/test_discovery.py`). Mockat/syntetiskt verifierat, ALDRIG kört mot
-  en riktig OCPP-laddare.
+- **OCPP-laddare via Home Assistants egen OCPP-integration - kopplad, overifierad mot
+  riktig laddare.** Motorn skriver nu via laddardrivrutinerna (förut gick ALL strömstyrning
+  direkt till Easees tjänster, så generiska/OCPP-laddare styrdes aldrig). Lärdomar från
+  [SpotNav](https://github.com/henrikekblad/spotnav-home-assistant) (MIT, bekräftat på Charge
+  Amps HALO): strömgränsen skrivs till sessionens gräns (`*_session_current_limit`), ALDRIG till
+  laddboxens bestående `*_maximum_current`; under 6 A höjs till 6 A och 0 A stänger av laddningen;
+  högst en skrivning per 10 s; OCPP-connector-status normaliseras (Available/Preparing/Charging/
+  SuspendedEV...). Entitetsväljaren föreslår switch, connector-status, sessionsgräns och
+  `current_import`. Easee oförändrat (samma anrop via sin drivrutin). Signalen
+  `binary_sensor.smartbox_elbil_laddar_fran_natet` låter Predbat/EMHASS/en BESS låta bli att tömma
+  batteriet i bilen.
 
 - **Exportstyrning för fler växelriktare - byggd, overifierad mot riktig hårdvara.**
   Via redan underhållna HA-integrationer, ingen egen protokollkod (se

@@ -104,6 +104,23 @@ heat_pump_driver = house_config.build_heat_pump_driver(house_cfg)
 solar_driver = house_config.build_solar_driver(house_cfg)
 spa_driver = house_config.build_spa_driver(house_cfg)
 battery_driver = house_config.build_battery_driver(house_cfg)
+
+
+# Laddboxar: skriv via laddarens drivrutin (Easee: samma tjänster som förut; generisk/OCPP: switch +
+# sessionens strömgräns, se drivers/charger_generic.py). Utan drivrutin för id:t: Easee-anropen som förut.
+def charger_set_limit(cid, amps, reason=None):
+    drv = physical_charger_drivers.get(cid)
+    return drv.set_limit_a(amps, reason=reason) if drv else homeassistant.set_ev_dynamic_limit(cid, amps, reason=reason)
+
+
+def charger_turn_on(cid):
+    drv = physical_charger_drivers.get(cid)
+    return drv.turn_on() if drv else homeassistant.turn_on_charger(cid)
+
+
+def charger_set_phases(cid, phases):
+    drv = physical_charger_drivers.get(cid)
+    return drv.set_phases(phases) if drv else homeassistant.set_easee_phases(cid, phases)
 battery_cfg = house_config.battery_settings(house_cfg)
 _battery = {"last": None, "at": None, "plan": None, "plan_at": None, "model": None, "model_at": None}
 
@@ -334,7 +351,7 @@ def _check_ev_stall(car_id, amps, charger_data, charger_id, phase_switch_active,
     if stalled_min >= EV_STALL_RETRY_MIN:
         status = charger_data.get("status") if charger_data else None
         print(f"⚠️ {car_id.capitalize()}: {amps}A beordrat men laddaren drar ~0A i {stalled_min:.0f} min (status={status!r}). Tvingar turn_on igen.")
-        homeassistant.turn_on_charger(charger_id)
+        charger_turn_on(charger_id)
         _ev_stall[car_id] = now_dt - timedelta(minutes=EV_STALL_RETRY_MIN - 2)  # försök igen om ~2 min, inte varje loop
         if stalled_min >= EV_STALL_ALERT_MIN:
             notifier.send_emil(f"⚠️ {car_id.capitalize()} laddar inte", f"{amps}A beordrat i {stalled_min:.0f} minuter men laddaren drar ingen ström (status: {status}). Kolla kabeln/laddaren - det kan krävas manuell koll.", {"tag": f"ev_stall_{car_id}"})
@@ -641,7 +658,7 @@ while True:
                                                     margin_a=_fuse_cfg["margin_a"], min_charge_a=EV_MIN_CHARGE_AMPS)
                 for _car, _amps in _trip.items():
                     _reason = f"Säkringsskydd: fas över {fuse_guard.TRIP_FACTOR} × {_fuse_cfg['fuse_a']} A"
-                    if homeassistant.set_ev_dynamic_limit(_fuse_charger_ids[_car], _amps, reason=_reason):
+                    if charger_set_limit(_fuse_charger_ids[_car], _amps, reason=_reason):
                         last_sent_ev_limit[_car] = _amps
                         print(f"🚨 {_reason} - stryper {_car} till {_amps} A direkt.")
             except Exception as _fe:
@@ -954,6 +971,13 @@ while True:
             # här ihopkopplingen löser. Allokerings-ALGORITMEN nedan är däremot äkta generisk.
             physical_charger_connected = {homeassistant.EASEE_LITE_ID: lite_conn, homeassistant.EASEE_CARPORT_ID: carport_conn}
             physical_charger_data = {homeassistant.EASEE_LITE_ID: ev_lite_data, homeassistant.EASEE_CARPORT_ID: ev_carport_data}
+            # Generiska laddboxar (OCPP m.fl.): status och ström från drivrutinen, normaliserad till samma ord som Easee.
+            for _pid, _pdrv in physical_charger_drivers.items():
+                if _pid not in physical_charger_data and hasattr(_pdrv, "read_state"):
+                    try:
+                        physical_charger_data[_pid] = _pdrv.read_state()
+                    except Exception as _ce:
+                        print(f"⚠️ Laddbox {_pid}: kunde inte läsas: {_ce}")
 
             # FIX: Teslans charging_state är platsoberoende (sant även vid supercharger borta) →
             # grinda plugged på GPS-hemma så en bil som laddar BORTA inte snor en hemma-laddare.
@@ -1661,10 +1685,10 @@ while True:
                 print("⚡ Fasbyte begärt! Asynkron omstart startad för säker kontaktor-brytning...")
                 def phase_switch_async(_cars=cars_switching, _ids=dict(car_charger_id), _phases=dict(ev_set_phases)):
                     for c in _cars:
-                        homeassistant.set_ev_dynamic_limit(_ids[c], 0, reason="Fasbyte förbereds")
+                        charger_set_limit(_ids[c], 0, reason="Fasbyte förbereds")
                     time.sleep(15)
                     for c in _cars:
-                        homeassistant.set_easee_phases(_ids[c], _phases[c])
+                        charger_set_phases(_ids[c], _phases[c])
                 threading.Thread(target=phase_switch_async).start()
                 for car_id in cars_switching:
                     last_sent_ev_limit[car_id] = 0
@@ -1680,10 +1704,10 @@ while True:
                     # FIX: hoppa över ström-sättning under pågående fasbyte (laddaren ska ligga på 0A)
                     if not ev_phase_switch_active[car_id]:
                         if ev_amps[car_id] != last_sent_ev_limit.get(car_id):
-                            if homeassistant.set_ev_dynamic_limit(charger_id, ev_amps[car_id], reason=ev_reason_stop.get(car_id)):
+                            if charger_set_limit(charger_id, ev_amps[car_id], reason=ev_reason_stop.get(car_id)):
                                 last_sent_ev_limit[car_id] = ev_amps[car_id]
                         if ev_amps[car_id] > 0 and charger_data.get("status") in ["awaiting_start", "paused", "off"]:
-                            homeassistant.turn_on_charger(charger_id)
+                            charger_turn_on(charger_id)
                         _check_ev_stall(car_id, ev_amps[car_id], charger_data, charger_id, ev_phase_switch_active[car_id], now)
                 else:
                     last_sent_ev_limit[car_id] = None
@@ -1998,6 +2022,13 @@ while True:
                     "sensor.smartbox_beslut": ((current_decision or "")[:250] or None, {"friendly_name": "Smartbox Beslut", "icon": "mdi:head-cog", "per_enhet": current_decision_items, "fullstandigt": (current_decision or "")[:1500]}),
                     "sensor.smartbox_tesla_batteri": (_r1(tesla_data.get("soc"), 0) if tesla_data else None, {"friendly_name": "Smartbox Tesla batteri", "unit_of_measurement": "%", "device_class": "battery", "senast_kand": bool(tesla_soc_stale), "alder_min": (round((now - _soc_mem["tesla"][1]).total_seconds() / 60) if tesla_soc_stale and _soc_mem["tesla"][1] else 0)}),
                     "sensor.smartbox_leaf_batteri": (_r1(nissan_data.get("soc"), 0) if nissan_data else None, {"friendly_name": "Smartbox Leaf batteri", "unit_of_measurement": "%", "device_class": "battery", "senast_kand": bool(nissan_soc_stale), "alder_min": (round((now - _soc_mem["nissan"][1]).total_seconds() / 60) if nissan_soc_stale and _soc_mem["nissan"][1] else 0)}),
+                    # SpotNav-idé: säg till batterisystemet (Predbat, EMHASS, växelriktarens BESS) när bilen
+                    # laddar från NÄTET, så det kan låta bli att tömma batteriet i bilen. Av vid solladdning.
+                    "binary_sensor.smartbox_elbil_laddar_fran_natet": (
+                        "on" if any((a or 0) >= EV_MIN_CHARGE_AMPS for a in ev_amps.values())
+                                and not getattr(gpm_engine, "ev_solar_charge_active", False) else "off",
+                        {"friendly_name": "Smartbox Elbil laddar från nätet", "icon": "mdi:transmission-tower-import",
+                         "bilar": [c for c, a in ev_amps.items() if (a or 0) >= EV_MIN_CHARGE_AMPS]}),
                     "binary_sensor.smartbox_kompressor": ("on" if (pump_data and pump_data.get("compressor_running") == 1) else "off", {"friendly_name": "Smartbox Kompressor", "device_class": "running"}),
                 }
                 threading.Thread(target=homeassistant.publish_states, args=(_pub,), daemon=True).start()

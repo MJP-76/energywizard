@@ -190,6 +190,9 @@ def battery_settings(cfg: dict) -> dict:
             "priority_soc": f("priority_soc", 50.0), "max_soc": f("max_soc", 100.0),
             "max_power_w": f("max_power_w", 5000.0), "capacity_kwh": f("capacity_kwh", None),
             "efficiency": f("efficiency", 0.9),
+            # Batteriets slitage, kr per urladdad kWh: cellernas pris / (kapacitet x antal cykler).
+            # T.ex. 40 000 kr / (10 kWh x 6000 cykler) ≈ 0,67 kr; 0,30 kr är ett försiktigt standardvärde.
+            "cycle_cost": f("cycle_cost", 0.30),
             # Dygnsplan (battery_plan.py) - bara i läget styr; plan: false = bara reglerna
             "plan": str(bat.get("plan", True)).lower() not in ("false", "0", "nej", "no")}
 

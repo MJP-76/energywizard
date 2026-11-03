@@ -118,6 +118,18 @@ def learn(samples, solar_pairs, configured):
     return {"learned": learned, "use": use}
 
 
+def median_load_profile(rows, min_days=3):
+    """rows = [(veckodag, timme, kW)] - en rad per timme och dag. Median per (veckodag, timme).
+    Effektvaktens profil (learning.get_base_load_profile) är 85:e percentilen - medvetet försiktig för
+    att inte slå i effekttaket. För batteriplanen överskattar den lasten; medianen ger en ärligare
+    förväntan (samma erfarenhet som flera andra hemmabyggen rapporterat)."""
+    by = {}
+    for dow, hour, kw in rows or []:
+        if kw is not None:
+            by.setdefault((int(dow), int(hour)), []).append(float(kw))
+    return {k: round(_median(v), 3) for k, v in by.items() if len(v) >= min_days}
+
+
 def apply(settings, model):
     """Configens batteriinställningar + det inlärda som klarat kontrollerna."""
     out = dict(settings)
@@ -129,6 +141,7 @@ def apply(settings, model):
         out["charge_kw"] = use.get("charge_kw")
         out["discharge_kw"] = use.get("discharge_kw")
     out["solar_factor"] = use.get("solar_factor") or {}
+    out["load_profile"] = use.get("load_profile") or {}
     return out
 
 
@@ -160,6 +173,8 @@ def describe(model):
         parts.append(f"laddar med {use['charge_kw']:.1f} kW")
     if use.get("solar_factor"):
         parts.append(f"solprognosen rättad för {len(use['solar_factor'])} timmar")
+    if use.get("load_profile"):
+        parts.append("husets förbrukning per timme (median)")
     need = max(0, MIN_SEGMENTS - min(lr.get("segments_in", 0), lr.get("segments_out", 0)))
     pending = f"Verkningsgraden lärs fortfarande - behöver {need} laddnings- och urladdningspass till." \
         if "efficiency" not in use and need else ""
@@ -183,6 +198,13 @@ def learn_from_db(engine, configured, days=21):
                                   FROM sensor_log WHERE timestamp > now() - make_interval(days => :d)
                                     AND solar_forecast_w IS NOT NULL AND pv_power_w IS NOT NULL
                                   GROUP BY date_trunc('hour', timestamp), 1"""), {"d": int(days)}).fetchall()
+        load = c.execute(text("""SELECT extract(isodow FROM h)::int - 1, extract(hour FROM h)::int, kw FROM (
+                                    SELECT date_trunc('hour', timestamp AT TIME ZONE 'Europe/Stockholm') AS h,
+                                           avg(GREATEST(0, COALESCE(house_consumption_w, net_power + COALESCE(pv_power_w, 0)
+                                                - COALESCE(battery_power_w, 0))) / 1000.0
+                                               - COALESCE(ev_power_kw, 0) - COALESCE(ev_carport_power_kw, 0)) AS kw
+                                    FROM sensor_log WHERE timestamp > now() - interval '28 days' GROUP BY 1) t"""
+                                 )).fetchall()
         y = c.execute(text("""SELECT extract(epoch FROM timestamp), net_power, battery_power_w, price FROM sensor_log
                               WHERE timestamp >= date_trunc('day', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm' - interval '1 day'
                                 AND timestamp < date_trunc('day', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm'
@@ -190,6 +212,10 @@ def learn_from_db(engine, configured, days=21):
     f = lambda v: float(v) if v is not None else None
     samples = [(float(ts), f(soc), f(p)) for ts, soc, p, _, _ in rows]
     model = learn(samples, [(h, f(fc), f(a)) for h, fc, a in solar], configured)
+    prof = median_load_profile([(d, h, max(0.0, f(kw) or 0.0)) for d, h, kw in load])
+    model["learned"]["load_profile_hours"] = len(prof)
+    if len(prof) >= 24:                     # minst ett dygns timmar täckta
+        model["use"]["load_profile"] = prof
     yrows = []
     for i, (ts, net, bat, price) in enumerate(y):
         dt = (float(y[i + 1][0]) - float(ts)) if i + 1 < len(y) else 60.0

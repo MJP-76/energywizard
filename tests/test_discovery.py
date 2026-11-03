@@ -180,7 +180,22 @@ def test_ocpp_laddare_hittas_via_entity_id_inte_markestext():
     assert charger["driver"] is None and charger["driver_known"] is False
     assert charger["generic_suggestion"]["driver"] == "generic"
     assert charger["generic_suggestion"]["entities"]["switch"] == "switch.laddpunkt1_charge_control"
-    assert charger["generic_suggestion"]["entities"]["current_limit"] == "number.laddpunkt1_maximum_current"
+    # maximum_current är laddboxens BESTÅENDE tak och ska aldrig skrivas varje minut (SpotNav-lärdom).
+    assert "current_limit" not in charger["generic_suggestion"]["entities"]
+
+
+def test_ocpp_anvander_sessionens_stromgrans_och_connectorns_sensorer():
+    def e(eid, name, u=None, st="1"):
+        return {"e": eid, "n": name, "a": None, "d": "dev_cp", "dn": "Charge Amps HALO", "m": None, "mo": None,
+                "dc": None, "u": u, "st": st}
+    ocpp = [e("switch.halo_charge_control", "Charge Control", st="on"),
+            e("number.halo_maximum_current", "Maximum Current", "A", "32"),
+            e("number.halo_session_current_limit", "Session Current Limit", "A", "unavailable"),
+            e("sensor.halo_status_connector", "Status Connector", st="Charging"),
+            e("sensor.halo_current_import", "Current Import", "A", "15.8")]
+    ent = discover_house(ocpp)["chargers"][0]["generic_suggestion"]["entities"]
+    assert ent == {"switch": "switch.halo_charge_control", "status": "sensor.halo_status_connector",
+                   "current_limit": "number.halo_session_current_limit", "current_import": "sensor.halo_current_import"}
 
 
 def test_okant_varmepumpsmarke_flaggas_utan_drivrutin_inte_tyst_fel_eller_kraschar():

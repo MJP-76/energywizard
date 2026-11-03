@@ -78,3 +78,12 @@ def test_pass_delas_vid_riktningsbyte_och_luckor():
     samples = [(i * 60.0, 20 + i, 3000.0) for i in range(10)] + [(3600.0 + i * 60, 30 - i, -3000.0) for i in range(10)]
     segs = segments(samples)
     assert [s[0] for s in segs] == ["in", "out"]
+
+
+def test_medianprofil_for_planen():
+    from battery_learning import median_load_profile
+    rows = [(0, 7, 1.0), (0, 7, 1.2), (0, 7, 9.0), (0, 8, 2.0), (0, 8, 2.0)]   # en extrem topp kl 7
+    p = median_load_profile(rows, min_days=2)
+    assert p[(0, 7)] == 1.2 and p[(0, 8)] == 2.0                              # medianen bryr sig inte om toppen
+    assert median_load_profile(rows, min_days=3) == {(0, 7): 1.2}
+    assert apply({}, {"use": {"load_profile": p}})["load_profile"] == p

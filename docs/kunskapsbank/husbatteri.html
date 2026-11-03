@@ -73,9 +73,16 @@
   </ul>
 
   <h3>Planen lär sig ditt batteri</h3>
+  <p><strong>Slitage räknas med.</strong> Varje urladdad kWh kostar batteriet en bit av sin livslängd -
+  som standard 0,30 kr/kWh (<code>cycle_cost</code>; räkna cellernas pris / (kapacitet × antal cykler)).
+  Planen laddar därför bara ur när prisskillnaden täcker både förluster och slitage, och varje
+  lägesbyte kostar också lite, så batteriet inte växlar fram och tillbaka i onödan.</p>
+
   <p>Ur historiken lär sig EnergyWizard batteriets <strong>verkliga verkningsgrad</strong>,
   <strong>användbara kapacitet</strong> och <strong>faktiska maxeffekt</strong>, och hur mycket
-  <strong>solprognosen brukar slå fel</strong> timme för timme hos just dig. Planen använder det
+  <strong>solprognosen brukar slå fel</strong> timme för timme hos just dig, och husets
+  <strong>förbrukning per veckodag och timme</strong> (medianen de senaste fyra veckorna - effektvakten
+  använder en försiktigare 85:e percentil, men för planering ger medianen en ärligare förväntan). Planen använder det
   inlärda, men bara när det finns tillräckligt med data och värdena är fysiskt rimliga - annars
   gäller det du skrivit i inställningarna. Varje dag räknas också ut vad batteriet
   <strong>faktiskt sparade</strong> igår: vad elen hade kostat utan batteriet minus vad den kostade.</p>
@@ -105,6 +112,7 @@
   reserve_soc: 20        # sparas alltid till strömavbrott
   priority_soc: 50       # över detta får elbilen solen först
   max_power_w: 5000      # batteriets max laddeffekt (för planen)
+  cycle_cost: 0.30       # slitage, kr per urladdad kWh
   plan: true             # dygnsplan (false = bara reglerna)
   entities:
     soc: sensor.batteri_soc
