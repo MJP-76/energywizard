@@ -21,7 +21,9 @@ optimeraren Energyplan är stängd och används inte):
 - **Mjuka effektändringar (slew rate).** Batteriets effekt ändras gradvis i stället för i hopp; säkringsskyddet får
   fortfarande agera direkt.
 - **Verifieringsnivå per drivrutin.** "Körs i N hem" bredvid varje märke på webben och i README, automatiskt ur
-  telemetrin (FTW märker sina drivrutiner verifierad/inte verifierad på hårdvara).
+  telemetrin (FTW märker sina drivrutiner verifierad/inte verifierad på hårdvara). FTW:s katalog med 92 drivrutiner
+  ([drivers.json](https://srcfl.github.io/device-drivers/drivers.json)) är en bra uppslagsbok för vilka märken som går
+  att styra och hur - som referens, vi fortsätter gå via HA:s integrationer.
 
 - **Värmepumpar: styrning via Matter-lagret (pausat 2026-11-03, Emils beslut).** Gränssnittet finns
   redan (`drivers/heatpump.py`: läge, effekt, COP, fel, kurva ±n med tak ±5, paus med tidsgräns,
