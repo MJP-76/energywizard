@@ -568,6 +568,12 @@ async def api_plan():
             c.rollback()
             bat_rows = []
         cheap_hours = _settings_row(c, ["cheap_hours_count"]).get("cheap_hours_count") or 8
+        try:                       # bilarnas mål till planklockan: närmaste påslagna schema idag eller imorgon
+            sched = c.execute(text("SELECT car_id, day_of_week, target_time, target_soc FROM ev_charging_schedule "
+                                   "WHERE enabled")).fetchall()
+        except Exception:
+            c.rollback()
+            sched = []
         mode_row = c.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL "
                                   "ORDER BY timestamp DESC LIMIT 1")).fetchone()
         try:
@@ -578,7 +584,27 @@ async def api_plan():
     brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
                                    int(cheap_hours), mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
-    return {"ok": True, **brief, "solar_days": sun}
+    from datetime import timedelta
+    clock_prices = [{"t": r[0].isoformat(), "spot": round(float(r[1]), 4), "total": round(nordpool.full_buy_cost(float(r[1])), 4)}
+                    for r in prices if r[1] is not None and now - timedelta(minutes=15) <= r[0] < now + timedelta(hours=24)]
+    return {"ok": True, **brief, "solar_days": sun, "now": now.isoformat(), "prices": clock_prices,
+            "car_goals": _car_goals(sched, now)}
+
+
+def _car_goals(sched, now):
+    """Nästa mål per bil ur laddschemat: {'car', 'at' (iso), 'soc'} - idag om tiden inte passerat, annars imorgon."""
+    from datetime import datetime, timedelta
+    goals = {}
+    for car, dow, tt, soc in sched or []:
+        for add in (0, 1):
+            day = (now + timedelta(days=add)).date()
+            if day.weekday() != dow or tt is None:
+                continue
+            at = datetime.combine(day, tt if not isinstance(tt, str) else datetime.strptime(tt[:5], "%H:%M").time(),
+                                  tzinfo=now.tzinfo)
+            if at > now and (car not in goals or at < datetime.fromisoformat(goals[car]["at"])):
+                goals[car] = {"car": car, "at": at.isoformat(), "soc": None if soc is None else int(soc)}
+    return sorted(goals.values(), key=lambda g: g["at"])
 
 
 @app.get("/api/flow")

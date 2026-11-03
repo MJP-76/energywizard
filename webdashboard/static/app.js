@@ -119,6 +119,123 @@ function sunDaysHtml(sd) {
     <div style="display:flex;gap:8px;flex-wrap:wrap">${tile("Idag", sd.today_kwh, today)}${tile("Imorgon", sd.tomorrow_kwh)}${sd.day_after_kwh != null ? tile("I övermorgon", sd.day_after_kwh) : ""}</div></div>`;
 }
 
+// ---------- Planklockan (idé från FTW, egen implementation) ----------
+// De kommande 24 timmarna som en urtavla: ett streck per kvart, färgat efter priset (grönt billigt, rött dyrt),
+// visaren på nu. Ringar innanför: värmepumpen laddar huset, elbilarna laddar, batteriet laddar/laddar ur.
+// Under: en remsa för de närmaste 12 timmarna och bilarnas mål. Spot/totalt växlar priset (totalt = inkl.
+// moms, nätavgift och skatt, samma som motorn räknar med). Bara visning - inga nya beslut fattas här.
+let clockPriceMode = localStorage.getItem("ew_clock_price") || "total";
+const CLOCK_COL = { cheap: "#22d3a0", mid: "#38bdf8", dear: "#f87171", heat: "#fb923c", charge: "#22d3a0", discharge: "#fbbf24",
+  hold: "#38bdf8", idle: "#94a3b8" };
+const CAR_COL = ["#38bdf8", "#a78bfa", "#f472b6", "#22d3a0"];
+const kr = (v) => v == null ? "–" : v.toFixed(2).replace(".", ",");
+const hhmm = (t) => new Date(t).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+
+function priceColor(p, lo, hi) {
+  if (hi - lo < 1e-6) return CLOCK_COL.mid;
+  const x = (p - lo) / (hi - lo);
+  return x < 0.33 ? CLOCK_COL.cheap : x < 0.66 ? CLOCK_COL.mid : CLOCK_COL.dear;
+}
+
+function planClockHtml(d) {
+  if (!d.prices || !d.prices.length) return "";
+  const C = 170, now = new Date(d.now), key = clockPriceMode === "spot" ? "spot" : "total";
+  const ang = (t) => { const x = new Date(t); return ((x.getHours() + x.getMinutes() / 60) / 24) * 2 * Math.PI - Math.PI / 2; };
+  const pt = (a, r) => [C + r * Math.cos(a), C + r * Math.sin(a)];
+  const vals = d.prices.map((p) => p[key]), lo = Math.min(...vals), hi = Math.max(...vals);
+  let ticks = "";
+  d.prices.forEach((p) => {
+    const a = ang(p.t), [x1, y1] = pt(a, 122), [x2, y2] = pt(a, 150);
+    ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${priceColor(p[key], lo, hi)}" stroke-width="5.2" stroke-linecap="round"><title>${hhmm(p.t)} · ${kr(p[key])} kr/kWh</title></line>`;
+  });
+  const end24 = new Date(now.getTime() + 24 * 3600e3);
+  const arc = (start, end, r, col, w, title) => {
+    const s = new Date(Math.max(new Date(start), now)), e = new Date(Math.min(new Date(end), end24));
+    if (e <= s) return "";
+    let a0 = ang(s), a1 = ang(e);
+    if (a1 <= a0) a1 += 2 * Math.PI;
+    const [x0, y0] = pt(a0, r), [xe, ye] = pt(a1, r), large = a1 - a0 > Math.PI ? 1 : 0;
+    return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${large} 1 ${xe.toFixed(1)} ${ye.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"><title>${esc(title)}</title></path>`;
+  };
+  const cars = [...new Set(d.items.filter((i) => i.kind === "ev").map((i) => i.car))];
+  const rings = [];
+  if (d.items.some((i) => i.kind === "heat")) rings.push({ kind: "heat" });
+  cars.forEach((c, k) => rings.push({ kind: "ev", car: c, col: CAR_COL[k % CAR_COL.length] }));
+  if (d.items.some((i) => i.kind === "battery")) rings.push({ kind: "battery" });
+  let ringSvg = "";
+  rings.slice(0, 4).forEach((rg, k) => {
+    const r = 106 - k * 15;
+    ringSvg += `<circle cx="${C}" cy="${C}" r="${r}" fill="none" stroke="var(--line)" stroke-width="8"/>`;
+    d.items.filter((i) => i.kind === rg.kind && (rg.kind !== "ev" || i.car === rg.car)).forEach((i) => {
+      if (rg.kind === "heat" && i.mode !== "CHEAP") return;
+      const col = rg.kind === "heat" ? CLOCK_COL.heat : rg.kind === "ev" ? rg.col : (CLOCK_COL[i.action] || CLOCK_COL.hold);
+      ringSvg += arc(i.start, i.end, r, col, 8, `${i.title} ${i.when}`);
+    });
+  });
+  let labels = "";
+  [0, 3, 6, 9, 12, 15, 18, 21].forEach((h) => {
+    const a = (h / 24) * 2 * Math.PI - Math.PI / 2, [x, y] = pt(a, 162), big = h % 6 === 0;
+    labels += `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" font-size="${big ? 12 : 10}" font-weight="${big ? 700 : 400}" fill="var(--mut)">${String(h).padStart(2, "0")}</text>`;
+  });
+  const an = ang(now), [hx, hy] = pt(an, 152);
+  const cur = d.prices.find((p) => new Date(p.t) <= now && now < new Date(new Date(p.t).getTime() + 15 * 60e3)) || d.prices[0];
+  const hand = `<line x1="${(C + 58 * Math.cos(an)).toFixed(1)}" y1="${(C + 58 * Math.sin(an)).toFixed(1)}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="var(--txt)" stroke-width="2.5" stroke-linecap="round" opacity=".85"/>
+    <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="5" fill="var(--txt)"/>`;
+  const cr = Math.max(30, 106 - Math.min(rings.length, 4) * 15 - 6);
+  const center = `<circle cx="${C}" cy="${C}" r="${cr}" fill="var(--bg)"/><circle cx="${C}" cy="${C}" r="${cr}" fill="var(--card2)"/>
+    <text x="${C}" y="${C - 2}" text-anchor="middle" font-size="26" font-weight="800" fill="${priceColor(cur[key], lo, hi)}">${kr(cur[key])}</text>
+    <text x="${C}" y="${C + 18}" text-anchor="middle" font-size="11" fill="var(--mut)">kr/kWh ${key === "spot" ? "spot" : "totalt"}</text>`;
+  const legend = [["Billigt", CLOCK_COL.cheap], ["Mellan", CLOCK_COL.mid], ["Dyrt", CLOCK_COL.dear]].map(([t, c]) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:10px;height:10px;border-radius:3px;background:${c}"></span>${t}</span>`).join("")
+    + rings.slice(0, 4).map((rg) => {
+      const [t, c] = rg.kind === "heat" ? ["Värmepumpen laddar huset", CLOCK_COL.heat] : rg.kind === "ev" ? [`${rg.car.charAt(0).toUpperCase() + rg.car.slice(1)} laddar`, rg.col]
+        : ["Batteriet", CLOCK_COL.charge];
+      return `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:14px;height:4px;border-radius:2px;background:${c}"></span>${t}</span>`;
+    }).join("");
+  const svg = `<svg viewBox="0 0 340 340" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto" role="img" aria-label="Planklocka: de kommande 24 timmarna">${labels}${ticks}${ringSvg}${hand}${center}</svg>`;
+  return `<div class="planclock" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;align-items:center;margin:4px 0 14px">
+      <div>${svg}<div class="note" style="text-align:center;margin-top:6px">${legend}</div>
+        <div style="display:flex;justify-content:center;gap:6px;margin-top:8px">
+          <button class="icobtn" data-clockprice="total"${key === "total" ? ` style="border-color:var(--acc);color:var(--acc)"` : ""}>Totalt pris</button>
+          <button class="icobtn" data-clockprice="spot"${key === "spot" ? ` style="border-color:var(--acc);color:var(--acc)"` : ""}>Spotpris</button></div></div>
+      <div>${planStripHtml(d, now)}</div>
+    </div>`;
+}
+
+// Remsan: de närmaste 12 timmarna, en rad per sak som planeras, med rutor "Ladda 01:00–03:45".
+function planStripHtml(d, now) {
+  const end = new Date(now.getTime() + 12 * 3600e3), span = end - now;
+  const pos = (t) => Math.max(0, Math.min(100, ((new Date(t) - now) / span) * 100));
+  const cars = [...new Set(d.items.filter((i) => i.kind === "ev").map((i) => i.car))];
+  const lanes = [];
+  if (d.items.some((i) => i.kind === "heat")) lanes.push(["🌡️", "Värmepump", (i) => i.kind === "heat" && i.mode === "CHEAP", () => CLOCK_COL.heat]);
+  cars.forEach((c, k) => lanes.push(["🚗", c.charAt(0).toUpperCase() + c.slice(1), (i) => i.kind === "ev" && i.car === c, () => CAR_COL[k % CAR_COL.length]]));
+  if (d.items.some((i) => i.kind === "battery")) lanes.push(["🔋", "Batteri", (i) => i.kind === "battery", (i) => CLOCK_COL[i.action] || CLOCK_COL.hold]);
+  const rows = lanes.map(([ico, name, match, col]) => {
+    const segs = d.items.filter(match).filter((i) => new Date(i.end) > now && new Date(i.start) < end).map((i) => {
+      const l = pos(i.start), w = Math.max(1.5, pos(i.end) - l);
+      return `<div title="${esc(i.title + " " + i.when)}" style="position:absolute;left:${l}%;width:${w}%;top:0;bottom:0;border-radius:6px;background:${col(i)};opacity:.85"></div>`;
+    }).join("");
+    const next = d.items.filter(match).find((i) => new Date(i.end) > now);
+    const txt = next ? `${esc(next.title.replace(/^\S+\s/, ""))} · ${esc(next.when)}` : "Inget planerat";
+    return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:8px;font-size:.92rem">
+        <span style="white-space:nowrap"><b>${ico} ${esc(name)}</b></span><span class="note" style="text-align:right;min-width:0">${txt}</span></div>
+      <div style="position:relative;height:14px;margin-top:5px;border-radius:7px;background:var(--line)">${segs}</div></div>`;
+  }).join("");
+  const ticks = [0, 3, 6, 9, 12].map((h) => {
+    const t = new Date(now.getTime() + h * 3600e3);
+    return `<span style="position:absolute;left:${(h / 12) * 100}%;transform:translateX(${h === 0 ? "0" : h === 12 ? "-100%" : "-50%"})">${h === 0 ? "nu" : hhmm(t)}</span>`;
+  }).join("");
+  const goals = (d.car_goals || []).map((g) => {
+    const day = new Date(g.at).toDateString() === now.toDateString() ? "" : "imorgon ";
+    return `<div class="stat" style="padding:8px 12px;flex:1;min-width:140px"><div class="note">🚗 ${esc(g.car.charAt(0).toUpperCase() + g.car.slice(1))}</div>
+      <div style="font-weight:700">${g.soc != null ? g.soc + " % " : ""}klar ${day}${hhmm(g.at)}</div></div>`;
+  }).join("");
+  return `<div class="note" style="margin-bottom:8px">De närmaste 12 timmarna</div>${rows || `<div class="note">Inget planerat.</div>`}
+    <div class="note" style="position:relative;height:16px;font-size:.75rem">${ticks}</div>
+    ${goals ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${goals}</div>` : ""}`;
+}
+
 function planCardHtml(d) {
   const rows = d.items.slice(0, 8).map((i) => `
     <div style="display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line)${i.active ? ";font-weight:600" : ""}">
@@ -129,6 +246,7 @@ function planCardHtml(d) {
     <div class="card">
       <h2>🗓️ Planen framåt</h2>
       <div style="font-size:1.02rem;margin:4px 0 10px">${esc(d.headline)}</div>
+      ${planClockHtml(d)}
       ${sunDaysHtml(d.solar_days)}
       ${rows || ""}
       ${d.items.length ? `<div class="note" style="margin-top:8px">${esc(d.note)}</div>` : ""}
@@ -141,6 +259,9 @@ async function mountPlan(slotId) {
   try {
     const d = await api("api/plan");
     slot.innerHTML = d.ok ? planCardHtml(d) : "";
+    slot.querySelectorAll("[data-clockprice]").forEach((b) => b.onclick = () => {
+      clockPriceMode = b.dataset.clockprice; localStorage.setItem("ew_clock_price", clockPriceMode); mountPlan(slotId);
+    });
   } catch (e) { slot.innerHTML = ""; }
 }
 

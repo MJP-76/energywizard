@@ -121,7 +121,7 @@ def ev_items(ev_rows, prices, now):
             if avg is not None and davg is not None:
                 why += f" (dygnets snitt {_kr(davg)})"
             items.append({
-                "kind": "ev", "start": b["start"].isoformat(), "end": b["end"].isoformat(),
+                "kind": "ev", "car": car, "start": b["start"].isoformat(), "end": b["end"].isoformat(),
                 "when": _span(max(b["start"], now), b["end"], now),
                 "title": f"🚗 {car.capitalize()} laddar",
                 "detail": " · ".join(x for x in (f"{_num(kw_max)} kW", f"{_num(kwh)} kWh", why) if x),
@@ -218,7 +218,7 @@ def battery_items(rows, now):
         parts = [f"till {float(b['soc']):.0f} %" if b["soc"] is not None else ""]
         if avg is not None:
             parts.append(f"spotpris {_kr(avg)}/kWh")
-        out.append({"kind": "battery", "start": b["start"].isoformat(), "end": b["end"].isoformat(),
+        out.append({"kind": "battery", "action": b["action"], "start": b["start"].isoformat(), "end": b["end"].isoformat(),
                     "when": _span(max(b["start"], now), b["end"], now), "title": _BAT[b["action"]],
                     "detail": " · ".join(x for x in parts if x), "active": b["start"] <= now < b["end"]})
     return out
