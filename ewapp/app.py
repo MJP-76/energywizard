@@ -13,9 +13,12 @@ from sqlalchemy import create_engine, text
 import homeassistant as H
 
 TZ = ZoneInfo("Europe/Stockholm")
-import ew_settings
+try:
+    import ew_settings
+except ImportError:                   # äldre smartbox/ på värden: bara DASHBOARD_PASSWORD, som förut
+    ew_settings = None
 _ENV_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
-PASSWORD = _ENV_PASSWORD or ew_settings.get("dashboard_password", "") or ""
+PASSWORD = _ENV_PASSWORD or (ew_settings.get("dashboard_password", "") if ew_settings else "") or ""
 SECRET = hashlib.sha256(("ewapp|" + PASSWORD).encode()).digest()
 
 
@@ -23,7 +26,7 @@ def _sync_password():
     """Lösenordet från webbens startguide gäller direkt, utan omstart (bara när det inte
     kommer från DASHBOARD_PASSWORD)."""
     global PASSWORD, SECRET
-    if _ENV_PASSWORD:
+    if _ENV_PASSWORD or ew_settings is None:
         return
     pw = ew_settings.get("dashboard_password", "") or ""
     if pw != PASSWORD:
@@ -1626,10 +1629,15 @@ def sw():
     return FileResponse("static/sw.js", media_type="application/javascript", headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
 
 
-import i18n_routes  # noqa: E402  (delade översättningar i smartbox/i18n/)
-i18n_routes.register(app)
-import web_common  # noqa: E402  (sponsring och språk, samma som webben)
-web_common.register(app, _role)
+# Delade översättningar och sponsring ligger i smartbox/ (monterad från värden i compose-driften).
+# En äldre kopia av smartbox/ på värden får inte krascha appen: då blir den bara svensk.
+try:
+    import i18n_routes  # noqa: E402
+    i18n_routes.register(app)
+    import web_common  # noqa: E402
+    web_common.register(app, _role)
+except ImportError as _ie:
+    print(f"⚠️ Språk/sponsring avstängt (äldre smartbox/ på värden, kör git pull): {_ie}", flush=True)
 
 
 @app.get("/app.js")
