@@ -107,6 +107,18 @@ async function mountSavings(slotId) {
 // ---------- Planen framåt i klartext (inspirerat av FTW:s plan brief) ----------
 // Beskriver motorns egen plan - elbilens laddpass och värmepumpens grundläge enligt
 // elpriset (smartbox/plan_brief.py). Inga nya beslut fattas här.
+// Solprognos per dygn (smartbox/solar_days.py): samma timprognos som motorn planerar efter.
+function sunDaysHtml(sd) {
+  if (!sd || sd.today_kwh == null) return "";
+  const f = (v) => v == null ? "–" : (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(".", ","));
+  const tile = (label, v, sub) => `<div class="stat" style="flex:1;min-width:110px;padding:10px 12px">
+      <div class="note">${label}</div><div style="font-size:1.25rem;font-weight:700">${f(v)} <span class="note">kWh</span></div>
+      ${sub ? `<div class="note">${sub}</div>` : ""}</div>`;
+  const today = [sd.today_left_kwh != null ? `${f(sd.today_left_kwh)} kvar` : "", sd.produced_today_kwh != null ? `${f(sd.produced_today_kwh)} hittills` : ""].filter(Boolean).join(" · ");
+  return `<div style="margin:0 0 10px"><div class="note" style="margin-bottom:6px">☀️ Solprognos</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${tile("Idag", sd.today_kwh, today)}${tile("Imorgon", sd.tomorrow_kwh)}${sd.day_after_kwh != null ? tile("I övermorgon", sd.day_after_kwh) : ""}</div></div>`;
+}
+
 function planCardHtml(d) {
   const rows = d.items.slice(0, 8).map((i) => `
     <div style="display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line)${i.active ? ";font-weight:600" : ""}">
@@ -117,6 +129,7 @@ function planCardHtml(d) {
     <div class="card">
       <h2>🗓️ Planen framåt</h2>
       <div style="font-size:1.02rem;margin:4px 0 10px">${esc(d.headline)}</div>
+      ${sunDaysHtml(d.solar_days)}
       ${rows || ""}
       ${d.items.length ? `<div class="note" style="margin-top:8px">${esc(d.note)}</div>` : ""}
     </div>`;

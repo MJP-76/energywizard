@@ -816,10 +816,15 @@ def plan_api():
             bat_rows = []
         ch = c.execute(text("SELECT cheap_hours_count FROM system_settings WHERE id = 1")).fetchone()
         mode_row = c.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL ORDER BY timestamp DESC LIMIT 1")).fetchone()
+        try:
+            import solar_days
+            sun = solar_days.load(c, now)
+        except Exception:
+            sun = None
     brief = plan_brief.build_brief(now, [(r[0], float(r[1])) for r in prices if r[1] is not None],
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
                                    int(ch[0]) if ch and ch[0] else 8, mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
-    return {"ok": True, **brief}
+    return {"ok": True, **brief, "solar_days": sun}
 
 
 @app.get("/api/history")

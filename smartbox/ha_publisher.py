@@ -97,6 +97,24 @@ def _collect():
         if sf:
             ent["sensor.smartbox_solprognos"] = (_num(sf[0], 0), {"friendly_name": "Smartbox Solprognos", "unit_of_measurement": "W", "device_class": "power", "icon": "mdi:weather-sunny"})
 
+        # Solprognos per dygn (solar_days.py): kWh idag, kvar idag och imorgon, med timmarna som attribut.
+        try:
+            import solar_days
+            sd = solar_days.load(c)
+        except Exception:
+            sd = None
+        if sd and sd.get("today_kwh") is not None:
+            ent["sensor.smartbox_solprognos_idag"] = (sd["today_kwh"], {
+                "friendly_name": "Smartbox Solprognos idag", "unit_of_measurement": "kWh", "device_class": "energy",
+                "icon": "mdi:solar-power-variant", "kvar_idag": sd.get("today_left_kwh"),
+                "producerat_idag": sd.get("produced_today_kwh"),
+                "timmar": [{"t": h["t"], "kw": h["kw"]} for h in sd["hours"] if h["d"] == 0]})
+            if sd.get("tomorrow_kwh") is not None:
+                ent["sensor.smartbox_solprognos_imorgon"] = (sd["tomorrow_kwh"], {
+                    "friendly_name": "Smartbox Solprognos imorgon", "unit_of_measurement": "kWh", "device_class": "energy",
+                    "icon": "mdi:solar-power-variant-outline",
+                    "timmar": [{"t": h["t"], "kw": h["kw"]} for h in sd["hours"] if h["d"] == 1]})
+
         # Idag: köpt el från nätet, effektviktat snittpris och vad tajmningen sparat mot dygnssnittet.
         # (Bygger på nätimporten net_power > 0 – avg_w_tot är pumpens SCHABLON och ingen mätning av husets last.)
         e = c.execute(text(

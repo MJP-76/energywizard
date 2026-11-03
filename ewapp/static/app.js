@@ -233,7 +233,9 @@ let planView = LS.get("ew_plan_view", "plan");
 function planList() {
   if (!PL) return `<div class="note" style="text-align:center">Laddar…</div>`;
   const items = PL.items || [];
-  return `<section class="card planlist"><div class="planhead">${esc(PL.headline)}</div>${items.slice(0, 5).map((i) => `<div class="plrow ${i.active ? "on" : ""}"><div class="plw">${i.active ? '<span class="chip ok">Nu</span> ' : ""}${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}${items.length > 5 ? `<button class="link" data-a="planall" style="padding:0;font-size:.82rem;text-align:left">+${items.length - 5} till</button>` : ""}<div class="note plnote">${esc(PL.note)}</div></section>`;
+  const sd = PL.solar_days, f = (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(".", ",");
+  const sun = sd && sd.today_kwh != null ? `<div class="note">☀️ Sol idag ${f(sd.today_kwh)} kWh${sd.today_left_kwh != null ? ` (${f(sd.today_left_kwh)} kvar)` : ""}${sd.tomorrow_kwh != null ? ` · imorgon ${f(sd.tomorrow_kwh)} kWh` : ""}</div>` : "";
+  return `<section class="card planlist"><div class="planhead">${esc(PL.headline)}</div>${sun}${items.slice(0, 5).map((i) => `<div class="plrow ${i.active ? "on" : ""}"><div class="plw">${i.active ? '<span class="chip ok">Nu</span> ' : ""}${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}${items.length > 5 ? `<button class="link" data-a="planall" style="padding:0;font-size:.82rem;text-align:left">+${items.length - 5} till</button>` : ""}<div class="note plnote">${esc(PL.note)}</div></section>`;
 }
 function pagePlan() {
   const seg = `<div class="seg"><button data-a="planview" data-v="plan" class="${planView === "plan" ? "on" : ""}">Planen</button><button data-a="planview" data-v="schema" class="${planView === "schema" ? "on" : ""}">Laddschema</button></div>`;
