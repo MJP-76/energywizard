@@ -195,7 +195,11 @@ def battery_settings(cfg: dict) -> dict:
             # T.ex. 40 000 kr / (10 kWh x 6000 cykler) ≈ 0,67 kr; 0,30 kr är ett försiktigt standardvärde.
             "cycle_cost": f("cycle_cost", 0.30),
             # Dygnsplan (battery_plan.py) - bara i läget styr; plan: false = bara reglerna
-            "plan": str(bat.get("plan", True)).lower() not in ("false", "0", "nej", "no")}
+            "plan": str(bat.get("plan", True)).lower() not in ("false", "0", "nej", "no"),
+            # planeringsstil (very_careful/careful/balanced/bold/very_bold) och om batteriet får
+            # sälja till nätet - kan också ändras i webben (sparas då i /data/energywizard.json)
+            "plan_style": str(bat.get("plan_style", "balanced")),
+            "allow_export": str(bat.get("allow_export", True)).lower() not in ("false", "0", "nej", "no")}
 
 
 def build_solar_driver(cfg: dict) -> SolarDriver:

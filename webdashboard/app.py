@@ -230,6 +230,38 @@ async def api_setup_ha(request: Request):
     return {"ok": True, "message": msg}
 
 
+# ---------- Batteriets planering: stil och försäljning (valt i webben) ----------
+@app.get("/api/battery-plan-settings")
+async def api_battery_plan_settings():
+    import battery_plan
+    st = ew_settings.load()
+    try:
+        bs = house_config.battery_settings(house_config.load_house_config(HOUSE_CONFIG_FILE))
+    except Exception:
+        bs = {}
+    return {"style": st.get("battery_plan_style") or bs.get("plan_style") or battery_plan.DEFAULT_STYLE,
+            "allow_export": st.get("battery_allow_export", bs.get("allow_export", True)) is not False,
+            "styles": list(battery_plan.PLAN_STYLES), "has_battery": bs.get("control", "av") != "av"}
+
+
+@app.post("/api/battery-plan-settings")
+async def api_battery_plan_settings_save(request: Request):
+    import battery_plan
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"detail": "Bara ägaren kan ändra batteriets planering"}, status_code=403)
+    body = await request.json()
+    upd = {}
+    if "style" in body:
+        if body["style"] not in battery_plan.PLAN_STYLES:
+            return JSONResponse({"detail": "Okänd stil"}, status_code=400)
+        upd["battery_plan_style"] = body["style"]
+    if "allow_export" in body:
+        upd["battery_allow_export"] = bool(body["allow_export"])
+    ew_settings.update(**upd)
+    return {"ok": True, **upd}
+
+
 @app.get("/api/me")
 async def me(request: Request):
     role, user = AUTH.session(request)

@@ -117,6 +117,8 @@ def decide(s, cfg, supported=frozenset({"auto"})):
     if planned:
         from battery_plan import REASON
         pmax_plan = pmax if planned in ("charge", "discharge") else None
+        if pmax_plan and s.get("planned_power_w"):            # planens egen effekt, aldrig över taket
+            pmax_plan = min(pmax_plan, max(500.0, float(s["planned_power_w"])))
         detail = f" ({price:.2f} kr/kWh)" if price is not None else ""
         saving = s.get("plan_saving_kr")
         extra = f" Planen sparar ≈ {saving:.0f} kr mot ren självförbrukning." if saving and saving >= 1 else ""

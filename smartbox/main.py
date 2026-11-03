@@ -153,7 +153,8 @@ def _on_sigterm(signum, frame):
 signal.signal(signal.SIGTERM, _on_sigterm)
 config_watch.start(HOUSE_CONFIG_PATH)   # ny house_config.yaml -> omstart som läser in den
 import ew_settings as _ew_settings
-config_watch.start(_ew_settings.PATH)   # ny anslutning till HA från startguiden -> omstart
+# ny anslutning till HA från startguiden -> omstart (andra inställningar läses utan omstart)
+config_watch.start(_ew_settings.PATH, signature=lambda _p: (_ew_settings.get("ha_url"), _ew_settings.get("ha_token")) if _ew_settings.get("ha_url") else None)
 _battery_to_auto("uppstart")
 print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(battery_driver.supported_intents()) or '-'}")
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
@@ -1660,6 +1661,7 @@ while True:
                         "ev_charging_grid": _ev_on and not _ev_sol, "ev_solar_active": _ev_on and _ev_sol,
                         "prices_rest_of_day": (all_prices or [])[_q:],
                         "planned_action": (_bplan or {}).get("action_now"), "plan_saving_kr": (_bplan or {}).get("saving_kr"),
+                        "planned_power_w": (_bplan or {}).get("power_now_w"),
                         "learned_note": (battery_learning.describe(_battery["model"])
                                          + (f" Igår sparade batteriet {_battery['model']['saving_yesterday_kr']:.0f} kr (uppmätt)."
                                             if (_battery["model"] or {}).get("saving_yesterday_kr") is not None else "")) if _battery["model"] else None,

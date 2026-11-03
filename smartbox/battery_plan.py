@@ -25,6 +25,24 @@ Ren modul utan I/O, testas i tests/test_battery_plan.py. main.py bygger indata o
 import math
 
 DT_H = 0.25                 # kvart
+
+# Planeringsstil (som FTW:s "planning style"): hur mycket planen litar på prognosen.
+# Försiktig = räkna med mindre sol och mer förbrukning, och värdera energi kvar vid slutet högre
+# (behåller mer i batteriet). Djärv = planera på prognosen som den är (tjänar mest när den stämmer).
+# Säkerhetsgränserna (reservnivå, säkringsskydd, effekttak) är desamma i alla stilar.
+PLAN_STYLES = {
+    #               sol ×  last ×  percentil för slutvärdet
+    "very_careful": (0.60, 1.25, 50),
+    "careful":      (0.80, 1.10, 35),
+    "balanced":     (1.00, 1.00, 25),
+    "bold":         (1.00, 1.00, 15),
+    "very_bold":    (1.05, 0.95, 5),
+}
+DEFAULT_STYLE = "balanced"
+
+
+def style_params(style):
+    return PLAN_STYLES.get(style or DEFAULT_STYLE, PLAN_STYLES[DEFAULT_STYLE])
 ACTIONS = ("auto", "hold", "idle", "charge", "discharge")
 
 
@@ -79,7 +97,8 @@ def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycl
 
 
 def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, discharge_kw,
-             eff=0.9, allowed=ACTIONS, step_kwh=None, switch_cost=0.10, cycle_cost=0.0):
+             eff=0.9, allowed=ACTIONS, step_kwh=None, switch_cost=0.10, cycle_cost=0.0,
+             terminal_pct=25, allow_export=True):
     """slots: [{'t', 'buy', 'sell', 'load_kw', 'solar_kw', 'ev_kw'}] (kvartar, i tidsordning).
     cycle_cost: kr per urladdad kWh - batteriets slitage (cellernas pris / livslängd i kWh). Planen
     laddar då bara ur när prisskillnaden täcker förluster OCH slitage.
@@ -99,7 +118,7 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
     # Energi kvar vid slutet värderas FÖRSIKTIGT (25:e percentilen av köppriset): med medianen
     # blev värdet så högt en dag med dyr kväll att planen hellre hamstrade än använde batteriet.
     buys = sorted(s["buy"] for s in slots)
-    terminal_value = buys[len(buys) // 4] * eff_d          # kr per kWh kvar vid slutet
+    terminal_value = buys[min(len(buys) - 1, int(len(buys) * terminal_pct / 100))] * eff_d   # kr per kWh kvar vid slutet
 
     INF = float("inf")
     # future[i][k] = minsta kostnad framåt från energinivå i när förra kvartens avsikt var acts[k]
@@ -116,6 +135,8 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
             row = []
             for a in acts:
                 b = _battery_power(a, net, charge_kw, discharge_kw)
+                if not allow_export and b < 0:
+                    b = max(b, -max(0.0, net))        # bara husets egen förbrukning, ingen försäljning
                 if ev_on and b < 0:
                     if a == "discharge":
                         row.append(None)
@@ -199,6 +220,14 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
     cap = settings.get("capacity_kwh")
     if not cap or soc_pct is None:
         return None
+    try:                                  # valt i webben går före house_config.yaml
+        import ew_settings
+        _st = ew_settings.load()
+    except Exception:
+        _st = {}
+    style = _st.get("battery_plan_style") or settings.get("plan_style") or DEFAULT_STYLE
+    allow_export = _st.get("battery_allow_export", settings.get("allow_export", True)) is not False
+    solar_mult, load_mult, terminal_pct = style_params(style)
     q0 = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
     with engine.connect() as c:
         prices = c.execute(text("SELECT time_start, sek_per_kwh FROM elpriser WHERE time_start >= :a AND time_start < :b "
@@ -228,7 +257,7 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
         if h not in solar_cache:
             try:
                 cloud, _, _, _ = weather.get_weather_at(h)
-                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0 * factor.get(h.hour, 1.0)
+                solar_cache[h] = (weather.get_smart_solar_w(cloud, h) or 0.0) / 1000.0 * factor.get(h.hour, 1.0) * solar_mult
             except Exception:
                 solar_cache[h] = 0.0
         return solar_cache[h]
@@ -241,8 +270,8 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
             break
         last_p = p
         slots.append({"t": t, "buy": nordpool.full_buy_cost(p), "sell": nordpool.full_sell_income(p), "spot": p,
-                      "load_kw": (settings.get("load_profile") or {}).get((t.weekday(), t.hour))
-                                 or learning.predict_base_load(t, base_profile), "solar_kw": solar_at(t),
+                      "load_kw": ((settings.get("load_profile") or {}).get((t.weekday(), t.hour))
+                                  or learning.predict_base_load(t, base_profile)) * load_mult, "solar_kw": solar_at(t),
                       "ev_kw": ev_kw.get(t, 0.0)})
         t += timedelta(minutes=15)
     if not slots:
@@ -250,7 +279,9 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
     r = optimize(slots, soc_pct / 100.0 * cap, cap, settings["reserve_soc"] / 100.0 * cap, settings["max_soc"] / 100.0 * cap,
                  settings.get("charge_kw") or settings["max_power_w"] / 1000.0,
                  settings.get("discharge_kw") or settings["max_power_w"] / 1000.0, eff=settings.get("efficiency", 0.9),
-                 allowed=supported, cycle_cost=settings.get("cycle_cost", 0.30))
+                 allowed=supported, cycle_cost=settings.get("cycle_cost", 0.30),
+                 terminal_pct=terminal_pct, allow_export=allow_export)
+    r["style"], r["allow_export"] = style, allow_export
     try:
         with engine.begin() as c:
             c.execute(text("CREATE TABLE IF NOT EXISTS battery_plan_slots (t_slot TIMESTAMPTZ PRIMARY KEY, action TEXT, "
@@ -262,5 +293,8 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
     except Exception as e:
         print(f"⚠️ Batteriplanen kunde inte sparas: {e}")
     r["action_now"] = r["rows"][0]["action"] if r["rows"] else None
+    r["power_now_w"] = abs(r["rows"][0]["battery_kw"]) * 1000.0 if r["rows"] else None
+    if not allow_export and r["action_now"] == "discharge":
+        r["action_now"] = "auto"        # självförbrukning täcker huset exakt och säljer aldrig från batteriet
     r["spot_now"] = slots[0]["spot"]
     return r

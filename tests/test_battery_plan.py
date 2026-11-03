@@ -99,3 +99,39 @@ def test_slitage_gor_sma_prisskillnader_olonsamma():
     # Stor skillnad lönar sig fortfarande trots slitage
     stor = optimize(_slots(CHEAP_THEN_DEAR), 2.0, 10.0, 2.0, 10.0, 3.0, 3.0, cycle_cost=0.50)
     assert "charge" in [x["action"] for x in stor["rows"]] and stor["saving_kr"] > 5
+
+
+def _day_slots():
+    """Billigt på natten, dyrt på kvällen, sol mitt på dagen."""
+    from datetime import datetime, timedelta
+    t0 = datetime(2026, 11, 3, 0, 0)
+    out = []
+    for q in range(96):
+        h = q // 4
+        buy = 0.5 if h < 6 else (3.0 if 17 <= h < 21 else 1.2)
+        out.append({"t": t0 + timedelta(minutes=15 * q), "buy": buy, "sell": buy * 0.8, "load_kw": 0.5,
+                    "solar_kw": 3.0 if 10 <= h < 15 else 0.0, "ev_kw": 0.0})
+    return out
+
+
+def test_forsiktig_stil_sparar_mer_i_batteriet():
+    from battery_plan import optimize, style_params
+    slots = _day_slots()
+    end = {}
+    for style in ("very_careful", "very_bold"):
+        _, _, pct = style_params(style)
+        r = optimize(slots, 5.0, 10.0, 1.0, 10.0, 5.0, 5.0, terminal_pct=pct)
+        end[style] = r["rows"][-1]["soc_kwh"]
+    assert end["very_careful"] >= end["very_bold"]
+
+
+def test_utan_forsaljning_laddar_batteriet_aldrig_ur_mot_natet():
+    from battery_plan import optimize
+    slots = _day_slots()
+    r = optimize(slots, 9.0, 10.0, 1.0, 10.0, 5.0, 5.0, allow_export=False)
+    for row, s in zip(r["rows"], slots):
+        net = s["load_kw"] - s["solar_kw"]
+        if row["battery_kw"] < 0:
+            assert -row["battery_kw"] <= max(0.0, net) + 1e-6       # bara husets förbrukning
+    r2 = optimize(slots, 9.0, 10.0, 1.0, 10.0, 5.0, 5.0, allow_export=True)
+    assert min(x["battery_kw"] for x in r2["rows"]) < -0.6           # med försäljning får den ladda ur mer

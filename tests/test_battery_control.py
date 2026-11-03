@@ -139,3 +139,9 @@ def test_elmatare_som_fastnat_raknas_som_dod():
     assert not m.update(1234.0, 599)
     assert m.update(1234.0, 600)                  # samma värde i 10 min
     assert not m.update(1235.0, 601)              # ändras igen -> levande
+
+
+def test_planen_styr_effekten():
+    r = d(planned_action="discharge", planned_power_w=1800.0)
+    assert r["intent"] == "discharge" and r["power_w"] == 1800.0
+    assert d(planned_action="charge", planned_power_w=99999.0)["power_w"] == 5000.0   # taket gäller

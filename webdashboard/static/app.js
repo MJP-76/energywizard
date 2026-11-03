@@ -819,6 +819,33 @@ async function showSponsorBanner() {
   el.querySelector("a.go").addEventListener("click", close);
 }
 
+const BAT_STYLES = {
+  very_careful: ["Mycket försiktig", "Planerar för en dålig dag: mycket mindre sol och mer förbrukning än prognosen. Sparar mest i batteriet."],
+  careful: ["Försiktig", "Räknar med lite mindre sol och lite mer förbrukning än prognosen."],
+  balanced: ["Balanserad", "Planerar på prognosen och sparar en del i batteriet till senare. Standard."],
+  bold: ["Djärv", "Planerar nära prognosen och använder batteriet mer."],
+  very_bold: ["Mycket djärv", "Planerar på prognosen som den är. Tjänar mest när den stämmer och kostar mer när den slår fel."],
+};
+async function mountBatteryPlanSettings() {
+  let d;
+  try { d = await api("api/battery-plan-settings"); } catch (e) { return; }
+  if (!d.has_battery) return;
+  document.getElementById("batplancard").hidden = false;
+  const draw = () => {
+    document.getElementById("batstyle").innerHTML = d.styles.map((k) =>
+      `<button class="icobtn${k === d.style ? " on" : ""}" data-style="${k}" style="${k === d.style ? "outline:2px solid var(--acc)" : ""}">${esc(BAT_STYLES[k][0])}</button>`).join("");
+    document.getElementById("batstyledesc").textContent = BAT_STYLES[d.style][1];
+    document.querySelectorAll("#batstyle [data-style]").forEach((b) => b.onclick = async () => {
+      try { await postJSON("api/battery-plan-settings", { style: b.dataset.style }); d.style = b.dataset.style; draw(); toast("Sparat - gäller från nästa plan (inom 15 min)"); }
+      catch (e) { toast(e.message); }
+    });
+  };
+  draw();
+  const cb = document.getElementById("batexport");
+  cb.checked = d.allow_export;
+  cb.onchange = () => postJSON("api/battery-plan-settings", { allow_export: cb.checked }).catch(() => { cb.checked = !cb.checked; });
+}
+
 function mountLangSelect(slotId, saveForInstall) {
   const slot = document.getElementById(slotId);
   if (!slot || !window.I18N) return;
@@ -909,6 +936,15 @@ async function renderInstallningar() {
       <div class="note" style="margin-top:4px">Skannar ditt Home Assistant efter värmepump, bilar, solceller, batteri, spa och laddare. Kryssa i det som stämmer och tryck <b>Spara och starta</b>.</div>
       <button class="icobtn" id="scanbtn" style="margin-top:10px">Skanna mitt Home Assistant</button>
     </div>
+    <div class="card" style="margin-bottom:16px" id="batplancard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">🔋 Batteriets planering</div>
+      <div class="note" style="margin-top:4px">Hur mycket planen litar på prognosen för sol och förbrukning. Säkerhetsgränserna är desamma i alla stilar.</div>
+      <div class="seg" id="batstyle" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      <div style="display:flex;justify-content:space-between;font-size:.8rem;opacity:.7;margin-top:4px"><span>Sparar mer i batteriet</span><span>Litar mer på prognosen</span></div>
+      <div class="note" id="batstyledesc" style="margin-top:8px"></div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px"><input type="checkbox" id="batexport">
+        <span>Tillåt batteriet att sälja till nätet när planen räknar med en lönsam försäljning.<br><span class="note">Av: batteriet täcker bara husets egen förbrukning. Solelen kan fortfarande säljas.</span></span></label>
+    </div>
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:1.1rem;font-weight:700">🌍 Språk / Language</div>
       <div class="note" style="margin-top:4px">Gäller hela installationen och alla enheter som inte valt eget språk.</div>
@@ -939,6 +975,7 @@ async function renderInstallningar() {
   document.getElementById("scanbtn").onclick = runDiscovery;
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
   mountLangSelect("setlang", true);
+  mountBatteryPlanSettings();
   if (window.I18N && I18N.lang !== "sv") {
     const mb = document.getElementById("missingbtn");
     mb.hidden = false; mb.onclick = () => I18N.downloadMissing();

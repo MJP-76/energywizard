@@ -20,27 +20,29 @@ def _signature(path):
         return None
 
 
-def changed(path, before):
-    """Ny signatur om filen ändrats sedan before, annars None. En fil som försvinner räknas inte."""
-    now = _signature(path)
+def changed(path, before, signature=None):
+    """Ny signatur om filen ändrats sedan before, annars None. En fil som försvinner räknas inte.
+    signature(path) kan ge en egen signatur, t.ex. bara de fält som kräver omstart."""
+    now = (signature or _signature)(path)
     if now is None or now == before:
         return None
     return now
 
 
-def start(path, on_change=None, every_s=CHECK_EVERY_S):
+def start(path, on_change=None, every_s=CHECK_EVERY_S, signature=None):
     """Bevakar path i en bakgrundstråd. on_change anropas en gång när filen ändrats."""
     if on_change is None:
         def on_change():
             print(f"🔄 {path} har ändrats - startar om motorn för att läsa in den.")
             os.kill(os.getpid(), signal.SIGTERM)
-    first = _signature(path)
+    sig_fn = signature or _signature
+    first = sig_fn(path)
 
     def loop():
         sig = first
         while True:
             time.sleep(every_s)
-            new = changed(path, sig)
+            new = changed(path, sig, sig_fn)
             if new is not None:
                 time.sleep(2)                 # låt skrivningen bli klar
                 on_change()
