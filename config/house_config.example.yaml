@@ -46,6 +46,20 @@ heat_pump:
 #   host: 192.168.1.60
 #   base_shift: 0            # din vanliga förskjutning i kurvläge; nollställs hit vid varje start
 #   indoor_from_z1: false    # true om zon 1 har rumsgivare (då blir Z1_Temp innetemperatur)
+#
+# NIBE S-serie, lokalt REST-API (meny 7.5.15). Börja med enbart läsning.
+# Lösenord och certifikatets SHA-256-pin sätts i NIBE_LOCAL_* (se .env.example).
+# Sensorer för S1155/S1255 mappas mot enhetens registermetadata. Andra modeller
+# och skrivningar kräver egna verifierade points-bindningar: docs/nibe-local-rest.md.
+# heat_pump:
+#   enabled: true
+#   driver: nibe_local
+#   control_enabled: false
+#   connection:
+#     host: 192.0.2.10
+#     port: 8443
+#     device_index: 0
+#     expected_product: "NIBE S1255"  # ersätt med exakt upptäckt produktnamn
 
 # --- Solceller (valfri) ---
 solar:

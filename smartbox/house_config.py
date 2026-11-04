@@ -199,6 +199,10 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
         return GenericClimateHeatPumpDriver(entity_id=hp.get("entities", {}).get("climate"))
     if driver_cls is MyUplinkHeatPumpDriver:
         return MyUplinkHeatPumpDriver(entities=hp.get("entities", {}))
+    if driver_cls is NibeLocalHeatPumpDriver:
+        return NibeLocalHeatPumpDriver(connection=hp.get("connection"), points=hp.get("points"),
+                                       control_enabled=hp.get("control_enabled", False),
+                                       mode_values=hp.get("mode_values"))
     if driver_cls is HeishaMonHeatPumpDriver:
         return HeishaMonHeatPumpDriver(host=hp.get("host"), base_shift=hp.get("base_shift", 0),
                                        indoor_from_z1=hp.get("indoor_from_z1", False))
