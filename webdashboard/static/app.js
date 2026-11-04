@@ -1067,8 +1067,8 @@ async function mountPriceSettings() {
   const card = document.getElementById("pricecard"), body = document.getElementById("pricebody");
   if (!card || !d.ok) return;
   card.hidden = false;
-  const field = (id, label, val, hint) => `<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0">
-      <span class="note">${label}</span><input id="${id}" inputmode="decimal" value="${val ?? ""}" style="width:100%">${hint ? `<span class="note" style="font-size:.78rem">${hint}</span>` : ""}</label>`;
+  const field = (id, label, val, hint, mode = "decimal") => `<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 170px;min-width:0">
+      <span class="note">${label}</span><input id="${id}" inputmode="${mode}" value="${val ?? ""}" style="width:100%">${hint ? `<span class="note" style="font-size:.78rem">${hint}</span>` : ""}</label>`;
   const draw = () => {
     const c = d.countries[d.country] || d.countries.SE, sym = d.symbol;
     body.innerHTML = `
@@ -1084,6 +1084,15 @@ async function mountPriceSettings() {
         ${field("psell", `Ersättning vid försäljning (${sym}/kWh)`, d.sell_extra, "Utöver spotpriset, t.ex. nätnytta")}
       </div>
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="psellvat"${d.sell_vat ? " checked" : ""}> Moms på såld el (oftast nej för privatpersoner)</label>
+      <details style="margin-top:12px"${d.tou_extra ? " open" : ""}><summary><b>Tidstariff</b> <span class="note">(dyrare nätavgift under höglasttid)</span></summary>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+          ${field("ptou", `Tillägg under höglast (${sym}/kWh, inkl. moms)`, d.tou_extra || "", "0 eller tomt = ingen tidstariff")}
+          ${field("ptouh", "Timmar", d.tou_hours, "T.ex. 6-22 = 06:00–21:59", "text")}
+          ${field("ptoum", "Månader", d.tou_months, "T.ex. 11-3 = november–mars", "text")}
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="ptouwd"${d.tou_weekdays ? " checked" : ""}> Bara vardagar</label>
+        <div class="note" style="margin-top:6px">Står på elräkningen eller nätbolagets sida (t.ex. Ellevio, E.ON, Vattenfall). Batteriplanen, planklockan och kostnaderna räknar med den.</div>
+      </details>
       <div id="pricesrc" style="margin-top:12px"></div>
       <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card2);line-height:1.5">
         Exempel: spotpris 1,00 ${sym} (exkl. moms) blir <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
@@ -1098,7 +1107,8 @@ async function mountPriceSettings() {
       const v = (id) => (document.getElementById(id) || {}).value;
       try {
         await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
-          sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked });
+          sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked,
+          tou_extra: v("ptou"), tou_hours: v("ptouh"), tou_months: v("ptoum"), tou_weekdays: document.getElementById("ptouwd").checked });
         toast("Sparat - priser och kostnader räknas om inom en minut");
         mountPriceSettings();
       } catch (e) { toast(e.message); }

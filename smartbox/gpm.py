@@ -177,7 +177,7 @@ class GlobalPriorityManager:
         # EKONOMISKT OPTIMUM vid minuspris: paid_to_import = djupt minuspris där den verkliga
         # köpkostnaden (nordpool.full_buy_cost - moms+nätavgift+skatt, källoberoende formel)
         # blir negativ → maxa nätuttag + strypa solen (importera allt → max betalning).
-        paid_to_import = price is not None and nordpool.full_buy_cost(price) < 0
+        paid_to_import = price is not None and nordpool.full_buy_cost(price, now) < 0
         pv_power = state.get('pv_power_w', 0.0)
         avg_net = state.get('avg_net_w', 0.0)
         

@@ -85,7 +85,46 @@ def cost_settings() -> dict:
         "buy_extra": _num(_setting("price_buy_extra", "PRICE_BUY_EXTRA"), preset.get("buy_extra", 0.0)),
         "sell_extra": _num(_setting("price_sell_extra", "PRICE_SELL_EXTRA"), preset.get("sell_extra", 0.0)),
         "sell_vat": str(_setting("price_sell_vat", "PRICE_SELL_VAT", "false")).lower() in ("1", "true", "ja", "yes"),
+        # Tidstariff (issue #98): extra nätavgift per kWh (inkl. moms) under höglasttid, t.ex. Ellevio/E.ON/Vattenfall
+        # vardagar 06-22 november-mars. 0 = ingen tidstariff (som förut).
+        "tou_extra": _num(_setting("price_tou_extra", "PRICE_TOU_EXTRA"), 0.0),
+        "tou_hours": _span_setting(_setting("price_tou_hours", "PRICE_TOU_HOURS", "6-22"), (6, 22), 0, 24),
+        "tou_months": _span_setting(_setting("price_tou_months", "PRICE_TOU_MONTHS", "11-3"), (11, 3), 1, 12),
+        "tou_weekdays": str(_setting("price_tou_weekdays", "PRICE_TOU_WEEKDAYS", "true")).lower() not in ("0", "false", "nej", "no"),
     }
+
+
+def _span_setting(v, default, lo, hi):
+    """"6-22" -> (6, 22). Ogiltigt -> standard."""
+    try:
+        a, b = (int(x) for x in str(v).replace("–", "-").split("-"))
+        if lo <= a <= hi and lo <= b <= hi:
+            return (a, b)
+    except (TypeError, ValueError):
+        pass
+    return default
+
+
+def _in_span(x, span, wrap_inclusive):
+    a, b = span
+    if a <= b:
+        return a <= x <= b if wrap_inclusive else a <= x < b
+    return x >= a or (x <= b if wrap_inclusive else x < b)
+
+
+def tou_extra_at(t, c=None) -> float:
+    """Tidstariffens tillägg för timmen som börjar vid t (svensk tid). 0 utan tid eller utan tidstariff.
+    Timmar: start <= timme < slut (6-22 = 06:00-21:59). Månader: båda inklusive (11-3 = nov-mars)."""
+    c = c or cost_settings()
+    if not c["tou_extra"] or t is None:
+        return 0.0
+    from zoneinfo import ZoneInfo
+    lt = t.astimezone(ZoneInfo("Europe/Stockholm")) if getattr(t, "tzinfo", None) else t
+    if c["tou_weekdays"] and lt.weekday() >= 5:
+        return 0.0
+    if not _in_span(lt.month, c["tou_months"], True) or not _in_span(lt.hour, c["tou_hours"], False):
+        return 0.0
+    return c["tou_extra"]
 
 
 def price_source() -> str:
@@ -115,13 +154,14 @@ def prices_include_vat() -> bool:
     return str(_setting("price_includes_vat", "PRICE_INCLUDES_VAT", "true")).lower() not in ("0", "false", "nej", "no")
 
 
-def full_buy_cost(spot: float) -> float:
+def full_buy_cost(spot: float, t=None) -> float:
     """Verklig köpkostnad per kWh inkl moms, nätöverföring och skatt (i landets valuta). Dubbelräknar aldrig
-    moms oavsett vilken bas spotpriset har."""
+    moms oavsett vilken bas spotpriset har. Med t (timmens start) räknas tidstariffen in."""
     c = cost_settings()
+    extra = c["buy_extra"] + tou_extra_at(t, c)
     if prices_include_vat():
-        return spot + c["buy_extra"]
-    return spot * _vat_factor() + c["buy_extra"]
+        return spot + extra
+    return spot * _vat_factor() + extra
 
 
 def full_sell_income(spot: float) -> float:
@@ -132,13 +172,27 @@ def full_sell_income(spot: float) -> float:
     return (base * f if c["sell_vat"] else base) + c["sell_extra"]
 
 
-def sql_buy_cost_expr(col: str) -> str:
+def _sql_tou(c, tcol):
+    if not c["tou_extra"] or not tcol:
+        return ""
+    lt = f"({tcol} AT TIME ZONE 'Europe/Stockholm')"
+    (ha, hb), (ma, mb) = c["tou_hours"], c["tou_months"]
+    hour = f"EXTRACT(HOUR FROM {lt})"
+    month = f"EXTRACT(MONTH FROM {lt})"
+    hcond = f"({hour} >= {ha} AND {hour} < {hb})" if ha <= hb else f"({hour} >= {ha} OR {hour} < {hb})"
+    mcond = f"({month} BETWEEN {ma} AND {mb})" if ma <= mb else f"({month} >= {ma} OR {month} <= {mb})"
+    dcond = f" AND EXTRACT(ISODOW FROM {lt}) < 6" if c["tou_weekdays"] else ""
+    return f" + CASE WHEN {hcond} AND {mcond}{dcond} THEN {c['tou_extra']} ELSE 0 END"
+
+
+def sql_buy_cost_expr(col: str, tcol: str | None = None) -> str:
     """Samma formel som SQL-uttryck (Postgres), för ställen som räknar i databasen
-    istället för rad-för-rad i Python (pump_runtime.py, smartdashboard)."""
+    istället för rad-för-rad i Python (pump_runtime.py, smartdashboard). tcol = tidskolumnen (tidstariffen)."""
     c = cost_settings()
+    tou = _sql_tou(c, tcol)
     if prices_include_vat():
-        return f"({col} + {c['buy_extra']})"
-    return f"({col} * {_vat_factor()} + {c['buy_extra']})"
+        return f"({col} + {c['buy_extra']}{tou})"
+    return f"({col} * {_vat_factor()} + {c['buy_extra']}{tou})"
 
 
 def sql_sell_income_expr(col: str) -> str:

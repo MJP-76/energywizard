@@ -319,7 +319,7 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
         raw_load = (settings.get("load_profile") or {}).get((t.weekday(), t.hour)) or learning.predict_base_load(t, base_profile)
         raw_solar = solar_at(t)
         forecast.append((t, raw_load, raw_solar))          # prognosen som den är, före stil och utfallsrättning
-        slots.append({"t": t, "buy": nordpool.full_buy_cost(p), "sell": nordpool.full_sell_income(p), "spot": p,
+        slots.append({"t": t, "buy": nordpool.full_buy_cost(p, t), "sell": nordpool.full_sell_income(p), "spot": p,
                       "load_kw": raw_load * load_bias * load_mult, "solar_kw": raw_solar * solar_bias * solar_mult,
                       "ev_kw": ev_kw.get(t, 0.0)})
         t += timedelta(minutes=15)

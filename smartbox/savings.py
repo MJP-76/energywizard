@@ -93,7 +93,7 @@ def summarize_periods(rows, today):
 # motorn (nordpool.sql_buy_cost_expr/sql_sell_income_expr: moms, nätavgift, skatt och påslag enligt inställningarna).
 def _money_sql():
     import nordpool
-    buy, sell = nordpool.sql_buy_cost_expr("price"), nordpool.sql_sell_income_expr("price")
+    buy, sell = nordpool.sql_buy_cost_expr("price", "timestamp"), nordpool.sql_sell_income_expr("price")
     return text(f"""
         SELECT (timestamp AT TIME ZONE 'Europe/Stockholm')::date AS d,
                sum(GREATEST(net_power, 0)) / 60000.0 AS bought_kwh,

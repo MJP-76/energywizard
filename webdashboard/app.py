@@ -327,7 +327,7 @@ async def shadow_set(request: Request):
 
 
 _PRICE_KEYS = ("price_country", "price_area", "price_vat_pct", "price_buy_extra", "price_sell_extra", "price_sell_vat",
-               "price_currency", "price_ha_entity")
+               "price_currency", "price_ha_entity", "price_tou_extra", "price_tou_hours", "price_tou_months", "price_tou_weekdays")
 
 
 @app.get("/api/price-settings")
@@ -335,6 +335,7 @@ async def price_settings_get():
     """Inställningar -> Elpris och avgifter: gällande värden, länderna och ett räkneexempel."""
     import nordpool
     c = nordpool.cost_settings()
+    c = {**c, "tou_hours": f"{c['tou_hours'][0]}-{c['tou_hours'][1]}", "tou_months": f"{c['tou_months'][0]}-{c['tou_months'][1]}"}
     return {"ok": True, **c, "source": nordpool.price_source(), "ha_entity": ew_settings.get("price_ha_entity") or "sensor.nordpool",
             "countries": {k: {"name": v["name"], "vat_pct": v["vat_pct"], "currency": v["currency"], "areas": v["areas"]}
                           for k, v in nordpool.COUNTRIES.items()},
@@ -414,6 +415,23 @@ async def price_settings_set(request: Request):
             return JSONResponse({"error": f"{field} utanför rimligt intervall"}, status_code=400)
         upd[key] = v
     upd["price_sell_vat"] = bool(body.get("sell_vat"))
+    # Tidstariff (issue #98): tillägg under höglasttid. Tomt/0 = ingen.
+    if "tou_extra" in body:
+        v = body.get("tou_extra")
+        try:
+            v = 0.0 if v in (None, "") else float(str(v).replace(",", "."))
+        except ValueError:
+            return JSONResponse({"error": "Ogiltigt värde: tou_extra"}, status_code=400)
+        if not 0 <= v <= 20:
+            return JSONResponse({"error": "tou_extra utanför rimligt intervall"}, status_code=400)
+        upd["price_tou_extra"] = v or None
+        for key, field, lo, hi in (("price_tou_hours", "tou_hours", 0, 24), ("price_tou_months", "tou_months", 1, 12)):
+            raw = str(body.get(field) or "").replace("–", "-").replace(" ", "")
+            m = re.fullmatch(r"(\d{1,2})-(\d{1,2})", raw)
+            if not m or not all(lo <= int(x) <= hi for x in m.groups()):
+                return JSONResponse({"error": f"Ogiltigt intervall: {field} (t.ex. {'6-22' if field == 'tou_hours' else '11-3'})"}, status_code=400)
+            upd[key] = f"{int(m.group(1))}-{int(m.group(2))}"
+        upd["price_tou_weekdays"] = bool(body.get("tou_weekdays", True))
     if "ha_entity" in body:
         ent = str(body.get("ha_entity") or "").strip()
         upd["price_ha_entity"] = ent if re.fullmatch(r"(sensor|event)\.[a-z0-9_]+", ent) else None
@@ -765,7 +783,7 @@ async def api_plan():
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
                                    int(cheap_hours), mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
     from datetime import timedelta
-    clock_prices = [{"t": r[0].isoformat(), "spot": round(float(r[1]), 4), "total": round(nordpool.full_buy_cost(float(r[1])), 4)}
+    clock_prices = [{"t": r[0].isoformat(), "spot": round(float(r[1]), 4), "total": round(nordpool.full_buy_cost(float(r[1]), r[0]), 4)}
                     for r in prices if r[1] is not None and now - timedelta(minutes=15) <= r[0] < now + timedelta(hours=24)]
     return {"ok": True, **brief, "solar_days": sun, "now": now.isoformat(), "prices": clock_prices,
             "car_goals": _with_plugged(_car_goals(sched, now))}
