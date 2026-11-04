@@ -5,6 +5,7 @@ import threading
 import math
 import statistics
 from datetime import datetime, timedelta
+import re
 import requests
 import zoneinfo
 import nordpool  # Hämtar elpriser från Nordpool
@@ -41,7 +42,7 @@ SWE_TZ = zoneinfo.ZoneInfo("Europe/Stockholm")
 EV_MIN_CHARGE_AMPS = 6
 EV_MAX_CHARGE_AMPS = 20
 
-_cached_ev_profiles = {'nissan': {}, 'tesla': {}}
+_cached_ev_profiles = {}
 _cached_ev_profiles_time = None
 
 # Tillståndsminne för handskakning (vilken bil står var) - initieras med riktiga
@@ -49,10 +50,8 @@ _cached_ev_profiles_time = None
 ev_allocations = {}
 
 # Tracker-state för GPS Hemkomst
-ev_gps_state = {
-    'nissan': {'prev_dist': 999.0, 'approaching': False},
-    'tesla': {'prev_dist': 999.0, 'approaching': False}
-}
+from collections import defaultdict as _dd
+ev_gps_state = _dd(lambda: {'prev_dist': 999.0, 'approaching': False})   # per bil (installationens id)
 
 def calc_distance(lat1, lon1, lat2, lon2):
     if None in (lat1, lon1, lat2, lon2): return 999.0
@@ -170,7 +169,10 @@ _battery_to_auto("uppstart")
 print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(battery_driver.supported_intents()) or '-'}")
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
 car_ids = [c.id for c in car_drivers]
-CAR_SPECS = house_config.car_specs(house_cfg)   # {bil: {name, max_a, phases}} - laddboxens faser ("1"/"3"/"auto") och maxström
+CAR_SPECS = house_config.car_specs(house_cfg)
+# Namnet i HA-sensorn sensor.smartbox_<namn>_batteri: evs[].ha_name, annars bilens id
+CAR_HA_NAME = {ev["id"]: re.sub(r"[^a-z0-9_]", "_", str(ev.get("ha_name") or ev["id"]).lower())
+               for ev in house_cfg.get("evs", []) or [] if ev.get("id")}   # {bil: {name, max_a, phases}} - laddboxens faser ("1"/"3"/"auto") och maxström
 ev_allocations = {physical_id: None for physical_id in physical_charger_drivers}
 print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepump={type(heat_pump_driver).__name__}, "
       f"sol={type(solar_driver).__name__}, spa={type(spa_driver).__name__}, laddare={list(physical_charger_drivers.keys())}")
@@ -256,7 +258,7 @@ last_disk_check_date = None
 last_pump_alarm_code  = None
 last_solar_error_sent = False
 last_spa_reached     = True
-last_ev_status       = "unknown"
+last_ev_status       = {}          # bil -> laddboxens senaste status (för "laddningen startade"-aviseringen)
 last_washer_running  = True
 # Säkerhetslarm för kallt inne (auto-värme kan vara avstängd i manuellt pumpläge)
 INDOOR_COLD_ALERT_C  = 18.0
@@ -279,16 +281,16 @@ last_valid_ha_temp_time = datetime.now(SWE_TZ)
 # men bilen har samma nivå tills den körs/laddas. Värdet sparas i sensor_log (tesla_soc/nissan_soc + *_soc_stale)
 # och läses tillbaka vid start. Används max CAR_SOC_MAX_AGE_H timmar.
 CAR_SOC_MAX_AGE_H = 48
-_soc_mem = {"loaded": False, "tesla": (None, None), "nissan": (None, None), "last_wake": None}   # (värde, tid för senaste LIVE-värde)
+_soc_mem = _dd(lambda: (None, None)); _soc_mem.update({"loaded": False})   # bil -> (värde, tid); "<bil>_wake"/"<bil>_poll" -> tid   # (värde, tid för senaste LIVE-värde)
 # Stalled-charging-vakt (2026-10-30): om ström beordras men laddaren inte faktiskt drar ström,
 # är "status" fastnad på ett ord turn_on-villkoret inte känner igen. Mäter verklig ström istället.
-_ev_stall = {"nissan": None, "tesla": None}   # bil -> tidpunkt sedan vi först sett 0A trots beordrad ström
+_ev_stall = _dd(lambda: None)   # bil -> tidpunkt sedan vi först sett 0A trots beordrad ström
 EV_STALL_RETRY_MIN = 8          # så länge väntar vi innan vi tvingar ett nytt turn_on
 EV_STALL_ALERT_MIN = 25         # så länge innan vi varnar Emil (annars tyst retry)
 EV_STALL_CURRENT_A = 2.0        # under detta anses laddaren inte dra ström alls
 # Morgongolv-larm (2026-10-30): varnar Emil i god tid om en bil riskerar missa 50%-golvet kl 06,
 # istället för att han upptäcker det när han redan sitter i bilen. Larmar max en gång/dag/bil.
-_morning_floor_alerted = {"nissan": None, "tesla": None}
+_morning_floor_alerted = _dd(lambda: None)
 MORNING_FLOOR_WARN_MIN = 90     # varna när så här många minuter (eller färre) kvar till 06 och fortfarande under golvet
 # Kalibrerad kurva: (framledning °C, pumpens el W). Medianer per framledningsintervall från 60 nätter (sol ~0),
 # 1687 minuter med kompressorn på: husets last minus elbil, spa och grundlast (657 W).
@@ -336,19 +338,24 @@ def _load_last_known_soc():
     try:
         from sqlalchemy import text as _sqltext
         from database_engine import engine as _engine
-        with _engine.connect() as _c:
-            for _car in ("tesla", "nissan"):
-                _row = _c.execute(_sqltext(
-                    f"SELECT {_car}_soc, timestamp FROM sensor_log WHERE {_car}_soc IS NOT NULL "
-                    f"AND COALESCE({_car}_soc_stale, 0) = 0 ORDER BY timestamp DESC LIMIT 1")).fetchone()
+        for _car in car_ids:
+            if not re.fullmatch(r"[a-z0-9_]{1,40}", _car):
+                continue
+            try:                                      # en bil vars kolumner inte finns än ska inte stoppa de andra
+                with _engine.connect() as _c:
+                    _row = _c.execute(_sqltext(
+                        f"SELECT {_car}_soc, timestamp FROM sensor_log WHERE {_car}_soc IS NOT NULL "
+                        f"AND COALESCE({_car}_soc_stale, 0) = 0 ORDER BY timestamp DESC LIMIT 1")).fetchone()
                 if _row and _row[0] is not None:
                     _soc_mem[_car] = (float(_row[0]), _row[1])
+            except Exception:
+                pass
         _soc_mem["loaded"] = True
-        print(f"🔋 Senast kända batterinivåer inlästa: Tesla {_soc_mem['tesla'][0]} %, Nissan {_soc_mem['nissan'][0]} %")
+        print("🔋 Senast kända batterinivåer inlästa: " + ", ".join(f"{CAR_SPECS.get(c, {}).get('name', c)} {_soc_mem[c][0]} %" for c in car_ids))
     except Exception as _e:
         print(f"⚠️ Kunde inte läsa senast kända batterinivåer: {_e}")
 
-_last_logged_charger_status = {"nissan": None, "tesla": None}
+_last_logged_charger_status = _dd(lambda: None)
 
 def _log_charger_status_if_changed(car_id, charger_data):
     """Loggar laddarens råa status varje gång den ändras (inte varje loop), så vi kan se
@@ -446,17 +453,14 @@ spa_solar_boost_grace_counter = 0
 spa_should_heat_now = False
 
 last_sent_ev_limit = {}  # {car_id: int|None} - ersätter de tidigare hårdkodade _nissan/_tesla-varianterna
-last_ev_full_notified = {"nissan": False, "tesla": False}
+last_ev_full_notified = _dd(lambda: False)
 raw_ev_schedule = settings.get_ev_schedule()
 ev_schedule = {}
 for car, days in raw_ev_schedule.items():
     ev_schedule[car] = {int(k): v for k, v in days.items() if str(k).isdigit()}
 ev_charge_plan = None
 
-ev_connection_state = {
-    'nissan': {'connected': False, 'time': None, 'soc_start': None, 'soc_5min': None, 'charge_completed': False, 'last_status': None},
-    'tesla':  {'connected': False, 'time': None, 'soc_start': None, 'soc_5min': None, 'charge_completed': False, 'last_status': None}
-}
+ev_connection_state = {c: {'connected': False, 'time': None, 'soc_start': None, 'soc_5min': None, 'charge_completed': False, 'last_status': None} for c in car_ids}
 
 def _override_amps(val):
     """Tolka en force-amps/phases-override SÄKERT: 'auto'/'0'/tomt/icke-numeriskt → 0, annars int.
@@ -474,7 +478,7 @@ def _persist_ev_plan(df):
     from sqlalchemy import text as _t
     rows = []
     if df is not None and len(df):
-        for car in ("nissan", "tesla"):
+        for car in car_ids:
             kc, sc, ec = f"{car}_kw", f"{car}_start_soc", f"{car}_end_soc"
             if kc not in df.columns:
                 continue
@@ -782,20 +786,24 @@ while True:
                 solar_modbus_offline_since = None
                 last_solar_modbus_error_notified = False
 
-            nissan_data = homeassistant.read_nissan_data()
-            tesla_data  = homeassistant.read_tesla_data()
+            # Bilarna ur installationen (drivrutin per bil, house_config.yaml evs[]) - inga bilnamn i motorn
+            car_data = {}
+            for _drv in car_drivers:
+                try:
+                    car_data[_drv.id] = _drv.read_state() or {}
+                except Exception as _cde:
+                    print(f"❌ Bilen {_drv.id} kunde inte läsas: {_cde}")
+                    car_data[_drv.id] = {}
             if not _soc_mem["loaded"]:
                 _load_last_known_soc()
                 ha_publisher.start()   # startar bakgrundstråden en gång
                 _seed_sensor_watch()
-            nissan_soc_stale = _remember_soc("nissan", nissan_data, now)
-            tesla_soc_stale  = _remember_soc("tesla", tesla_data, now)
-            nissan_soc = nissan_data.get("soc") if nissan_data else None
-            tesla_soc = tesla_data.get("soc") if tesla_data else None
+            car_soc_stale = {c: _remember_soc(c, car_data.get(c), now) for c in car_ids}
+            car_soc = {c: (car_data.get(c) or {}).get("soc") for c in car_ids}
 
             if _cached_ev_profiles_time is None or (now - _cached_ev_profiles_time) > timedelta(hours=6):
-                _cached_ev_profiles['nissan'] = learning.get_ev_habit_profile('nissan')
-                _cached_ev_profiles['tesla'] = learning.get_ev_habit_profile('tesla')
+                for _c in car_ids:
+                    _cached_ev_profiles[_c] = learning.get_ev_habit_profile(_c)
                 _cached_ev_profiles_time = now
 
             if _cached_outdoor_avg_time is None or (now - _cached_outdoor_avg_time) > timedelta(hours=4):
@@ -874,8 +882,15 @@ while True:
             
             solar_data   = solar_driver.read_production()
             ha_temps     = homeassistant.read_temperatures()
-            ev_lite_data = homeassistant.read_easee_lite()
-            ev_carport_data = homeassistant.read_easee_carport()
+            # Laddboxarna ur installationen, i installationens ordning (den ordningen styr också loggkolumnerna)
+            physical_charger_data = {}
+            for _pid, _pdrv in physical_charger_drivers.items():
+                try:
+                    physical_charger_data[_pid] = _pdrv.read_state()
+                except Exception as _ce:
+                    print(f"⚠️ Laddbox {_pid}: kunde inte läsas: {_ce}")
+                    physical_charger_data[_pid] = None
+            _charger_list = [physical_charger_data.get(p) for p in physical_charger_drivers]
             gecko_data   = spa_driver.read_state()
             spa_power_data = homeassistant.read_spa_power()
             spa_power_w  = spa_power_data.get('total_w')
@@ -889,7 +904,13 @@ while True:
                                    f"Spabadets skyddssensor(er) har löst ut: {', '.join(_fmap[f] for f in _spa_faults)}.")
                 last_spa_safety_notify = now
             miele_data   = homeassistant.read_miele()
-            trackers     = homeassistant.read_ev_trackers()
+            # Bilarnas position (entities.tracker per bil i installationen)
+            trackers = {}
+            for _ev in house_cfg.get("evs", []) or []:
+                _tr = (_ev.get("entities") or {}).get("tracker")
+                if _ev.get("id") and _tr:
+                    trackers[f"{_ev['id']}_lat"] = homeassistant._get_numeric_attribute(_tr, "latitude")
+                    trackers[f"{_ev['id']}_lon"] = homeassistant._get_numeric_attribute(_tr, "longitude")
 
             # Spabad Watchdog
             if gecko_data is None or gecko_data.get("current_temp") is None:
@@ -919,23 +940,8 @@ while True:
                     spa_reboot_stage = 0
 
             # Handshake och Bilallokering (Steg 4:4 - generisk, se smartbox/ev_handshake.py)
-            lite_status = ev_lite_data.get("status") if ev_lite_data else "offline"
-            carport_status = ev_carport_data.get("status") if ev_carport_data else "offline"
-            lite_conn = lite_status not in ['disconnected', 'offline', 'unknown', 'none', None, '']
-            carport_conn = carport_status not in ['disconnected', 'offline', 'unknown', 'none', None, '']
-            # Easees två fysiska boxar läses idag via två namngivna homeassistant.py-funktioner
-            # (ingen generisk "läs valfri Easee-box" finns, se house_config.py:s _EASEE_PHYSICAL) -
-            # det är en förbefintlig, dokumenterad begränsning i HA-integrationen, inte något den
-            # här ihopkopplingen löser. Allokerings-ALGORITMEN nedan är däremot äkta generisk.
-            physical_charger_connected = {homeassistant.EASEE_LITE_ID: lite_conn, homeassistant.EASEE_CARPORT_ID: carport_conn}
-            physical_charger_data = {homeassistant.EASEE_LITE_ID: ev_lite_data, homeassistant.EASEE_CARPORT_ID: ev_carport_data}
-            # Generiska laddboxar (OCPP m.fl.): status och ström från drivrutinen, normaliserad till samma ord som Easee.
-            for _pid, _pdrv in physical_charger_drivers.items():
-                if _pid not in physical_charger_data and hasattr(_pdrv, "read_state"):
-                    try:
-                        physical_charger_data[_pid] = _pdrv.read_state()
-                    except Exception as _ce:
-                        print(f"⚠️ Laddbox {_pid}: kunde inte läsas: {_ce}")
+            _NOT_CONNECTED = ['disconnected', 'offline', 'unknown', 'none', None, '']
+            physical_charger_connected = {p: ((d or {}).get("status") not in _NOT_CONNECTED) for p, d in physical_charger_data.items()}
 
             # FIX: Teslans charging_state är platsoberoende (sant även vid supercharger borta) →
             # grinda plugged på GPS-hemma så en bil som laddar BORTA inte snor en hemma-laddare.
@@ -949,26 +955,23 @@ while True:
             # docstring för varför). Ett bilmärke utan egen detektering byggd ger bara False,
             # overksamt precis som en Null-drivrutin - kraschar inte.
             def _car_cable_plugged(car_id):
-                if car_id == "tesla":
-                    t_plug = tesla_data.get("plugged_in") if tesla_data else 0
-                    t_state = str(tesla_data.get("charging_state")).lower() if tesla_data else ""
-                    t_home = _gps_home_or_unknown(trackers.get('tesla_lat'), trackers.get('tesla_lon'))
-                    cable = (t_plug == 1.0) or (t_state in ['charging', 'stopped', 'complete']) or (carport_conn and t_home and trackers.get('tesla_lat') is not None)
-                    return cable and (t_home or carport_conn)
-                if car_id == "nissan":
-                    n_home = _gps_home_or_unknown(trackers.get('nissan_lat'), trackers.get('nissan_lon'))
-                    # 2026-10-15: bilintegrationerna har inga kabelsensorer längre → upptagen
-                    # hemma-laddare + bilens GPS hemma = kabel i (annars blev laddaren 'guest').
-                    cable = (nissan_data.get("plugged_in") == 1.0 if nissan_data else False) or (lite_conn and n_home and trackers.get('nissan_lat') is not None)
-                    return cable and (n_home or lite_conn)
-                return False
+                """Kabel i hemma: bilens egen kabelgivare (1.0), laddstatus (charging/stopped/complete) eller - när
+                bilintegrationen saknar kabelgivare - att bilens egen laddbox är upptagen och bilen är hemma (GPS).
+                Bilens egen laddbox och tracker kommer från installationen. Samma regel som förut för Tesla/Leaf."""
+                d = car_data.get(car_id) or {}
+                lat, lon = trackers.get(f'{car_id}_lat'), trackers.get(f'{car_id}_lon')
+                home = _gps_home_or_unknown(lat, lon)
+                own_conn = physical_charger_connected.get(default_physical_for_car.get(car_id), False)
+                state = str(d.get("charging_state")).lower()
+                cable = (d.get("plugged_in") == 1.0) or (state in ['charging', 'stopped', 'complete']) or (own_conn and home and lat is not None)
+                return cable and (home or own_conn)
 
+            default_physical_for_car = {c: p for p, c in default_car_per_charger.items()}
             car_plugged = {car_id: _car_cable_plugged(car_id) for car_id in car_ids}
             ev_allocations = ev_handshake.resolve_charger_allocations(
                 physical_charger_connected, car_plugged, ev_allocations, default_car_per_charger
             )
 
-            default_physical_for_car = {c: p for p, c in default_car_per_charger.items()}
             car_charger_id = {}
             car_charger_data = {}
             swapped = False
@@ -981,17 +984,11 @@ while True:
             if swapped:
                 ai_thoughts.append("🔄 Handskakning aktiv: Bilarna har bytt laddplats med varandra! GPM styr rätt box.")
 
-            # Bakåtkompatibla alias - resten av filen byts om delsystem för delsystem (se planen).
-            nissan_charger_id = car_charger_id.get('nissan')
-            nissan_charger_data = car_charger_data.get('nissan')
-            tesla_charger_id = car_charger_id.get('tesla')
-            tesla_charger_data = car_charger_data.get('tesla')
-
-            update_soc_tracker('nissan', nissan_data, nissan_charger_data, now, ev_schedule)
-            update_soc_tracker('tesla', tesla_data, tesla_charger_data, now, ev_schedule)
+            for _c in car_ids:
+                update_soc_tracker(_c, car_data.get(_c), car_charger_data.get(_c), now, ev_schedule)
 
             # Smart Hemkomst GPS
-            for car in ['nissan', 'tesla']:
+            for car in car_ids:
                 lat = trackers.get(f'{car}_lat')
                 lon = trackers.get(f'{car}_lon')
                 dist = calc_distance(weather.LATITUDE, weather.LONGITUDE, lat, lon)
@@ -999,7 +996,7 @@ while True:
                 if 0.5 < dist < 15.0 and dist < ev_gps_state[car]['prev_dist'] - 0.2:
                     if not ev_gps_state[car]['approaching']:
                         ev_gps_state[car]['approaching'] = True
-                        print(f"📍 GPS: {car.capitalize()} närmar sig hemmet! (Avstånd: {dist:.1f} km). Förallokerar.")
+                        print(f"📍 GPS: {CAR_SPECS.get(car, {}).get('name', car)} närmar sig hemmet! (Avstånd: {dist:.1f} km). Förallokerar.")
                         force_ev_plan_recalc = True
                 elif dist <= 0.5 or dist >= 15.0 or ev_connection_state[car]['connected']:
                     ev_gps_state[car]['approaching'] = False
@@ -1007,7 +1004,7 @@ while True:
                 ev_gps_state[car]['prev_dist'] = dist
                 
                 if ev_gps_state[car]['approaching']:
-                    ai_thoughts.append(f"📍 GPS: {car.capitalize()} närmar sig hemmet ({dist:.1f} km bort). För-allokerar.")
+                    ai_thoughts.append(f"📍 GPS: {CAR_SPECS.get(car, {}).get('name', car)} närmar sig hemmet ({dist:.1f} km bort). För-allokerar.")
 
             # Solinstrålning vs Prognos (CSI)
             # ROBUSTHET: SolarEdge-pv:n (solaredge_aktuell_effekt) fastnar ibland på stale värden
@@ -1050,25 +1047,23 @@ while True:
 
             # Morgongolv-vakt (2026-10-30): oberoende säkerhetsnät för "50% kl 06 varje dag".
             # Körs VARJE loop (inte bara var 15:e min) så vi hinner larma/tvinga i tid om allt annat failat.
-            for _car_id, _soc, _plugged in (
-                ("nissan", nissan_soc, ev_connection_state['nissan']['connected'] or ev_gps_state['nissan']['approaching']),
-                ("tesla", tesla_soc, ev_connection_state['tesla']['connected'] or ev_gps_state['tesla']['approaching']),
-            ):
+            for _car_id in car_ids:
+                _soc = car_soc.get(_car_id)
+                _plugged = ev_connection_state[_car_id]['connected'] or ev_gps_state[_car_id]['approaching']
                 _check_morning_floor(_car_id, _soc, _plugged, now)
 
             # EV Plan
             if ev_charge_plan is None or now.minute % 15 == 0 or force_ev_plan_recalc:
                 last_ev_plan_time = now
                 print("🧠 Beräknar ny EV-laddningsplan...")
-                car_data_for_plan = {
-                    "nissan_soc": nissan_soc,
-                    "tesla_soc": tesla_soc,
-                    "nissan_phases": nissan_charger_data.get('phases') if nissan_charger_data else None,
-                    "tesla_phases": tesla_charger_data.get('phases') if tesla_charger_data else None,
-                    "nissan_plugged_in": ev_connection_state['nissan']['connected'] or ev_gps_state['nissan']['approaching'],
-                    "tesla_plugged_in": ev_connection_state['tesla']['connected'] or ev_gps_state['tesla']['approaching'],
+                car_data_for_plan = {}
+                for _c in car_ids:
+                    car_data_for_plan[f"{_c}_soc"] = car_soc.get(_c)
+                    car_data_for_plan[f"{_c}_phases"] = (car_charger_data.get(_c) or {}).get('phases')
+                    car_data_for_plan[f"{_c}_plugged_in"] = ev_connection_state[_c]['connected'] or ev_gps_state[_c]['approaching']
+                car_data_for_plan.update({
                     "car_ids": list(car_ids), "car_specs": CAR_SPECS,     # bilarna ur installationen (laddplanen har inga bilnamn)
-                }
+                })
                 ev_charge_plan = decisions.calculate_ev_charge_plan(now, ev_schedule, car_data_for_plan, cfg)
                 try:
                     _persist_ev_plan(ev_charge_plan)
@@ -1439,16 +1434,14 @@ while True:
             max_hw_prob = max(hw_prob_now, hw_prob_next)
 
             # Säkring Matematik
-            n1 = ev_lite_data.get('current_l1') or 0 if ev_lite_data else 0
-            n2 = ev_lite_data.get('current_l2') or 0 if ev_lite_data else 0
-            n3 = ev_lite_data.get('current_l3') or 0 if ev_lite_data else 0
-            t1 = ev_carport_data.get('current_l1') or 0 if ev_carport_data else 0
-            t2 = ev_carport_data.get('current_l2') or 0 if ev_carport_data else 0
-            t3 = ev_carport_data.get('current_l3') or 0 if ev_carport_data else 0
+            # Laddboxarnas fasströmmar (alla laddboxar i installationen) dras av från husets last
+            ev_l1 = sum(((d or {}).get('current_l1') or 0) for d in _charger_list)
+            ev_l2 = sum(((d or {}).get('current_l2') or 0) for d in _charger_list)
+            ev_l3 = sum(((d or {}).get('current_l3') or 0) for d in _charger_list)
 
-            hl1_non_ev = max(0, (avg_hl1 or 0) - n1 - t1)
-            hl2_non_ev = max(0, (avg_hl2 or 0) - n2 - t2)
-            hl3_non_ev = max(0, (avg_hl3 or 0) - n3 - t3)
+            hl1_non_ev = max(0, (avg_hl1 or 0) - ev_l1)
+            hl2_non_ev = max(0, (avg_hl2 or 0) - ev_l2)
+            hl3_non_ev = max(0, (avg_hl3 or 0) - ev_l3)
             house_load_excluding_ev_a = max(hl1_non_ev, hl2_non_ev, hl3_non_ev)
 
             # Termisk säkringsmodell: tak för bilarnas totala ström (None = ingen färsk Tibber-data,
@@ -1479,7 +1472,7 @@ while True:
             minutes_left_burn = 60 - now.minute
             historical_base_load_kw = learning.predict_base_load(now, dynamic_base_load_profile)
             
-            ev_kw_now = (ev_lite_data.get("power_kw") or 0.0 if ev_lite_data else 0.0) + (ev_carport_data.get("power_kw") or 0.0 if ev_carport_data else 0.0)
+            ev_kw_now = sum(((d or {}).get("power_kw") or 0.0) for d in _charger_list)
             if ev_kw_now > 100: ev_kw_now /= 1000.0 
             spa_kw_now = 3.0 if (gecko_data and str(gecko_data.get("heater_state", "")).lower() in ["heating", "heat"]) else 0.0
             current_actual_base_load_kw = max(0.5, (house_consumption_w / 1000.0) - ev_kw_now - spa_kw_now)
@@ -1492,42 +1485,49 @@ while True:
             allowed_kwh_now = current_target_limit - reserve_kwh_needed_now
 
             # ============================================================
-            # 🚗 Väck Teslan när den är inkopplad men bara har ett gammalt (minnes)värde för batteriet.
-            # Under pågående laddning är bilen vaken av sig själv; styrningen sker via Easee, så detta gäller bara
-            # avläsningen av batterinivån. Högst en gång per TESLA_WAKE_MIN_INTERVAL_H (även vid misslyckat försök).
-            try:
-                # Dessutom: ett kvarts-vaket före första planerade laddblocket, så att planen räknas om på ett färskt värde i stället för ett gammalt (högst var 30:e minut).
-                _plan_soon = False
-                if ev_connection_state['tesla']['connected'] and tesla_soc_stale:
+            # 🚗 Bilar som sover (entities.wake_button i installationen, t.ex. Tesla): väck en inkopplad bil när den bara
+            # har ett gammalt (minnes)värde för batteriet. Under pågående laddning är bilen vaken av sig själv. Högst en gång
+            # per TESLA_WAKE_MIN_INTERVAL_H (även vid misslyckat försök), eller var 30:e minut när laddning är planerad inom
+            # en kvart - så att planen räknas om på ett färskt värde.
+            # 🚗 Bilar som bara hämtar nytt värde på begäran (entities.update_button, t.ex. Leaf - 24 okt: 12 % trots full):
+            # be om uppdatering var 30:e minut medan bilen är inkopplad och inte full, annars var 3:e timme.
+            for _ev in house_cfg.get("evs", []) or []:
+                _cid, _ents = _ev.get("id"), _ev.get("entities") or {}
+                if not _cid or not ev_connection_state.get(_cid, {}).get('connected'):
+                    continue
+                _name = CAR_SPECS.get(_cid, {}).get("name", _cid)
+                if _ents.get("wake_button") and car_soc_stale.get(_cid):
                     try:
-                        from sqlalchemy import text as _wt
-                        from database_engine import engine as _weng
-                        _n = now.replace(tzinfo=None)
-                        with _weng.connect() as _wc:
-                            _plan_soon = bool(_wc.execute(_wt("SELECT 1 FROM ev_plan_slots WHERE car_id = 'tesla' AND kw > 0 AND t_slot BETWEEN :a AND :b LIMIT 1"), {"a": _n, "b": _n + timedelta(minutes=15)}).fetchone())
-                    except Exception as _pe:
-                        print(f"⚠️ Kunde inte läsa laddplanen för väckning: {_pe}")
-                _wake_gap = timedelta(minutes=30) if _plan_soon else timedelta(hours=TESLA_WAKE_MIN_INTERVAL_H)
-                if (ev_connection_state['tesla']['connected'] and tesla_soc_stale
-                        and (_soc_mem["last_wake"] is None or (now - _soc_mem["last_wake"]) > _wake_gap)):
-                    _soc_mem["last_wake"] = now
-                    if homeassistant.press_button("button.tesla_model_y_wake_up"):
-                        print("🚗 Väckte Teslan (" + ("laddning planerad inom 15 min, batterinivån gammal" if _plan_soon else "inkopplad, batterinivå okänd") + ")")
-            except Exception as _we:
-                print(f"⚠️ Väckning av Tesla misslyckades: {_we}")
+                        _plan_soon = False
+                        try:
+                            from sqlalchemy import text as _wt
+                            from database_engine import engine as _weng
+                            _n = now.replace(tzinfo=None)
+                            with _weng.connect() as _wc:
+                                _plan_soon = bool(_wc.execute(_wt("SELECT 1 FROM ev_plan_slots WHERE car_id = :c AND kw > 0 AND t_slot BETWEEN :a AND :b LIMIT 1"),
+                                                              {"c": _cid, "a": _n, "b": _n + timedelta(minutes=15)}).fetchone())
+                        except Exception as _pe:
+                            print(f"⚠️ Kunde inte läsa laddplanen för väckning: {_pe}")
+                        _wake_gap = timedelta(minutes=30) if _plan_soon else timedelta(hours=TESLA_WAKE_MIN_INTERVAL_H)
+                        _last = _soc_mem.get(f"{_cid}_wake")
+                        if _last is None or (now - _last) > _wake_gap:
+                            _soc_mem[f"{_cid}_wake"] = now
+                            if homeassistant.press_button(_ents["wake_button"]):
+                                print(f"🚗 Väckte {_name} (" + ("laddning planerad inom 15 min, batterinivån gammal" if _plan_soon else "inkopplad, batterinivå okänd") + ")")
+                    except Exception as _we:
+                        print(f"⚠️ Väckning av {_name} misslyckades: {_we}")
+                if _ents.get("update_button"):
+                    try:
+                        _s = car_soc.get(_cid)
+                        _gap = timedelta(minutes=30) if (_s is None or _s < 98) else timedelta(hours=3)
+                        _last = _soc_mem.get(f"{_cid}_poll")
+                        if _last is None or (now - _last) > _gap:
+                            _soc_mem[f"{_cid}_poll"] = now
+                            homeassistant.press_button(_ents["update_button"])
+                    except Exception as _ne:
+                        print(f"⚠️ Uppdatering av {_name}s data misslyckades: {_ne}")
 
-            # 🚗 Nissan: Leaf-integrationen i HA hämtar bara nytt värde när vi ber om det, så batterinivån står kvar på
-            # det gamla (24 okt natt: 12 % trots att bilen blev fulladdad). Be om en uppdatering var 30:e minut medan
-            # bilen är inkopplad och inte full, annars var 3:e timme.
-            try:
-                _nsoc = nissan_data.get("soc") if nissan_data else None
-                _ngap = timedelta(minutes=30) if (_nsoc is None or _nsoc < 98) else timedelta(hours=3)
-                if ev_connection_state['nissan']['connected'] and (_soc_mem.get("nissan_poll") is None or (now - _soc_mem["nissan_poll"]) > _ngap):
-                    _soc_mem["nissan_poll"] = now
-                    homeassistant.press_button("button.leaf_update_data")
-            except Exception as _ne:
-                print(f"⚠️ Uppdatering av Leaf-data misslyckades: {_ne}")
-
+            # ============================================================
             # 🧠 GPM UTVÄRDERING
             # ============================================================
             gpm_state = {
@@ -1559,25 +1559,22 @@ while True:
                 'max_fuse_a': cfg.get('fuse_size_a', decisions.MAX_FUSE_A), 'house_load_a': house_load_excluding_ev_a, 'ev_actual_a': 0,
                 'ev_fuse_cap_a': ev_fuse_cap_a,
                 'current_solar_limit_pct': current_solar_limit_pct, 'current_target_limit': current_target_limit,
-                'nissan_soc': nissan_soc, 'tesla_soc': tesla_data.get('soc') if tesla_data else None,
-                'nissan_connected': ev_connection_state['nissan']['connected'] or ev_gps_state['nissan']['approaching'],
-                'tesla_connected': ev_connection_state['tesla']['connected'] or ev_gps_state['tesla']['approaching'],
-                'ev_min_charge_a': EV_MIN_CHARGE_AMPS, 'ev_max_charge_a': EV_MAX_CHARGE_AMPS,
-                'nissan_charge_completed': ev_connection_state['nissan']['charge_completed'],
-                'tesla_charge_completed': ev_connection_state['tesla']['charge_completed'],
-                'nissan_phases': nissan_charger_data.get('phases') if nissan_charger_data else None,
-                'tesla_phases': tesla_charger_data.get('phases') if tesla_charger_data else None,
-                'nissan_habit_profile': _cached_ev_profiles.get('nissan', {}),
-                'tesla_habit_profile': _cached_ev_profiles.get('tesla', {}),
-                'ev_plan': ev_charge_plan, 'nissan_prio': cfg.get('ev_nissan_prio', 2), 'tesla_prio': cfg.get('ev_tesla_prio', 1),
-                'nissan_force_amps': _override_amps(all_overrides.get("nissan_force_amps", "0")),
-                'nissan_force_phases': _override_amps(all_overrides.get("nissan_force_phases", "0")),
-                'tesla_force_amps': _override_amps(all_overrides.get("tesla_force_amps", "0")),
-                'tesla_force_phases': _override_amps(all_overrides.get("tesla_force_phases", "0")),
-                'nissan_hold': all_overrides.get("nissan_hold") == "on", 'tesla_hold': all_overrides.get("tesla_hold") == "on",     # EnergyWizard Mobil: manuell paus (håller 0A tills Auto väljs)
+                'ev_min_charge_a': EV_MIN_CHARGE_AMPS, 'ev_max_charge_a': EV_MAX_CHARGE_AMPS, 'ev_plan': ev_charge_plan,
                 # Bilarna ur installationen: vilka som finns och deras laddboxars faser/maxström (gpm har inga bilnamn)
                 'car_ids': list(car_ids), 'car_specs': CAR_SPECS,
             }
+            for _c in car_ids:      # per bil: <bil>_soc, _connected, _phases ... (samma nycklar gpm alltid läst)
+                gpm_state.update({
+                    f'{_c}_soc': car_soc.get(_c),
+                    f'{_c}_connected': ev_connection_state[_c]['connected'] or ev_gps_state[_c]['approaching'],
+                    f'{_c}_charge_completed': ev_connection_state[_c]['charge_completed'],
+                    f'{_c}_phases': (car_charger_data.get(_c) or {}).get('phases'),
+                    f'{_c}_habit_profile': _cached_ev_profiles.get(_c, {}),
+                    f'{_c}_prio': cfg.get(f'ev_{_c}_prio', 2),
+                    f'{_c}_force_amps': _override_amps(all_overrides.get(f"{_c}_force_amps", "0")),
+                    f'{_c}_force_phases': _override_amps(all_overrides.get(f"{_c}_force_phases", "0")),
+                    f'{_c}_hold': all_overrides.get(f"{_c}_hold") == "on",          # EnergyWizard Mobil: manuell paus
+                })
             
             gpm_actions = gpm_engine.evaluate(gpm_state)
             try:
@@ -1852,11 +1849,13 @@ while True:
                             last_spa_ready_notify_time = now
                     last_spa_reached = is_reached
 
-            if ev_lite_data:
-                c_status = ev_lite_data.get("status")
-                if c_status == "charging" and last_ev_status != "charging":
-                    if cfg.get("notify_ev_start", True): notifier.notify_ev_charging("Nissan", ev_lite_data.get("power_kw") or 0.0)
-                last_ev_status = c_status
+            for _c in car_ids:                       # "laddningen startade" per bil (förut bara Nissan)
+                _cd = car_charger_data.get(_c) or {}
+                c_status = _cd.get("status")
+                if c_status == "charging" and last_ev_status.get(_c) not in (None, "charging"):
+                    if cfg.get("notify_ev_start", True):
+                        notifier.notify_ev_charging(CAR_SPECS.get(_c, {}).get("name", _c), _cd.get("power_kw") or 0.0)
+                last_ev_status[_c] = c_status
 
             if miele_data:
                 is_running = miele_data.get("status") not in ["off", "unavailable", "unknown", None]
@@ -1967,17 +1966,16 @@ while True:
                 consumed_kwh, current_kwh,
                 cloud_cover, wind_speed, avg_net, wind_dir,
                 solar_now, pump_data, dict(solar_data or {}, limit_pct=current_solar_limit_pct), ha_temps,
-                nissan_charger_data, cop=cop, ev_carport=tesla_charger_data,
-                car_data={
-                    "nissan_soc": nissan_data.get("soc") if nissan_data else None,
-                    "tesla_soc": tesla_data.get("soc") if tesla_data else None,
-                    "nissan_soc_stale": 1 if nissan_soc_stale else 0,
-                    "tesla_soc_stale": 1 if tesla_soc_stale else 0,
-                    "nissan_climate_temp": nissan_data.get("climate_temp") if nissan_data else None,
-                    "nissan_climate_state": nissan_data.get("climate_state") if nissan_data else None,
-                    "nissan_charge_completed": ev_connection_state['nissan']['charge_completed'],
-                    "tesla_charge_completed": ev_connection_state['tesla']['charge_completed'],
-                },
+                # Laddboxarna loggas i installationens ordning (första -> ev_*, andra -> ev_carport_*) och bilarna under
+                # sina egna id:n (<bil>_soc, <bil>_soc_stale ...; logger.py skapar kolumnerna för nya bilar).
+                (_charger_list[0] if _charger_list else None), cop=cop, ev_carport=(_charger_list[1] if len(_charger_list) > 1 else None),
+                car_data={k: v for _c in car_ids for k, v in {
+                    f"{_c}_soc": car_soc.get(_c),
+                    f"{_c}_soc_stale": 1 if car_soc_stale.get(_c) else 0,
+                    f"{_c}_climate_temp": (car_data.get(_c) or {}).get("climate_temp"),
+                    f"{_c}_climate_state": (car_data.get(_c) or {}).get("climate_state"),
+                    f"{_c}_charge_completed": ev_connection_state[_c]['charge_completed'],
+                }.items()},
                 pump_operating_mode=pump_operating_mode_from_pump,
                 shelly_l1_a=avg_hl1, shelly_l2_a=avg_hl2, shelly_l3_a=avg_hl3,
                 ev_avail_a=sum(ev_amps.values()),
@@ -2009,8 +2007,13 @@ while True:
                     "sensor.smartbox_cop": (_r1(cop, 2), {"friendly_name": "Smartbox COP", "icon": "mdi:heat-pump"}),
                     "sensor.smartbox_lage": (current_mode, {"friendly_name": "Smartbox Läge", "icon": "mdi:brain"}),
                     "sensor.smartbox_beslut": ((current_decision or "")[:250] or None, {"friendly_name": "Smartbox Beslut", "icon": "mdi:head-cog", "per_enhet": current_decision_items, "fullstandigt": (current_decision or "")[:1500]}),
-                    "sensor.smartbox_tesla_batteri": (_r1(tesla_data.get("soc"), 0) if tesla_data else None, {"friendly_name": "Smartbox Tesla batteri", "unit_of_measurement": "%", "device_class": "battery", "senast_kand": bool(tesla_soc_stale), "alder_min": (round((now - _soc_mem["tesla"][1]).total_seconds() / 60) if tesla_soc_stale and _soc_mem["tesla"][1] else 0)}),
-                    "sensor.smartbox_leaf_batteri": (_r1(nissan_data.get("soc"), 0) if nissan_data else None, {"friendly_name": "Smartbox Leaf batteri", "unit_of_measurement": "%", "device_class": "battery", "senast_kand": bool(nissan_soc_stale), "alder_min": (round((now - _soc_mem["nissan"][1]).total_seconds() / 60) if nissan_soc_stale and _soc_mem["nissan"][1] else 0)}),
+                    # Per bil: sensor.smartbox_<ha_name eller id>_batteri (Emils Leaf har ha_name: leaf i installationen)
+                    **{f"sensor.smartbox_{CAR_HA_NAME.get(_c, _c)}_batteri": (
+                        _r1(car_soc.get(_c), 0),
+                        {"friendly_name": f"Smartbox {CAR_SPECS.get(_c, {}).get('name', _c)} batteri", "unit_of_measurement": "%",
+                         "device_class": "battery", "senast_kand": bool(car_soc_stale.get(_c)),
+                         "alder_min": (round((now - _soc_mem[_c][1]).total_seconds() / 60) if car_soc_stale.get(_c) and _soc_mem[_c][1] else 0)})
+                       for _c in car_ids},
                     # SpotNav-idé: säg till batterisystemet (Predbat, EMHASS, växelriktarens BESS) när bilen
                     # laddar från NÄTET, så det kan låta bli att tömma batteriet i bilen. Av vid solladdning.
                     "binary_sensor.smartbox_elbil_laddar_fran_natet": (
@@ -2036,15 +2039,14 @@ while True:
             # ── LAST-NEDBRYTNING: förklara husets effekt med det vi FAKTISKT mäter ────────
             # total = elbil + värmepump + spa + OFÖRKLARAT (ugn/bastu/tvätt/…).
             try:
-                _ev_w   = (((ev_lite_data.get("power_kw") or 0.0) if ev_lite_data else 0.0)
-                           + ((ev_carport_data.get("power_kw") or 0.0) if ev_carport_data else 0.0)) * 1000.0
+                _ev_w   = sum(((d or {}).get("power_kw") or 0.0) for d in _charger_list) * 1000.0
                 # OBS: compressor_power_kw är VÄRME-uteffekt (el×COP), INTE el. Pumpens faktiska
                 # EL-effekt är avg_tot (~2200 W när kompressorn går, annars 0). Använd den här.
                 _pump_w = avg_tot if avg_tot else 0.0
                 _spa_w  = spa_power_w or 0.0
                 # Vilken bil laddar? Publiceras som sensor.smartbox_elbil_laddar (energiflödet i HA visar annars bara "Elbil").
-                _laddar = [namn for namn, d in (("Nissan Leaf", nissan_charger_data), ("Tesla Model Y", tesla_charger_data))
-                           if d and ((d.get("power_kw") or 0.0) > 0.3 or str(d.get("status")) == "charging")]
+                _laddar = [CAR_SPECS.get(_c, {}).get("name", _c) for _c in car_ids
+                           if (d := car_charger_data.get(_c)) and ((d.get("power_kw") or 0.0) > 0.3 or str(d.get("status")) == "charging")]
                 _laddar_txt = " + ".join(_laddar) if _laddar else "Ingen"
                 if _solar_persist.get("laddar") != _laddar_txt:
                     from database_engine import engine as _eng

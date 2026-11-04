@@ -1,4 +1,5 @@
 import os
+import re
 import psycopg
 import pandas as pd
 from datetime import datetime
@@ -214,6 +215,24 @@ def init_log_db():
         print(f"❌ Kunde inte skapa twin_features-vy: {e}")
 
 
+_CAR_COLUMN_TYPES = {"soc": "NUMERIC", "soc_stale": "SMALLINT", "charge_completed": "SMALLINT",
+                     "climate_temp": "NUMERIC", "climate_state": "VARCHAR(50)"}
+_car_columns_ok: set = set()
+
+
+def _ensure_car_column(col: str, kind: str) -> None:
+    if col in _car_columns_ok:
+        return
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"ALTER TABLE sensor_log ADD COLUMN IF NOT EXISTS {col} {_CAR_COLUMN_TYPES[kind]}")
+            conn.commit()
+        _car_columns_ok.add(col)
+    except Exception as e:
+        print(f"❌ Kunde inte skapa loggkolumnen {col}: {e}")
+
+
 def log_status(
     price, indoor, water, target_room, water_mode,
     forward, retur, calc_forward, outdoor,
@@ -348,16 +367,8 @@ def log_status(
             "mower_power_w": mower.get("power_w"),
             "mower_status": mower.get("status"),
             "ev_carport_status": ec.get("status"),
-            "nissan_soc": cd.get("nissan_soc"),
-            "tesla_soc": cd.get("tesla_soc"),
-            "tesla_soc_stale": cd.get("tesla_soc_stale"),
-            "nissan_soc_stale": cd.get("nissan_soc_stale"),
-            "nissan_charge_completed": 1 if cd.get("nissan_charge_completed") else 0,
-            "tesla_charge_completed": 1 if cd.get("tesla_charge_completed") else 0,
             "water_setpoint": p.get("water_setpoint"),
             "cop": cop,
-            "tesla_climate_temp": cd.get("tesla_climate_temp"),
-            "tesla_climate_state": cd.get("tesla_climate_state"),
             "shelly_l1_a": shelly_l1_a,
             "shelly_l2_a": shelly_l2_a,
             "shelly_l3_a": shelly_l3_a,
@@ -402,6 +413,15 @@ def log_status(
         }
         
         # Generera strängarna dynamiskt oavsett mängden data
+        # Bilarnas kolumner per bil-id ur installationen (<bil>_soc, _soc_stale, _charge_completed, _climate_temp,
+        # _climate_state) - skapas första gången en ny bil syns. Emils befintliga kolumner har samma namn.
+        for k, v in cd.items():
+            m = re.fullmatch(r"([a-z0-9_]{1,40})_(soc|soc_stale|charge_completed|climate_temp|climate_state)", str(k))
+            if not m:
+                continue
+            _ensure_car_column(k, m.group(2))
+            data[k] = (1 if v else 0) if m.group(2) == "charge_completed" else v
+
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["%s"] * len(data))
         values = tuple(data.values())

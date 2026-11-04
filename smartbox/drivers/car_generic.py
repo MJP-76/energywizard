@@ -14,15 +14,23 @@ class GenericEvCarDriver(CarDriver):
         self._e = entities or {}
 
     def read_state(self) -> dict:
+        """Samma form som de gamla read_nissan_data/read_tesla_data, men ur installationens entiteter:
+        plugged_in som tal (1.0/0.0/None, binary_sensor on/off -> 1/0), charging_state "charging" när bilens
+        laddningsgivare (entities.charging) är på, annars entities.charging_state som den står."""
         soc_e = self._e.get("soc")
         plugged_e = self._e.get("plugged_in")
         climate_e = self._e.get("climate")
-        return {
+        out = {
             "soc": homeassistant._get_numeric_state(soc_e) if soc_e else None,
-            "plugged_in": bool(homeassistant._get_numeric_state(plugged_e)) if plugged_e else None,
+            "plugged_in": homeassistant._get_numeric_state(plugged_e) if plugged_e else None,
             "climate_temp": homeassistant._get_numeric_attribute(climate_e, "current_temperature") if climate_e else None,
             "climate_state": homeassistant._get_raw_state(climate_e) if climate_e else None,
         }
+        ch_e, cs_e = self._e.get("charging"), self._e.get("charging_state")
+        if ch_e or cs_e:
+            on = ch_e and homeassistant._get_raw_state(ch_e) == "on"
+            out["charging_state"] = "charging" if on else (homeassistant._get_raw_state(cs_e) if cs_e else None)
+        return out
 
     def set_climate(self, hvac_mode: str, temperature: float | None = None) -> None:
         climate_e = self._e.get("climate")
@@ -31,16 +39,10 @@ class GenericEvCarDriver(CarDriver):
 
 
 class NissanCarDriver(GenericEvCarDriver):
-    """Samma som GenericEvCarDriver idag - egen klass så Nissan-specifika kvirkar
-    (t.ex. button.leaf_update_data-uppdatering) har en naturlig plats att landa i
-    senare utan att påverka GenericEvCarDriver eller andra bilar."""
-    def read_state(self) -> dict:
-        return homeassistant.read_nissan_data()
+    """Samma som GenericEvCarDriver (entiteterna kommer från installationen). Leafs batterivärde hämtas bara när
+    man ber om det: entities.update_button trycks av main.py."""
 
 
 class TeslaCarDriver(GenericEvCarDriver):
-    """Tesla har egna kvirkar (sover och slutar rapportera, se homeassistant.py:s
-    stale-tolerans) som homeassistant.read_tesla_data() redan hanterar - återanvänd den
-    istället för att läsa om logiken här."""
-    def read_state(self) -> dict:
-        return homeassistant.read_tesla_data()
+    """Samma som GenericEvCarDriver. En sovande Tesla rapporterar inget batterivärde: entities.wake_button trycks
+    av main.py när den är inkopplad men värdet är gammalt."""

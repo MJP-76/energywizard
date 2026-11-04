@@ -11,6 +11,7 @@ evs:
   # entiteter inbyggda. Startguiden fyller i samma fält åt nya användare.
   - id: nissan
     name: Nissan Leaf
+    ha_name: leaf                      # HA-sensorn heter sensor.smartbox_leaf_batteri (som förut)
     notify: [owner]                    # vilka användares telefoner som får bilens aviseringar (tomt = alla)
     driver: nissan
     battery_kwh: 40

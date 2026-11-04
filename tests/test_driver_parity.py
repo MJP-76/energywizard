@@ -143,16 +143,35 @@ def test_charger_set_phases_turn_on_turn_off():
 
 # ---------- Bilar (Nissan/TeslaCarDriver -> homeassistant.py) ----------
 
-def test_nissan_read_state_vidarekopplar_read_nissan_data():
-    with patch("drivers.car_generic.homeassistant") as mock_ha:
-        mock_ha.read_nissan_data.return_value = {"soc": 64}
-        assert NissanCarDriver(id="nissan", battery_kwh=40).read_state() == {"soc": 64}
+def _fake_ha(mock_ha, states, attrs=None):
+    nums = {k: (1.0 if v == "on" else 0.0 if v == "off" else float(v)) for k, v in states.items()
+            if v not in (None, "unknown") and str(v).replace(".", "", 1).lstrip("-").isdigit() or v in ("on", "off")}
+    mock_ha._get_numeric_state.side_effect = lambda e: nums.get(e)
+    mock_ha._get_raw_state.side_effect = lambda e: states.get(e)
+    mock_ha._get_numeric_attribute.side_effect = lambda e, a: (attrs or {}).get((e, a))
 
 
-def test_tesla_read_state_vidarekopplar_read_tesla_data():
+def test_nissan_laser_installationens_entiteter_som_den_gamla_read_nissan_data():
+    """2026-11-04: inga inbyggda entiteter - samma värden och form som read_nissan_data gav (kontrollerat live)."""
+    ents = {"soc": "sensor.leaf_battery_level", "plugged_in": "binary_sensor.leaf_plugged_in", "climate": "climate.leaf_climate"}
     with patch("drivers.car_generic.homeassistant") as mock_ha:
-        mock_ha.read_tesla_data.return_value = {"soc": 81}
-        assert TeslaCarDriver(id="tesla", battery_kwh=75).read_state() == {"soc": 81}
+        _fake_ha(mock_ha, {"sensor.leaf_battery_level": "52", "binary_sensor.leaf_plugged_in": "off", "climate.leaf_climate": "off"},
+                 {("climate.leaf_climate", "current_temperature"): 15.0})
+        assert NissanCarDriver(id="nissan", battery_kwh=40, entities=ents).read_state() == \
+            {"soc": 52.0, "plugged_in": 0.0, "climate_temp": 15.0, "climate_state": "off"}
+
+
+def test_tesla_laddstatus_ur_laddgivaren_som_den_gamla_read_tesla_data():
+    ents = {"soc": "sensor.t_battery", "plugged_in": "binary_sensor.t_charger", "charging": "binary_sensor.t_charging",
+            "charging_state": "sensor.t_charging_state"}
+    with patch("drivers.car_generic.homeassistant") as mock_ha:
+        _fake_ha(mock_ha, {"sensor.t_battery": "16", "binary_sensor.t_charger": "on", "binary_sensor.t_charging": "on"})
+        st = TeslaCarDriver(id="tesla", battery_kwh=75, entities=ents).read_state()
+        assert st["soc"] == 16.0 and st["plugged_in"] == 1.0 and st["charging_state"] == "charging"
+    with patch("drivers.car_generic.homeassistant") as mock_ha:
+        _fake_ha(mock_ha, {"sensor.t_battery": "16", "binary_sensor.t_charger": "on", "binary_sensor.t_charging": "off",
+                           "sensor.t_charging_state": "stopped"})
+        assert TeslaCarDriver(id="tesla", battery_kwh=75, entities=ents).read_state()["charging_state"] == "stopped"
 
 
 def test_set_climate_samma_entitet_argument_som_main_py_anvander():
