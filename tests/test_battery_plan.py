@@ -216,3 +216,18 @@ def test_utan_forsaljning_laddar_batteriet_aldrig_ur_mot_natet():
             assert -row["battery_kw"] <= max(0.0, net) + 1e-6       # bara husets förbrukning
     r2 = optimize(slots, 9.0, 10.0, 1.0, 10.0, 5.0, 5.0, allow_export=True)
     assert min(x["battery_kw"] for x in r2["rows"]) < -0.6           # med försäljning får den ladda ur mer
+
+
+def test_batteripass_har_niva_energi_och_pris_for_planklockan():
+    """Planklockans batterirad: 80→35 %, kWh och toppris (urladdning) / lägsta pris (laddning)."""
+    from datetime import datetime, timedelta
+    from plan_brief import battery_items, SWE
+    now = datetime(2026, 11, 4, 6, 0, tzinfo=SWE)
+    rows = [(now - timedelta(minutes=15), "auto", 80, 1.0, 0.0)] + \
+           [(now + timedelta(minutes=15 * i), "discharge", 80 - 15 * (i + 1), p, -3.0) for i, p in enumerate([3.1, 4.31, 2.9])] + \
+           [(now + timedelta(hours=2, minutes=15 * i), "charge", 40 + 10 * i, p, 2.0) for i, p in enumerate([0.5, 0.2])]
+    ur, ladd = battery_items(rows, now)
+    assert (ur["soc_from"], ur["soc_to"], ur["kwh"], ur["price_peak"]) == (80, 35, 2.2, 4.31)
+    assert (ladd["soc_from"], ladd["soc_to"], ladd["kwh"], ladd["price_peak"]) == (35, 50, 1.0, 0.2)
+    # Äldre rader utan battery_kw går fortfarande
+    assert battery_items([r[:4] for r in rows], now)[0]["kwh"] is None

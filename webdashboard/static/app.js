@@ -221,6 +221,19 @@ function planClockHtml(d) {
 }
 
 // Remsan: de närmaste 12 timmarna, en rad per sak som planeras, med rutor "Ladda 01:00–03:45".
+// Batteriraden i planklockan: "Laddar ur till 09:45 · 80→35 % · 8,6 kWh · toppris 4,31 kr" (önskemål från HannesB).
+const BAT_VERB = { charge: "Laddar", discharge: "Laddar ur", hold: "Sparas", idle: "Vilar" };
+function batteryLaneText(i, now) {
+  const on = new Date(i.start) <= now;
+  const verb = BAT_VERB[i.action] || "Batteri";
+  const parts = on ? [`${verb} till ${hhmm(new Date(i.end))}`] : [verb, i.when];
+  if (i.soc_from != null && i.soc_to != null && i.soc_from !== i.soc_to) parts.push(`${i.soc_from}→${i.soc_to} %`);
+  else if (i.soc_to != null) parts.push(`${i.soc_to} %`);
+  if (i.kwh) parts.push(`${String(i.kwh).replace(".", ",")} kWh`);
+  if (i.price_peak != null) parts.push(`${i.action === "discharge" ? "toppris" : "lägsta pris"} ${i.price_peak.toFixed(2).replace(".", ",")} kr`);
+  return parts.map((p) => `<span>${esc(p)}</span>`).join(" · ");   // en textnod per del, så att översättningen hittar dem
+}
+
 function planStripHtml(d, now) {
   const end = new Date(now.getTime() + 12 * 3600e3), span = end - now;
   const pos = (t) => Math.max(0, Math.min(100, ((new Date(t) - now) / span) * 100));
@@ -235,7 +248,7 @@ function planStripHtml(d, now) {
       return `<div title="${esc(i.title + " " + i.when)}" style="position:absolute;left:${l}%;width:${w}%;top:0;bottom:0;border-radius:6px;background:${col(i)};opacity:.85"></div>`;
     }).join("");
     const next = d.items.filter(match).find((i) => new Date(i.end) > now);
-    const txt = next ? `${esc(next.title.replace(/^\S+\s/, ""))} · ${esc(next.when)}` : "Inget planerat";
+    const txt = next ? (next.kind === "battery" ? batteryLaneText(next, now) : `${esc(next.title.replace(/^\S+\s/, ""))} · ${esc(next.when)}`) : "Inget planerat";
     return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:8px;font-size:.92rem">
         <span style="white-space:nowrap"><b>${ico} ${esc(name)}</b></span><span class="note" style="text-align:right;min-width:0">${txt}</span></div>
       <div style="position:relative;height:14px;margin-top:5px;border-radius:7px;background:var(--line)">${segs}</div></div>`;

@@ -742,7 +742,7 @@ async def api_plan():
             c.rollback()
             ev_rows = []
         try:
-            bat_rows = c.execute(text("SELECT t_slot, action, soc_pct, spot FROM battery_plan_slots "
+            bat_rows = c.execute(text("SELECT t_slot, action, soc_pct, spot, battery_kw FROM battery_plan_slots "
                                       "WHERE t_slot >= now() - interval '15 minutes' ORDER BY t_slot")).fetchall()
         except Exception:      # tabellen skapas först när en batteriplan sparats
             c.rollback()
@@ -922,7 +922,8 @@ async def api_forecast():
 async def api_historylog():
     """Historik-sidan: ew_log (familjelogg + systemhändelser) - de senaste 80 posterna,
     nyast först."""
-    with ENGINE.connect() as c:
+    with ENGINE.begin() as c:
+        c.execute(text("CREATE TABLE IF NOT EXISTS ew_log (id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ DEFAULT NOW(), usr TEXT, txt TEXT)"))
         rows = c.execute(text("SELECT ts, usr, txt FROM ew_log ORDER BY ts DESC LIMIT 80")).fetchall()
     return {"ok": True, "entries": [{"ts": r[0].isoformat(), "user": r[1], "text": r[2]} for r in rows]}
 

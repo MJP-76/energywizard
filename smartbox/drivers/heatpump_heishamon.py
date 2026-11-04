@@ -14,7 +14,9 @@ ALDRIG KÖRD MOT EN RIKTIG PUMP. Bara det som källan bekräftar används; reste
 Kurvförskjutning (Matter-lagrets adjust_curve): bara i kurvläge (Heating_Mode 0). Då är Z1_Heat_Request_Temp en
 förskjutning -5..5, och vi skriver husets grundförskjutning (heat_pump.base_shift i house_config.yaml, standard 0)
 plus vår förskjutning. I direktläge skrivs ingenting (det är en absolut temperatur och skulle tolkas helt fel).
-Paus = SetHeatpump 0/1 och släpps alltid av tick() inom tidsgränsen.
+Paus = kurvan till lägsta förskjutningen (-5), INTE SetHeatpump 0 (issue #109: en avstängd Aquarea tappar cirkulation
+och frostskydd på vintern, och kompressorn får omstartsskydd efteråt). Pumpen "vilar" men är på. Bara i kurvläge; i
+direktläge går det inte att pausa. tick() släpper pausen inom tidsgränsen och skriver tillbaka grund + vår förskjutning.
 
 set_operating_mode tar bara de normaliserade lägena i drivers.heatpump.MODES. main.py skickar idag Thermias råa
 heltalskoder; de avvisas här i stället för att gissas om till Panasonics koder.
@@ -38,6 +40,7 @@ class HeishaMonHeatPumpDriver(HeatPumpDriver):
         self._base_shift = float(base_shift or 0)
         self._indoor_from_z1 = bool(indoor_from_z1)   # Z1_Temp är rumstemp bara om pumpen har rumsgivare för zon 1
         self._http = session or requests
+        self._resting = False                         # pausad = kurvan på -5 (se _write_paused)
         self._warned = set()
 
     # --- HTTP -----------------------------------------------------------------------------------------------------
@@ -156,8 +159,22 @@ class HeishaMonHeatPumpDriver(HeatPumpDriver):
         if self._num(v.get("Heating_Mode")) != 0:
             self._warn_once("curve", "⚠️ HeishaMon: kurvförskjutning bara i kurvläge (Heating_Mode 0) - inget skickat.")
             return False
+        if self._resting:                             # pausad: skrivs när pausen släpps
+            return True
         shift = max(-5, min(5, round(self._base_shift + offset)))
         return self._command("SetZ1HeatRequestTemperature", shift)
 
     def _write_paused(self, paused: bool) -> bool:
-        return self._command("SetHeatpump", 0 if paused else 1)
+        if self._num(self._values().get("Heating_Mode")) != 0:
+            self._warn_once("pause", "⚠️ HeishaMon: paus bara i kurvläge (Heating_Mode 0) - pumpen stängs aldrig av.")
+            return False
+        if paused:
+            if not self._command("SetZ1HeatRequestTemperature", -5):
+                return False
+            self._resting = True
+            return True
+        shift = max(-5, min(5, round(self._base_shift + self._curve_offset)))
+        if not self._command("SetZ1HeatRequestTemperature", shift):
+            return False
+        self._resting = False
+        return True

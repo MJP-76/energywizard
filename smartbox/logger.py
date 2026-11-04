@@ -166,6 +166,10 @@ def init_log_db():
                         ADD COLUMN IF NOT EXISTS mower_status VARCHAR(50),
                         ADD COLUMN IF NOT EXISTS mower_power_w NUMERIC
                 """)
+                # Garagetemperatur (issue #104: kolumnen loggades men skapades aldrig på nya installationer)
+                cur.execute("ALTER TABLE sensor_log ADD COLUMN IF NOT EXISTS temp_garage NUMERIC")
+                # Historik-sidans logg (skapades förut bara av familjeappen)
+                cur.execute("CREATE TABLE IF NOT EXISTS ew_log (id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ DEFAULT NOW(), usr TEXT, txt TEXT)")
             conn.commit()
         print("🗄️ Databas: sensor_log är redo.")
     except Exception as e:

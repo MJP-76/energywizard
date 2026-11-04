@@ -197,30 +197,43 @@ _BAT = {"charge": "🔋 Batteriet laddar", "discharge": "🔋 Batteriet laddar u
 
 
 def battery_items(rows, now):
-    """rows = [(t_slot, action, soc_pct, spot)] ur battery_plan_slots. Sammanhängande pass utom auto."""
+    """rows = [(t_slot, action, soc_pct, spot[, battery_kw])] ur battery_plan_slots (soc_pct = nivån efter
+    kvarten). Sammanhängande pass utom auto. Varje pass får också nivån före/efter, energin och det högsta
+    (urladdning) eller lägsta (laddning) spotpriset - för planklockans kompakta rad (önskemål från HannesB)."""
     now = _local(now)
-    blocks = []
-    for t, action, soc, spot in sorted(rows or [], key=lambda r: r[0]):
+    blocks, prev_soc = [], None
+    for r in sorted(rows or [], key=lambda r: r[0]):
+        t, action, soc, spot = r[:4]
+        kw = r[4] if len(r) > 4 else None
         t = _local(t)
         if blocks and blocks[-1]["action"] == action and blocks[-1]["end"] == t:
             b = blocks[-1]
             b["end"] = t + SLOT
             b["soc"] = soc
             b["spots"].append(spot)
+            b["kws"].append(kw)
         else:
-            blocks.append({"action": action, "start": t, "end": t + SLOT, "soc": soc, "spots": [spot]})
+            blocks.append({"action": action, "start": t, "end": t + SLOT, "soc": soc, "soc_from": prev_soc,
+                           "spots": [spot], "kws": [kw]})
+        prev_soc = soc
     out = []
     for b in blocks:
         if b["action"] not in _BAT or b["end"] <= now:
             continue
         sp = [float(x) for x in b["spots"] if x is not None]
         avg = sum(sp) / len(sp) if sp else None
+        kws = [abs(float(x)) for x in b["kws"] if x is not None]
+        kwh = round(sum(kws) * SLOT.total_seconds() / 3600, 1) if kws else None
+        peak = (max(sp) if b["action"] == "discharge" else min(sp) if b["action"] == "charge" else None) if sp else None
         parts = [f"till {float(b['soc']):.0f} %" if b["soc"] is not None else ""]
         if avg is not None:
             parts.append(f"spotpris {_kr(avg)}/kWh")
         out.append({"kind": "battery", "action": b["action"], "start": b["start"].isoformat(), "end": b["end"].isoformat(),
                     "when": _span(max(b["start"], now), b["end"], now), "title": _BAT[b["action"]],
-                    "detail": " · ".join(x for x in parts if x), "active": b["start"] <= now < b["end"]})
+                    "detail": " · ".join(x for x in parts if x), "active": b["start"] <= now < b["end"],
+                    "soc_from": None if b["soc_from"] is None else round(float(b["soc_from"])),
+                    "soc_to": None if b["soc"] is None else round(float(b["soc"])),
+                    "kwh": kwh if kwh else None, "price_peak": peak})
     return out
 
 

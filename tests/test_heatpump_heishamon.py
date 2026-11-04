@@ -72,10 +72,17 @@ def test_kurva_relativt_grundforskjutning_och_bara_i_kurvlage():
 
 def test_paus_och_lagen():
     http = FakeHttp()
-    d = HeishaMonHeatPumpDriver("hm", session=http)
-    assert d.pause(30, now=0) and http.commands[-1] == {"SetHeatpump": 0}
+    d = HeishaMonHeatPumpDriver("hm", base_shift=1, session=http)
+    assert d.adjust_curve(1) and http.commands[-1] == {"SetZ1HeatRequestTemperature": 2}
+    # Paus = kurvan på -5, pumpen stängs aldrig av (issue #109)
+    assert d.pause(30, now=0) and http.commands[-1] == {"SetZ1HeatRequestTemperature": -5}
+    n = len(http.commands)
+    assert d.adjust_curve(1) and len(http.commands) == n              # under pausen: sparas, skickas inte
     d.tick(now=30 * 60)
-    assert http.commands[-1] == {"SetHeatpump": 1}
+    assert http.commands[-1] == {"SetZ1HeatRequestTemperature": 3}    # grund 1 + förskjutning 2
+    assert {"SetHeatpump": 0} not in http.commands
+    direct = FakeHttp(dict(Heating_Mode=1))
+    assert not HeishaMonHeatPumpDriver("hm", session=direct).pause(30) and direct.commands == []
     assert d.set_operating_mode("heat_dhw") and http.commands[-1] == {"SetOperationMode": 4}
     assert d.set_operating_mode("off") and http.commands[-1] == {"SetHeatpump": 0}
     n = len(http.commands)

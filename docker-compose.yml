@@ -72,6 +72,7 @@ services:
       - HOUSE_CONFIG_PATH=/house_config.yaml
       - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
       - NORDPOOL_HA_ENTITY=${NORDPOOL_HA_ENTITY:-sensor.nordpool}
+      - NOTIFY_TARGET=${NOTIFY_TARGET:-}
       # Strikt opt-in, av om TELEMETRY_OPT_IN saknas - se .env.example och smartbox/telemetry.py
       - TELEMETRY_OPT_IN=${TELEMETRY_OPT_IN:-}
       - TELEMETRY_ENDPOINT=${TELEMETRY_ENDPOINT:-}

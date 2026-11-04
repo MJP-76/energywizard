@@ -4,7 +4,43 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- Mottagare ---
-EMIL = "mobile_app_emils_telefon"
+# Telefonen som får aviseringarna: NOTIFY_TARGET (miljövariabel) eller "notify_target" i /data/energywizard.json,
+# t.ex. "mobile_app_pixel_8". Saknas båda väljs den första mobile_app_*-tjänsten i Home Assistant (issue #104:
+# ett hårdkodat namn gav 400-fel varje gång hos alla andra installationer).
+_auto_target = {"t": 0.0, "name": None}
+
+
+def target():
+    import os, time
+    name = os.environ.get("NOTIFY_TARGET", "").strip()
+    if not name:
+        try:
+            import ew_settings
+            name = (ew_settings.get("notify_target") or "").strip()
+        except Exception:
+            name = ""
+    if name:
+        return name.removeprefix("notify.")
+    if time.time() - _auto_target["t"] > 3600:
+        _auto_target["t"] = time.time()
+        _auto_target["name"] = _find_mobile_app()
+    return _auto_target["name"]
+
+
+def _find_mobile_app():
+    _init()
+    try:
+        r = requests.get(f"{_ha_base}/services", headers=_ha_headers, timeout=5, verify=False)
+        r.raise_for_status()
+        for dom in r.json():
+            if dom.get("domain") == "notify":
+                names = sorted(n for n in (dom.get("services") or {}) if n.startswith("mobile_app_"))
+                if names:
+                    print(f"🔔 Aviseringar går till notify.{names[0]} (ändra med NOTIFY_TARGET)")
+                    return names[0]
+    except Exception as e:
+        print(f"⚠️ Kunde inte hitta någon telefon för aviseringar: {e}")
+    return None
 
 # Mappning för värmepumpens driftläge (register 2201)
 PUMP_MODE_MAP = {
@@ -50,7 +86,11 @@ def _send(target: str, title: str, message: str, data: dict = None):
 
 
 def send_emil(title: str, message: str, data: dict = None):
-    return _send(EMIL, title, message, data)
+    """Avisering till husets ägare (namnet är historiskt)."""
+    t = target()
+    if not t:
+        return False
+    return _send(t, title, message, data)
 
 
 
