@@ -32,6 +32,7 @@ import battery_control   # Husbatteriet som del av hela systemet (styr / samarbe
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
+import car_climate_watch # Följer upp bilens värme från appen tills den faktiskt startar (annars avisering)
 import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
 
@@ -617,6 +618,8 @@ fast_hl1, fast_hl2, fast_hl3 = [], [], []
 # Säkringsstorlek/marginal och laddar-ID:n uppdateras i minutloopen; nödbromsen i 10-sekunders-
 # loopen använder senast kända värden (före första minuten: decisions.MAX_FUSE_A, inga laddare).
 fuse_model = fuse_guard.FuseThermalModel()
+_sun_cache = {"t": 0.0, "soon": None, "day": None}
+_climate_watch = {}             # bil-id -> car_climate_watch.ClimateWatch
 _fuse_cfg = {"fuse_a": decisions.MAX_FUSE_A, "margin_a": 0.0}
 _fuse_charger_ids = {}
 _hour_import = {"h": None, "wh": 0.0, "t": None}
@@ -693,6 +696,33 @@ while True:
             cfg = settings.get_settings()
             all_overrides = logger.get_all_overrides()
             ai_thoughts = []
+
+            # Bilens värme från appen: följ upp tills bilen faktiskt värmer, annars säg till (car_climate_watch.py).
+            for _ev in house_cfg.get("evs", []) or []:
+                _cid, _cent = _ev.get("id"), (_ev.get("entities") or {}).get("climate")
+                if not _cid or not _cent:
+                    continue
+                _key = f"{_cid}_climate"
+                try:
+                    _w = _climate_watch.setdefault(_cid, car_climate_watch.ClimateWatch())
+                    _want = all_overrides.get(_key)
+                    _res = _w.step(_want, homeassistant._get_raw_state(_cent) if _want not in (None, "", "off") else None, time.time())
+                    _name = _cid.capitalize()
+                    if _res == "resend":
+                        _t = float(_want) if str(_want).replace(".", "", 1).isdigit() else 21.0
+                        homeassistant.set_car_climate(_cent, "heat_cool", _t)
+                        print(f"🚗 {_name}: värmen har inte startat än - skickar igen (försök {_w.tries}).")
+                    elif _res == "ok":
+                        logger.set_override(_key, "off")
+                        print(f"🚗 {_name}: värmen är igång i bilen.")
+                    elif _res == "give_up":
+                        logger.set_override(_key, "off")
+                        print(f"🚗 {_name}: värmen startade inte efter flera försök - aviserar.")
+                        notifier.send_emil(f"🥶 {_name}: värmen startade inte",
+                                           f"Bilen svarade inte på värmekommandot efter {car_climate_watch.MAX_TRIES + 1} försök på 12 minuter "
+                                           f"(tillverkarens moln startade aldrig klimatet). Prova igen, eller starta från tillverkarens app.")
+                except Exception as _ce:
+                    print(f"⚠️ Bilvärmen ({_cid}): {_ce}")
             
             def should_notify(key, default=True):
                 val = all_overrides.get(key, "auto")
@@ -835,6 +865,15 @@ while True:
 
             cloud_cover, wind_speed, wind_dir, forecast_temp = weather.get_current_weather()
             solar_now, solar_next = weather.get_solar_forecast_now_and_next()
+            # Solutsikt för husvärmen (Prio 5): sol de närmaste timmarna och nästa dagsljus värmer huset genom
+            # fönstren, så motorn lagrar mindre värme då. Räknas om var 15:e minut (väderprognosen ändras inte oftare).
+            if time.time() - _sun_cache["t"] > 900:
+                try:
+                    _sun_cache["soon"] = weather.sun_outlook(now, 4)
+                    _sun_cache["day"] = weather.sun_outlook(now, 16)
+                except Exception as _se:
+                    print(f"⚠️ Solutsikt: {_se}")
+                _sun_cache["t"] = time.time()
 
             # Byt ut statisk solprognos mot ML-Tvillingen
             solar_profile = learning.get_solar_profile()
@@ -1587,6 +1626,7 @@ while True:
                 'predicted_cooling_rate': predicted_cooling_rate, 'base_load_profile': dynamic_base_load_profile,
                 'peak_shaving_enabled': cfg.get("peak_shaving_enabled", True), 'solar_is_shaky': solar_is_shaky,
                 'solar_auto_export': str(all_overrides.get("solar_auto_export", "true")).lower() != "false",
+                'sun_soon': _sun_cache.get("soon"), 'sun_day': _sun_cache.get("day"),
                 'indoor_temp': indoor_temp, 'indoor_humidity': ha_temps.get('indoor_humidity'), 'indoor_min': cfg.get("indoor_min", 19.0), 'indoor_max': cfg.get("indoor_max", 22.5),
                 'water_temp': water_temp or 50.0, 'water_target_normal': wt_norm,
                 'brine_out_temp': pump_data.get("brine_out_temp") if pump_data else None,

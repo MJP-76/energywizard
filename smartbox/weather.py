@@ -218,6 +218,29 @@ def get_smart_solar_w(cloud_cover_pct, dt, solar_profile=None):
             return max(0.0, roof_max * (1.0 - (cloud_cover_pct / 100.0) * 0.85))
     return estimate_solar_w(cloud_cover_pct, dt)
 
+SUNNY_RATIO = 0.55          # prognosen minst så här stor andel av klarväder = soligt
+SUNNY_MIN_CLEAR_KWH = 1.5   # ... och det ska finnas sol att tala om (inte skymning eller vintermörker)
+
+
+def sunny_verdict(forecast_kwh, clear_kwh):
+    """True om en period väntas bli solig: prognosen är en stor del av vad en klar himmel hade gett."""
+    return clear_kwh >= SUNNY_MIN_CLEAR_KWH and forecast_kwh >= SUNNY_RATIO * clear_kwh
+
+
+def sun_outlook(start, hours):
+    """{'kwh', 'clear_kwh', 'sunny'} för solcellerna de kommande timmarna (väderprognos mot klarväder).
+    Solcellerna är husets bästa mått på solinstrålning: soligt för panelerna = sol genom fönstren också."""
+    profile = learning.get_solar_profile()
+    kwh = clear = 0.0
+    h0 = start.replace(minute=0, second=0, microsecond=0)
+    for i in range(int(hours)):
+        h = h0 + timedelta(hours=i)
+        cloud, _, _, _ = get_weather_at(h)
+        kwh += get_smart_solar_w(cloud, h, profile) / 1000.0
+        clear += get_smart_solar_w(0.0, h, profile) / 1000.0
+    return {"kwh": round(kwh, 1), "clear_kwh": round(clear, 1), "sunny": sunny_verdict(kwh, clear)}
+
+
 def get_solar_forecast_now_and_next():
     now       = datetime.now(SWE_TZ)
     next_hour = now.replace(minute=0, second=0, microsecond=0)

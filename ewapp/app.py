@@ -524,12 +524,12 @@ async def action(car: str, request: Request):
     if kind in ("heat_on", "heat_off"):
         on = kind == "heat_on"
         ok = H.set_car_climate(c["climate"], "heat_cool" if on else "off", 21.0 if on else None)
-        if car == "nissan":                                   # samma som dashboarden: Nissans 'vakthund' följer överstyrningen
-            set_override("nissan_climate", "21.0" if on else "off")
+        set_override(f"{car}_climate", "21.0" if on else "off")   # smartbox/car_climate_watch.py följer upp tills bilen värmer
         _cache["t"] = 0.0
         if not ok:
             raise HTTPException(502, "Bilen svarade inte på klimatkommandot")
-        return {"ok": True, "msg": ("Värmekommando skickat (21 °C)" if on else "Stoppkommando skickat") + (" – Nissan kan ta någon minut på sig" if car == "nissan" else "")}
+        return {"ok": True, "msg": ("Värmekommando skickat (21 °C). EnergyWizard kollar att bilen startar värmen och säger till om den inte gör det."
+                                    if on else "Stoppkommando skickat")}
     raise HTTPException(400, "Okänd åtgärd")
 
 

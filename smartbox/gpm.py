@@ -112,6 +112,7 @@ class GlobalPriorityManager:
         self.ev_solar_phase_pause = False  # FIX #16: tillfällig 0A-paus under kontaktor-cooldown
         self.last_global_phase_switch = None
         self.avg_net_history = []
+        self.spa_solar_since = None       # när spabadets solvärme startade (hysteres, se _spa_solar_hold)
         self.spa_cooldown_until = None
         self.prio5_hysteresis_active = False
         self.no_sensor_lowered_since = None   # husvärme utan innegivare: sänkt sedan
@@ -125,6 +126,27 @@ class GlobalPriorityManager:
         # Återställ kompressorspärren om containern just startade om
         self._restore_compressor_lock()
 
+
+    SPA_SOLAR_MIN_RUN = timedelta(minutes=10)
+
+    @staticmethod
+    def _spa_draw(state):
+        """Vad spabadets värmare drar just nu (W), 0 om den inte värmer."""
+        w = state.get('spa_measured_w')
+        return float(w) if w is not None and w > 1000.0 else 0.0
+
+    def _spa_solar_hold(self, avg_net, state, now, threshold):
+        """Fortsätt solvärmen i spabadet: överskottet räknas UTAN badets egen värmare (annars stänger badet av sig
+        självt när det börjar dra 3 kW, och slår på igen när det stängt - av/på med några minuters mellanrum,
+        2026-11-04), och badet går minst SPA_SOLAR_MIN_RUN innan det får stängas."""
+        if self.spa_solar_since is None:
+            return False
+        if now - self.spa_solar_since < self.SPA_SOLAR_MIN_RUN:
+            return True
+        if avg_net - self._spa_draw(state) < threshold:
+            return True
+        self.spa_solar_since = None
+        return False
     def _restore_compressor_lock(self):
         try:
             with logger.get_db() as conn, conn.cursor() as cur:
@@ -692,7 +714,7 @@ class GlobalPriorityManager:
                 actions["spa_solar_boost_active"] = True
                 actions["log"].append("🛁 Prio 4 (SPA): Minuspris -> Värmer bad till max för termisk lagring.")
         
-        elif avg_net < spa_solar_threshold:
+        elif avg_net < spa_solar_threshold or self._spa_solar_hold(avg_net, state, now, spa_solar_threshold):
             if in_cooldown:
                 actions["spa_target"] = spa_normal_temp
                 actions["spa_eco"] = False
@@ -701,7 +723,10 @@ class GlobalPriorityManager:
                 actions["spa_target"] = spa_max_temp
                 actions["spa_eco"] = False
                 actions["spa_solar_boost_active"] = True
-                actions["log"].append(f"🛁 Prio 4 (SPA): Netto ({avg_net:.0f}W) < Tröskel ({spa_solar_threshold:.0f}W) -> Startar spabadsvärme på solel.")
+                if self.spa_solar_since is None:
+                    self.spa_solar_since = now
+                actions["log"].append(f"🛁 Prio 4 (SPA): Solöverskott (netto {avg_net:.0f}W, utan badet {avg_net - self._spa_draw(state):.0f}W, "
+                                      f"tröskel {spa_solar_threshold:.0f}W) -> Värmer spabadet på solel.")
 
         elif state.get('spa_target_scheduled_active'):
             if state.get('spa_should_heat_now'):
@@ -741,6 +766,9 @@ class GlobalPriorityManager:
             actions["pump_run_water"] = True
             actions["log"].append("🔋 Prio 4.5 (TERMISKT BATTERI): Gratis el / Solöverskott! Maximerar varmvattenberedaren till 60°C.")
 
+        if not actions.get("spa_solar_boost_active"):
+            self.spa_solar_since = None   # en annan regel (bilen, bortaläge ...) tog över: solvärmen i badet räknas som avslutad
+
         # --- Prio 5: HUSVÄRME (Adaptive Comfort & Solöverskott) ---
         indoor_temp = state.get('indoor_temp')
         indoor_min = state.get('indoor_min', 19.0)
@@ -757,7 +785,7 @@ class GlobalPriorityManager:
         if indoor_temp is not None:
             # 1. Proaktiv avstängning (Derivata & Sol)
             is_heating_fast_by_sun = cooling_rate < -0.1 and pv_power > 500
-            dynamic_indoor_max = 22.2 if is_heating_fast_by_sun else indoor_max
+            dynamic_indoor_max = indoor_max - 0.3 if is_heating_fast_by_sun else indoor_max      # var 22,2 fast (= 0,3 under 22,5)
 
             # 2. Aktivera Hysteres om vi når taket
             if indoor_temp >= dynamic_indoor_max:
@@ -794,8 +822,16 @@ class GlobalPriorityManager:
                 
             # NYTT: Solöverskott driver värmen oavsett timpris!
             elif avg_net < -1500 and actions["pump_mode"] == "EXPENSIVE":
+                # Lagra solvärme bara om huset inte redan är varmt: högst 0,5 °C under taket, och 1 °C under när solen
+                # väntas fortsätta - då värmer den huset genom fönstren av sig själv (2026-11-04: 23 °C en solig förmiddag).
+                sun_soon = state.get('sun_soon') or {}
+                store_max = indoor_max - (1.0 if sun_soon.get('sunny') else 0.5)
                 if is_summer:
                     actions["log"].append(f"☀️ Prio 5 (HUS): Solöverskott ignoreras för husvärme pga sommarläge ({outdoor_avg_5d:.1f}°C).")
+                elif indoor_temp >= store_max:
+                    why = "sol väntas de närmaste timmarna och värmer huset ändå" if sun_soon.get('sunny') else "huset är redan varmt"
+                    actions["log"].append(f"☀️ Prio 5 (HUS): Solöverskott, men {why} ({indoor_temp:.1f}°C >= {store_max:.1f}°C). "
+                                          f"Lagrar ingen värme - överskottet går till bil, spabad eller försäljning.")
                 else:
                     actions["pump_mode"] = "CHEAP"
                     actions["pump_target_temp"] = state.get('temp_cheap', 22.0)
@@ -810,6 +846,12 @@ class GlobalPriorityManager:
                     actions["pump_target_temp"] = target_t
                     actions["log"].append(f"☀️ Prio 5 (HUS): Sommar-läge aktivt (5-dygnsmedel ute: {outdoor_avg_5d:.1f}°C). Blockerar billig nattvärme för att inte kringgå Värmestoppet.")
                 else:
+                    # Sol väntas (nästa dagsljus): den värmer huset genom fönstren, så nattens/morgonens lagring blir mindre
+                    # och ingen extra överladdning görs (2026-11-04: lagrat till 23,3 °C inför en solig dag).
+                    sun_day = state.get('sun_day') or {}
+                    sunny_ahead = bool(sun_day.get('sunny'))
+                    if sunny_ahead:
+                        target_t = target_t - 0.5
                     # PREDIKTIV ÖVERLADDNING: Om priset är billigt nu, men en extrem prisspik är på väg de närmaste 6 timmarna, 
                     # trycker vi in extra värme i huset (upp till max-gränsen) så kompressorn kan vila helt genom toppen.
                     all_p = state.get('all_prices')
@@ -824,7 +866,7 @@ class GlobalPriorityManager:
                             # spread-blinda +0.50 kr / ×1.5.
                             day_p85 = _percentile(all_p, 85)
                             day_p50 = _percentile(all_p, 50)
-                            if (day_p85 is not None and day_p50 is not None
+                            if (not sunny_ahead and day_p85 is not None and day_p50 is not None
                                     and max_future_price >= day_p85 and price <= day_p50
                                     and day_p85 > day_p50 * 1.10):
                                 target_t = min(target_t + 1.0, indoor_max)
@@ -833,7 +875,8 @@ class GlobalPriorityManager:
                     actions["pump_mode"] = "CHEAP"
                     actions["pump_target_temp"] = target_t
                     if "Prediktiv överladdning" not in actions["log"][-1]:
-                        actions["log"].append(f"🏠 Prio 5 (HUS): Pris och villkor godkända -> Håller huset på {target_t}°C.")
+                        extra = f" Sol väntas ({sun_day.get('kwh', 0):.0f} kWh), lagrar 0,5 °C mindre." if sunny_ahead else ""
+                        actions["log"].append(f"🏠 Prio 5 (HUS): Pris och villkor godkända -> Håller huset på {target_t}°C.{extra}")
 
         else:
             # Ingen innegivare: prisstyrningen ovan (grundläget) får skydd mot att huset kyls ut.
