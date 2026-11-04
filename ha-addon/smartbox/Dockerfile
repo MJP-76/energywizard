@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Commit-id:t gör att byggcachen inte återanvänder en gammal klon (sätts av CI, tomt annars).
 ARG ENERGYWIZARD_COMMIT=
+# Versionen i telemetrin (commit, kortas till 7 tecken i telemetry.py). Tom när HA bygger själv.
+ENV APP_VERSION=${ENERGYWIZARD_COMMIT}
 # Repot att klona: standard är projektet självt; CI sätter forkens adress för pull requests från forkar
 # (grenen finns bara där, annars misslyckas kloningen).
 ARG ENERGYWIZARD_REPO=https://github.com/murre87/energywizard

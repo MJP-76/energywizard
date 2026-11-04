@@ -45,10 +45,34 @@ def _hashed_house_id(house_id: str) -> str:
     return hashlib.sha256((house_id or "unknown").encode()).hexdigest()[:16]
 
 
+def install_id(create: bool = True) -> str | None:
+    """Slumpat ID för just den här installationen, sparat i /data/energywizard.json (telemetry_id).
+    2026-11-04: house_id dög inte - startguiden skriver "mitt-hus" åt alla, och utan house_id blev det
+    "unknown", så många hus räknades som ett och skrev över varandras utrustning. create=False (webben)
+    skapar aldrig ett eget, så att motorn och webben inte kan få olika."""
+    try:
+        import ew_settings
+        tid = ew_settings.get("telemetry_id")
+        if not tid and create:
+            import uuid
+            tid = uuid.uuid4().hex
+            ew_settings.update(telemetry_id=tid)
+            if ew_settings.get("telemetry_id") != tid:     # gick inte att spara: hellre inget än ett nytt varje start
+                return None
+        return tid or None
+    except Exception:
+        return None
+
+
+def house_hash(cfg: dict | None = None, create: bool = True) -> str:
+    tid = install_id(create)
+    return _hashed_house_id(tid) if tid else _hashed_house_id((cfg or {}).get("house_id", ""))
+
+
 def _software_version() -> str:
     v = os.environ.get("APP_VERSION", "").strip()          # satt av bildbygget; git finns inte i bilden
     if v and v != "dev":
-        return v[:40]
+        return v[:7] if len(v) == 40 and all(c in "0123456789abcdef" for c in v) else v[:40]
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=3, cwd=Path(__file__).parent)
         return r.stdout.strip() or "unknown"
@@ -102,6 +126,34 @@ def _driver_summary(cfg: dict, maker_fn=None) -> list[str]:
             out.append(f"charger:{ev['charger']['driver']}{_brand(ev['charger'], maker_fn)}")
     for ch in cfg.get("chargers", []) or []:
         out.append(f"charger:{ch.get('driver', '?')}{_brand(ch, maker_fn)}")
+    # Elmätaren (märket ur HA, t.ex. Tibber/Shelly/IAMMETER), priskällan och landet, och hur EnergyWizard körs.
+    pm = (cfg.get("power_meter") or {})
+    if pm.get("entities"):
+        out.append(f"meter:ha{_brand(pm, maker_fn)}")
+    out.extend(_setup_summary(cfg))
+    return out
+
+
+def _setup_summary(cfg: dict) -> list[str]:
+    out = []
+    try:
+        import nordpool
+        out.append(f"price:{nordpool.price_source()}")
+        out.append(f"country:{nordpool.cost_settings()['country']}")
+    except Exception:
+        pass
+    bat = cfg.get("battery") or {}
+    if bat.get("enabled"):
+        ctl = str(bat.get("control", "samarbete")).lower()
+        out.append(f"mode:battery_{ctl if ctl in ('styr', 'samarbete', 'av') else 'samarbete'}")
+        if bat.get("modes"):
+            out.append(f"mode:preset_{str(bat.get('preset') or 'egen')[:30]}")
+    try:
+        import ew_settings
+        if ew_settings.get("shadow_mode"):
+            out.append("mode:shadow")
+    except Exception:
+        pass
     return out
 
 
@@ -124,7 +176,7 @@ def send_driver_snapshot(cfg: dict) -> None:
     _last_snapshot = datetime.now(timezone.utc)
     try:
         payload = {
-            "house": _hashed_house_id(cfg.get("house_id", "")),
+            "house": house_hash(cfg),
             "version": _software_version(),
             "drivers": _driver_summary(cfg, _ha_maker),
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -149,7 +201,7 @@ def report_error(cfg: dict, module: str, error_type: str) -> None:
             return
         _ERROR_SEEN[key] = now
         payload = {
-            "house": _hashed_house_id(cfg.get("house_id", "")),
+            "house": house_hash(cfg),
             "version": _software_version(),
             "module": module,
             "error_type": error_type,

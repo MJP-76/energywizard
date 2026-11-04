@@ -50,19 +50,24 @@ def test_tom_endpoint_betyder_standardadressen(monkeypatch):
     mock_post.assert_called_once()
 
 
+def _equipment(items):
+    """Bara utrustningen - inställningarna (pris, land, läge) testas för sig."""
+    return [x for x in items if not x.startswith(("price:", "country:", "mode:"))]
+
+
 def test_marke_fran_enhetsregistret_men_aldrig_entiteten(monkeypatch):
     t = _reload(monkeypatch)
     cfg = {"battery": {"enabled": True, "driver": "generic", "entities": {"soc": "sensor.foxess_bat_soc"}},
            "heat_pump": {"enabled": True, "driver": "thermia_husdata"},
            "chargers": [{"driver": "generic", "entities": {"switch": "switch.zap_laddning"}}]}
     makers = {"sensor.foxess_bat_soc": "FoxESS", "switch.zap_laddning": "Zaptec <script>"}
-    out = t._driver_summary(cfg, makers.get)
+    out = _equipment(t._driver_summary(cfg, makers.get))
     assert out == ["heatpump:thermia_husdata", "battery:generic@FoxESS", "charger:generic@Zaptec script"]
-    nested = t._driver_summary({"evs": [{"driver": "tesla", "charger": {"driver": "easee", "physical": "carport"}},
-                                        {"driver": "nissan", "charger": {"driver": "easee", "physical": "lite"}}]}, None)
+    nested = _equipment(t._driver_summary({"evs": [{"driver": "tesla", "charger": {"driver": "easee", "physical": "carport"}},
+                                        {"driver": "nissan", "charger": {"driver": "easee", "physical": "lite"}}]}, None))
     assert nested == ["car:tesla", "charger:easee", "car:nissan", "charger:easee"]
     assert not any("sensor." in x or "switch." in x for x in out)
-    assert t._driver_summary(cfg, lambda e: (_ for _ in ()).throw(RuntimeError())) == \
+    assert _equipment(t._driver_summary(cfg, lambda e: (_ for _ in ()).throw(RuntimeError()))) == \
         ["heatpump:thermia_husdata", "battery:generic", "charger:generic"]
 
 
@@ -80,8 +85,11 @@ def test_daglig_signal_en_gang_per_dygn(monkeypatch):
     assert len(started) == 2
 
 
-def test_driver_snapshot_skickar_bara_tillatna_falt(monkeypatch):
+def test_driver_snapshot_skickar_bara_tillatna_falt(monkeypatch, tmp_path):
+    import ew_settings
     t = _reload(monkeypatch, opt_in="true", endpoint="https://telemetri.example.com")
+    monkeypatch.setattr(ew_settings, "PATH", str(tmp_path / "s.json"))
+    ew_settings._cache.update(mtime=None, data={})
     cfg = {
         "house_id": "mitt-hus",
         "solar": {"enabled": True, "driver": "solaredge"},
@@ -97,7 +105,8 @@ def test_driver_snapshot_skickar_bara_tillatna_falt(monkeypatch):
     assert set(payload.keys()) == {"house", "version", "drivers", "ts"}
     assert payload["house"] != "mitt-hus"  # hashat, inte klartext
     assert len(payload["house"]) == 16
-    assert set(payload["drivers"]) == {"solar:solaredge", "heatpump:husdata", "car:tesla"}
+    assert set(_equipment(payload["drivers"])) == {"solar:solaredge", "heatpump:husdata", "car:tesla"}
+    assert not any("mitt-hus" in x for x in payload["drivers"])
 
 
 def test_samma_hus_ger_samma_hash_olika_hus_ger_olika_hash(monkeypatch):
@@ -129,3 +138,34 @@ def test_natverksfel_kraschar_inte(monkeypatch):
     with patch("telemetry.requests.post", side_effect=RuntimeError("timeout")):
         t.send_driver_snapshot({"house_id": "h"})
         t.report_error({"house_id": "h"}, "main_loop", "ValueError")
+
+
+def test_slumpat_installations_id_inte_house_id(monkeypatch, tmp_path):
+    """2026-11-04: startguiden skriver house_id "mitt-hus" åt alla - alla sådana hus blev ett i statistiken."""
+    import ew_settings
+    t = _reload(monkeypatch)
+    monkeypatch.setattr(ew_settings, "PATH", str(tmp_path / "a.json"))
+    ew_settings._cache.update(mtime=None, data={})
+    assert t.house_hash({"house_id": "mitt-hus"}, create=False) == t._hashed_house_id("mitt-hus")   # webben skapar inget
+    a = t.house_hash({"house_id": "mitt-hus"})
+    assert a == t.house_hash({"house_id": "mitt-hus"}) == t.house_hash({}, create=False)          # stabilt, delas med webben
+    monkeypatch.setattr(ew_settings, "PATH", str(tmp_path / "b.json"))
+    ew_settings._cache.update(mtime=None, data={})
+    b = t.house_hash({"house_id": "mitt-hus"})
+    assert a != b and a != t._hashed_house_id("mitt-hus") and len(a) == 16
+
+
+def test_matare_priskalla_och_lage_skickas(monkeypatch, tmp_path):
+    import ew_settings
+    t = _reload(monkeypatch)
+    monkeypatch.setattr(ew_settings, "PATH", str(tmp_path / "s.json"))
+    ew_settings._cache.update(mtime=None, data={})
+    ew_settings.update(shadow_mode=True)
+    cfg = {"power_meter": {"entities": {"power_w": "sensor.tibber_power"}},
+           "battery": {"enabled": True, "driver": "generic", "control": "styr", "preset": "solis_modbus",
+                       "modes": {"auto": "x"}, "entities": {"soc": "sensor.bat"}}}
+    out = t._driver_summary(cfg, {"sensor.tibber_power": "Tibber", "sensor.bat": "Solis"}.get)
+    assert "meter:ha@Tibber" in out and "battery:generic@Solis" in out
+    assert "mode:battery_styr" in out and "mode:preset_solis_modbus" in out and "mode:shadow" in out
+    assert any(x.startswith("price:") for x in out) and any(x.startswith("country:") for x in out)
+    assert not any("sensor." in x for x in out)

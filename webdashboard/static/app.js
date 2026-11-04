@@ -1234,7 +1234,7 @@ async function renderInstalls() {
   const d = await api("api/installs").catch(() => null);
   if (!d || !d.configured) { main.innerHTML = `<div class="placeholder">Inte tillgängligt.</div>`; return; }
   if (!d.ok) { main.innerHTML = installsCard(d); return; }
-  const labelOf = (k) => { const [drv, brand] = k.split("@"); const dn = DRIVER_NAMES[drv] || drv;
+  const labelOf = (k) => { const [drv, brand] = k.split("@"); const dn = DRIVER_NAMES[drv] || (drv.startsWith("preset_") ? "förinställning " + drv.slice(7) : drv);
     return brand && brand.toLowerCase() !== dn.toLowerCase() ? `<b>${esc(brand)}</b> <span class="note">${esc(dn)}</span>` : `<b>${esc(dn)}</b>`; };
   const big = (n, t) => `<div><div style="font-size:2rem;font-weight:800">${n}</div><div class="note">${t}</div></div>`;
   const summary = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
@@ -1263,11 +1263,15 @@ async function renderInstalls() {
 
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
 const INSTALL_CATS = [["heatpump", "🌡️", "Värmepump"], ["spa", "🛁", "Spabad"], ["solar", "☀️", "Solceller / växelriktare"],
-  ["battery", "🔋", "Husbatteri"], ["charger", "🔌", "Laddbox"], ["car", "🚗", "Elbil"]];
+  ["battery", "🔋", "Husbatteri"], ["charger", "🔌", "Laddbox"], ["car", "🚗", "Elbil"], ["meter", "📟", "Elmätare"],
+  ["price", "💶", "Priskälla"], ["country", "🌍", "Land"], ["mode", "⚙️", "Körs som"]];
 const DRIVER_NAMES = { thermia_husdata: "Thermia (Husdata)", generic_climate: "climate i HA", nibe_local: "NIBE S (lokalt)",
   myuplink: "myUplink", heishamon: "Panasonic (HeishaMon)", solaredge: "SolarEdge", generic_number: "exportgräns i HA",
   huawei_solar: "Huawei", modbus_register: "Modbus-register", gecko: "Gecko", balboa: "Balboa", switch: "relä/brytare",
-  shelly: "Shelly", generic: "generisk", easee: "Easee", tesla: "Tesla", nissan: "Nissan", generic_ev: "generisk elbil" };
+  shelly: "Shelly", generic: "generisk", easee: "Easee", tesla: "Tesla", nissan: "Nissan", generic_ev: "generisk elbil",
+  ha: "via HA", elprisetjustnu: "elprisetjustnu.se", ha_nordpool: "prissensor i HA", shadow: "skuggläge",
+  battery_styr: "styr batteriet", battery_samarbete: "läser batteriet", battery_av: "batteri av",
+  SE: "Sverige", NO: "Norge", DK: "Danmark", FI: "Finland", DE: "Tyskland", GB: "Storbritannien", NL: "Nederländerna" };
 function installsCard(d) {
   if (!d.ok) return `<div class="card" style="margin-bottom:16px">👥 ${esc(d.error || "")}</div>`;
   const label = (k) => { const [drv, brand] = k.split("@"); return brand ? `${esc(brand)} <span class="note">(${esc(DRIVER_NAMES[drv] || drv)})</span>` : esc(DRIVER_NAMES[drv] || drv); };

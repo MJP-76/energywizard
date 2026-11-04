@@ -578,12 +578,12 @@ async def installs(request: Request):
     if not TELEMETRY_STATS_URL or role != "owner":
         return {"ok": False, "configured": False}
     try:
-        import hashlib
+        import telemetry
         try:
-            hid = house_config.load_house_config(HOUSE_CONFIG_FILE).get("house_id", "")
+            cfg = house_config.load_house_config(HOUSE_CONFIG_FILE)
         except Exception:
-            hid = ""
-        me = hashlib.sha256((hid or "unknown").encode()).hexdigest()[:16]      # samma som smartbox/telemetry.py
+            cfg = {}
+        me = telemetry.house_hash(cfg, create=False)      # samma som motorn skickar (installationens slumpade ID)
         r = requests.get(TELEMETRY_STATS_URL, timeout=10, headers={"X-Stats-Token": TELEMETRY_STATS_TOKEN}, params={"me": me})
         r.raise_for_status()
         return {"ok": True, "configured": True, **r.json()}
@@ -1214,6 +1214,8 @@ def _build_house_config_yaml(sel: dict) -> str:
                    "  reserve_soc: 20      # sparas alltid till strömavbrott (%)",
                    "  priority_soc: 50     # över detta får elbilen solöverskottet före batteriet (%)",
                    "  max_power_w: 5000    # FYLL I - batteriets max ladd-/urladdningseffekt (W)"]
+        if gs.get("preset") and re.fullmatch(r"[a-z0-9_]{1,40}", str(gs["preset"])):
+            lines.append(f"  preset: {gs['preset']}   # vilken förinställning lägena kommer från (för telemetrin)")
         if gs.get("keepalive_s"):
             lines.append(f"  keepalive_s: {int(gs['keepalive_s'])}     # skriv om laddkommandot så här ofta (växelriktarens fjärrstyrning släpper annars)")
         if modes:
