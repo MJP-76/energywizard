@@ -188,6 +188,10 @@ async def stats(request: Request, me: str = ""):
         rows = c.execute(
             "SELECT house, version, drivers FROM driver_snapshots WHERE received_at >= ? ORDER BY id", (since,)).fetchall()
         first = {r[0]: r[1] for r in c.execute("SELECT house, first_seen FROM known_houses")}
+        day = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        errs = {}
+        for h, mod, et in c.execute("SELECT DISTINCT house, module, error_type FROM errors WHERE received_at >= ?", (day,)):
+            errs.setdefault(h, []).append(f"{mod}: {et}")
     latest = {}
     for house, version, drivers in rows:
         if _is_real_house(house):
@@ -208,7 +212,8 @@ async def stats(request: Request, me: str = ""):
         for d in latest[h][1]:
             cat, _, rest = d.partition(":")
             devs.setdefault(cat, []).append(_norm(rest))
-        houses.append({"label": f"Hus {i}", "since": (first.get(h) or "")[:10], "mine": bool(me) and h == me, "devices": devs})
+        houses.append({"label": f"Hus {i}", "since": (first.get(h) or "")[:10], "mine": bool(me) and h == me, "devices": devs,
+                       "version": latest[h][0], "errors": sorted(errs.get(h, []))})
     week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     return {
         "active": len(latest),
@@ -220,6 +225,32 @@ async def stats(request: Request, me: str = ""):
         "versions": versions,
         "houses": houses,
     }
+
+
+@app.get("/api/error-groups")
+async def error_groups(request: Request, days: int = 14):
+    """Felen grupperade per modul + feltyp, för skriptet som gör GitHub-issues av dem (ops/gh_error_issues.sh).
+    Bara antal hus, versioner och tider - aldrig vilka hus."""
+    from datetime import timedelta
+    if not _token_ok(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    since = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 90)))).isoformat()
+    groups = {}
+    with _db() as c:
+        for rec, house, version, module, et in c.execute(
+                "SELECT received_at, house, version, module, error_type FROM errors WHERE received_at >= ? ORDER BY id", (since,)):
+            if not _is_real_house(house):
+                continue
+            g = groups.setdefault(f"{module}: {et}", {"module": module, "error_type": et, "houses": set(), "versions": set(),
+                                                      "first": rec, "last": rec, "count": 0})
+            g["houses"].add(house)
+            g["versions"].add(version or "okänd")
+            g["last"] = rec
+            g["count"] += 1
+    out = [{"key": k, "module": g["module"], "error_type": g["error_type"], "houses": len(g["houses"]),
+            "versions": sorted(g["versions"]), "first": g["first"], "last": g["last"], "reports": g["count"]}
+           for k, g in groups.items()]
+    return {"groups": sorted(out, key=lambda x: (-x["houses"], x["key"]))}
 
 
 @app.get("/api/ping")

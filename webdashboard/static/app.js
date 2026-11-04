@@ -1234,7 +1234,14 @@ async function renderInstalls() {
   const d = await api("api/installs").catch(() => null);
   if (!d || !d.configured) { main.innerHTML = `<div class="placeholder">Inte tillgängligt.</div>`; return; }
   if (!d.ok) { main.innerHTML = installsCard(d); return; }
-  const labelOf = (k) => { const [drv, brand] = k.split("@"); const dn = DRIVER_NAMES[drv] || (drv.startsWith("preset_") ? "förinställning " + drv.slice(7) : drv);
+  const SIZE_PRE = { battery_: "batteri ", car_: "elbil ", fuse_: "huvudsäkring " };
+  const prettyDrv = (drv) => {
+    if (DRIVER_NAMES[drv]) return DRIVER_NAMES[drv];
+    if (drv.startsWith("preset_")) return "förinställning " + drv.slice(7);
+    const pre = Object.keys(SIZE_PRE).find((p) => drv.startsWith(p));
+    return pre ? SIZE_PRE[pre] + drv.slice(pre.length).replace(/(\d)(kWh|A)$/, "$1 $2") : drv;
+  };
+  const labelOf = (k) => { const [drv, brand] = k.split("@"); const dn = prettyDrv(drv);
     return brand && brand.toLowerCase() !== dn.toLowerCase() ? `<b>${esc(brand)}</b> <span class="note">${esc(dn)}</span>` : `<b>${esc(dn)}</b>`; };
   const big = (n, t) => `<div><div style="font-size:2rem;font-weight:800">${n}</div><div class="note">${t}</div></div>`;
   const summary = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
@@ -1245,16 +1252,21 @@ async function renderInstalls() {
     const n = Object.values(h.devices).reduce((a, l) => a + l.length, 0);
     const rows = INSTALL_CATS.map(([cat, ico, name]) => {
       const list = h.devices[cat] || [];
+      if (!list.length && ["meter", "price", "country", "size", "mode"].includes(cat)) return "";   // äldre versioner skickar inte dessa
       const counts = {}; list.forEach((x) => counts[x] = (counts[x] || 0) + 1);
       const val = list.length ? Object.entries(counts).map(([k, c]) => labelOf(k) + (c > 1 ? ` × ${c}` : "")).join(", ") : `<span class="note">–</span>`;
       return `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${ico}</span>
         <span class="note" style="flex:0 0 120px">${name}</span><span style="flex:1 1 auto;min-width:0">${val}</span></div>`;
     }).join("");
-    return `<div class="card" style="padding:14px${h.mine ? ";border-color:var(--acc)" : ""}">
+    const errs = (h.errors || []);
+    const errRow = `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${errs.length ? "⚠️" : "✅"}</span>
+        <span class="note" style="flex:0 0 120px">Fel senaste dygnet</span><span style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere${errs.length ? ";color:#c0392b" : ""}">${errs.length ? errs.map(esc).join("<br>") : `<span class="note">inga</span>`}</span></div>`;
+    const verRow = h.version ? `<div class="note" style="padding-top:6px">Version ${esc(h.version)}</div>` : "";
+    return `<div class="card" style="padding:14px${h.mine ? ";border-color:var(--acc)" : ""}${errs.length ? ";box-shadow:0 0 0 2px #e74c3c55" : ""}">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px">
         <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
         <div class="note">sedan ${esc(h.since)}</div></div>
-      ${n ? rows : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}</div>`;
+      ${n ? rows : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
   }).join("");
   main.innerHTML = summary
     + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-bottom:16px">${cards}</div>`
@@ -1264,13 +1276,13 @@ async function renderInstalls() {
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
 const INSTALL_CATS = [["heatpump", "🌡️", "Värmepump"], ["spa", "🛁", "Spabad"], ["solar", "☀️", "Solceller / växelriktare"],
   ["battery", "🔋", "Husbatteri"], ["charger", "🔌", "Laddbox"], ["car", "🚗", "Elbil"], ["meter", "📟", "Elmätare"],
-  ["price", "💶", "Priskälla"], ["country", "🌍", "Land"], ["mode", "⚙️", "Körs som"]];
+  ["price", "💶", "Priskälla"], ["country", "🌍", "Land"], ["size", "📏", "Storlek"], ["mode", "⚙️", "Körs som"]];
 const DRIVER_NAMES = { thermia_husdata: "Thermia (Husdata)", generic_climate: "climate i HA", nibe_local: "NIBE S (lokalt)",
   myuplink: "myUplink", heishamon: "Panasonic (HeishaMon)", solaredge: "SolarEdge", generic_number: "exportgräns i HA",
   huawei_solar: "Huawei", modbus_register: "Modbus-register", gecko: "Gecko", balboa: "Balboa", switch: "relä/brytare",
   shelly: "Shelly", generic: "generisk", easee: "Easee", tesla: "Tesla", nissan: "Nissan", generic_ev: "generisk elbil",
   ha: "via HA", elprisetjustnu: "elprisetjustnu.se", ha_nordpool: "prissensor i HA", shadow: "skuggläge",
-  battery_styr: "styr batteriet", battery_samarbete: "läser batteriet", battery_av: "batteri av",
+  tou_tariff: "tidstariff", battery_styr: "styr batteriet", battery_samarbete: "läser batteriet", battery_av: "batteri av",
   SE: "Sverige", NO: "Norge", DK: "Danmark", FI: "Finland", DE: "Tyskland", GB: "Storbritannien", NL: "Nederländerna" };
 function installsCard(d) {
   if (!d.ok) return `<div class="card" style="margin-bottom:16px">👥 ${esc(d.error || "")}</div>`;
@@ -1652,7 +1664,9 @@ function setupHA(total, prev) {
      <details class="note"><summary>Var hittar jag token?</summary>
        I Home Assistant: klicka på ditt namn längst ner till vänster, välj fliken <b>Säkerhet</b>,
        scrolla längst ner till <b>Långlivade åtkomsttoken</b> och tryck <b>Skapa token</b>. Kopiera den och klistra in här.
-     </details>`,
+     </details>
+     <details class="note"><summary>Vad skickas till utvecklaren?</summary>
+       <p style="margin:6px 0">En gång per dygn: vilken utrustning du har (drivrutin och märke, t.ex. "Solis"), priskälla och land, ungefärliga storlekar (t.ex. batteri 10–15 kWh, huvudsäkring 25 A) och om skuggläget, batteristyrningen eller tidstariffen är på. Vid fel: var i koden felet uppstod och vilken typ, aldrig feltexten. Felen blir automatiskt ärenden på GitHub så att de kan rättas. Aldrig namn, adress, entiteter eller mätvärden.</p><p style="margin:6px 0">Stäng av med TELEMETRY_OPT_IN=false.</p></details>`,
     "Testa och spara", async () => {
       const j = await postJSON("api/setup/ha", { url: document.getElementById("s_url").value, token: document.getElementById("s_tok").value });
       document.getElementById("setupok").textContent = j.message || "Kopplat!";

@@ -92,3 +92,17 @@ def test_per_installation_anonymt_och_easee_ihop(monkeypatch):
     assert [h["label"] for h in s["houses"]] == ["Hus 1", "Hus 2"] and s["houses"][0]["mine"] and not s["houses"][1]["mine"]
     assert s["houses"][1]["devices"]["battery"] == ["generic@Solis"]
     assert a not in str(s) and b not in str(s)
+
+
+def test_error_groups_grupperar_utan_hus(monkeypatch):
+    monkeypatch.setenv("STATS_TOKEN", "hemlig")
+    c, mod = _client(monkeypatch)
+    for h in ("a" * 16, "b" * 16, "a" * 16):
+        c.post("/ingest/error", json={"house": h, "version": "1.50", "module": "logger.log_data", "error_type": "UndefinedColumn"})
+    c.post("/ingest/drivers", json={"house": "a" * 16, "version": "1.50", "drivers": ["battery:generic@Solis"]})
+    assert c.get("/api/error-groups").status_code == 403
+    g = c.get("/api/error-groups", headers={"X-Stats-Token": "hemlig"}).json()["groups"]
+    assert g[0]["key"] == "logger.log_data: UndefinedColumn" and g[0]["houses"] == 2 and g[0]["reports"] == 3
+    assert "a" * 16 not in str(g)
+    s = c.get("/api/stats", headers={"X-Stats-Token": "hemlig"}).json()
+    assert s["houses"][0]["errors"] == ["logger.log_data: UndefinedColumn"] and s["houses"][0]["version"] == "1.50"

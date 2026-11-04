@@ -165,6 +165,7 @@ print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepum
       f"sol={type(solar_driver).__name__}, spa={type(spa_driver).__name__}, laddare={list(physical_charger_drivers.keys())}")
 
 telemetry.send_driver_snapshot(house_cfg)  # no-op om TELEMETRY_OPT_IN inte är satt - se telemetry.py
+telemetry.install_error_hook(house_cfg)    # "❌"-fel -> modul.funktion + feltyp (aldrig texten), se telemetry.py
 
 # Ny installation (house_config.yaml fortfarande i princip tomt) → EN envägs-notis i HA:s
 # eget notisfält (persistent_notification, ligger kvar tills användaren kryssar bort den -

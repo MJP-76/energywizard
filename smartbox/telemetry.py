@@ -134,12 +134,47 @@ def _driver_summary(cfg: dict, maker_fn=None) -> list[str]:
     return out
 
 
+def _bucket(v, edges, unit):
+    """Avrundat intervall, t.ex. 12.8 kWh -> "10-15kWh" - aldrig exakta värden."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    lo = 0
+    for e in edges:
+        if v < e:
+            return f"{lo}-{e}{unit}"
+        lo = e
+    return f"{lo}+{unit}"
+
+
 def _setup_summary(cfg: dict) -> list[str]:
     out = []
+    # Storlekar, avrundade till intervall (2026-11-04)
+    bat = cfg.get("battery") or {}
+    if bat.get("enabled"):
+        b = _bucket(bat.get("capacity_kwh"), (5, 10, 15, 20, 30, 50), "kWh")
+        if b:
+            out.append(f"size:battery_{b}")
+    for ev in cfg.get("evs", []) or []:
+        b = _bucket(ev.get("battery_kwh"), (30, 50, 70, 90), "kWh")
+        if b:
+            out.append(f"size:car_{b}")
+    fuse = (cfg.get("fuse") or {}).get("main_fuse_a")
+    if fuse:
+        try:
+            out.append(f"size:fuse_{int(float(fuse))}A")
+        except (TypeError, ValueError):
+            pass
     try:
         import nordpool
         out.append(f"price:{nordpool.price_source()}")
-        out.append(f"country:{nordpool.cost_settings()['country']}")
+        cs = nordpool.cost_settings()
+        out.append(f"country:{cs['country']}")
+        if cs.get("tou_extra"):
+            out.append("mode:tou_tariff")
     except Exception:
         pass
     bat = cfg.get("battery") or {}
@@ -210,3 +245,41 @@ def report_error(cfg: dict, module: str, error_type: str) -> None:
         requests.post(f"{ENDPOINT}/ingest/error", json=payload, timeout=5)
     except Exception as e:
         print(f"ℹ️ Telemetri (felrapport) kunde inte skickas, fortsätter ändå: {e}")
+
+
+# ---- Felkrok (2026-11-04) -----------------------------------------------------------------------------------------
+# Motorn skriver fel som "❌ ..." på ett 60-tal ställen (fångade undantag som annars bara syns i loggen, t.ex.
+# databasfel, HA som inte svarar, drivrutiner som inte når pumpen/laddboxen). Kroken rapporterar varje sådan rad
+# som modul.funktion + undantagets typ - kodens egna namn, ALDRIG radens text (den kan innehålla adresser och
+# entitetsnamn). report_error avdubblar en gång per dygn och feltyp. Samlaren gör sedan GitHub-issues av dem.
+_hook_cfg: dict = {}
+
+
+def install_error_hook(cfg: dict) -> None:
+    import builtins
+    import sys
+    import threading
+    _hook_cfg.clear()
+    _hook_cfg.update(cfg or {})
+    if getattr(builtins.print, "_ew_hook", False) or not (OPT_IN and ENDPOINT):
+        return
+    orig = builtins.print
+
+    def hooked(*args, **kwargs):
+        orig(*args, **kwargs)
+        try:
+            if not args or not isinstance(args[0], str) or not args[0].lstrip().startswith("❌"):
+                return
+            f = sys._getframe(1)
+            mod = os.path.splitext(os.path.basename(f.f_code.co_filename))[0]
+            if mod == "telemetry":
+                return
+            exc = sys.exc_info()[0]
+            where = f"{mod}.{f.f_code.co_name}"[:60]
+            kind = exc.__name__ if exc else "Error"
+            threading.Thread(target=report_error, args=(_hook_cfg, where, kind), daemon=True).start()
+        except Exception:
+            pass
+
+    hooked._ew_hook = True
+    builtins.print = hooked

@@ -169,3 +169,43 @@ def test_matare_priskalla_och_lage_skickas(monkeypatch, tmp_path):
     assert "mode:battery_styr" in out and "mode:preset_solis_modbus" in out and "mode:shadow" in out
     assert any(x.startswith("price:") for x in out) and any(x.startswith("country:") for x in out)
     assert not any("sensor." in x for x in out)
+
+
+def test_storlekar_avrundas_och_tidstariff(monkeypatch, tmp_path):
+    import ew_settings
+    t = _reload(monkeypatch)
+    monkeypatch.setattr(ew_settings, "PATH", str(tmp_path / "s.json"))
+    ew_settings._cache.update(mtime=None, data={})
+    ew_settings.update(price_tou_extra=0.4)
+    cfg = {"battery": {"enabled": True, "capacity_kwh": 12.8}, "evs": [{"driver": "tesla", "battery_kwh": 75}],
+           "fuse": {"main_fuse_a": 25}}
+    out = t._driver_summary(cfg, None)
+    assert "size:battery_10-15kWh" in out and "size:car_70-90kWh" in out and "size:fuse_25A" in out
+    assert "mode:tou_tariff" in out
+    assert not any("12.8" in x or "75" in x for x in out)                      # aldrig exakta värden
+
+
+def test_felkroken_skickar_plats_och_typ_aldrig_texten(monkeypatch):
+    import builtins
+    t = _reload(monkeypatch, opt_in="true", endpoint="https://telemetri.example.com")
+    sent = []
+    monkeypatch.setattr(t, "report_error", lambda cfg, mod, kind: sent.append((mod, kind)))
+    orig = builtins.print
+    try:
+        t.install_error_hook({})
+        import threading
+
+        def ladda():
+            try:
+                raise ConnectionError("http://192.168.1.5 sensor.hemlig")
+            except ConnectionError as e:
+                print(f"❌ Kunde inte nå laddboxen: {e}")
+        ladda()
+        print("✅ allt väl")
+        for th in threading.enumerate():
+            if th is not threading.current_thread() and th.daemon:
+                th.join(timeout=2)
+    finally:
+        builtins.print = orig
+    assert sent == [("test_telemetry.ladda", "ConnectionError")]
+    assert not any("192.168" in m or "hemlig" in m for m, _ in sent)

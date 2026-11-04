@@ -100,12 +100,18 @@ Home Assistant. For brand-specific control, see `smartbox/drivers/*.py` for the 
 
 ## Telemetry (on by default, easy to turn off)
 
-Sends only: a hashed house identifier (`sha256(house_id)`), which driver categories are active (e.g.
-`solar:solaredge` - no entity ids or sensor values) and the brand from Home Assistant's device registry
-(e.g. `battery:generic@FoxESS`), once a day, error types from critical errors in the main loop (the
-exception class name, never the message), a version hash and a timestamp. Nothing else - no price data, no sensor
-history, no location. See `smartbox/telemetry.py` for exactly what is sent. To send nothing at all, set
-`TELEMETRY_OPT_IN=false` in your `.env`.
+Helps the developer see which equipment is used and find errors in other installations before people have to report them.
+Sent once a day and at start, to `https://energywizzard.profitalgos.com/telemetry`:
+
+- **A random installation ID** (created at first start, stored in `/data/energywizard.json`, sent hashed). Nothing that can be tied to you.
+- **Equipment:** the driver per category and the brand from Home Assistant's device registry, e.g. `battery:generic@Solis`, `meter:ha@Tibber`. No entity ids.
+- **Settings:** price source, country, whether the battery is controlled or only read (and which preset), shadow mode and time-of-use tariff on/off.
+- **Approximate sizes:** battery and car in ranges (e.g. `10-15kWh`), the main fuse in amperes.
+- **Errors:** where in the code an error happened (`module.function`) and its type (e.g. `ConnectionError`), at most once a day per error. **Never the error message**, as it can contain addresses or names. Errors are collected and automatically become issues here on GitHub (label `auto-fel`), with nothing that identifies a house.
+- Version number and a timestamp.
+
+Never: names, addresses, location, measurements, electricity prices, fees or history. See `smartbox/telemetry.py` for exactly
+what is sent. To send nothing at all, set `TELEMETRY_OPT_IN=false` in your `.env`.
 
 ## 🌍 Translate
 

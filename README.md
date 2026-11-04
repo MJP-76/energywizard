@@ -138,19 +138,19 @@ Se [ROADMAP.md](ROADMAP.md) för vad som är nästa rimliga steg och varför.
 
 ## Telemetri (på som standard, lätt att stänga av)
 
-Skickar bara: en hashad, oåterkallelig husidentifierare (`sha256(house_id)`,
-inte house_id i klartext), vilka drivrutinkategorier som är aktiva (t.ex.
-`solar:solaredge` - inga entity-id:n eller sensorvärden) och märket enligt Home
-Assistants enhetsregister (t.ex. `battery:generic@FoxESS`), en gång per dygn, feltyper vid
-kritiska fel i huvudloopen (exceptionens klassnamn, aldrig feltexten), en
-grov versionsindikator (git-commit-hash) och en tidsstämpel. Inget annat -
-ingen elprisdata, ingen sensorhistorik, ingen plats. Går till den centrala,
-publika mottagaren (`https://energywizzard.profitalgos.com/telemetry`) som
-standard - det hjälper utvecklaren upptäcka fel i andras installationer utan
-att de behöver höra av sig själva. Se `smartbox/telemetry.py` för exakt vad
-som skickas och `telemetry-collector/` för mottagarsidan (en separat, valfri
-tjänst - `docker compose --profile telemetry-collector up -d` om du vill
-köra din egen).
+Hjälper utvecklaren att se vilken utrustning som används och att hitta fel hos andra innan de behöver höra av sig.
+Skickas en gång per dygn och vid start, till `https://energywizzard.profitalgos.com/telemetry`:
+
+- **Ett slumpat installations-ID** (skapas vid första start och sparas i `/data/energywizard.json`, skickas hashat). Inget som går att koppla till dig.
+- **Utrustningen:** drivrutin per kategori och märket enligt Home Assistants enhetsregister, t.ex. `battery:generic@Solis`, `meter:ha@Tibber`. Inga entitets-ID:n.
+- **Inställningar:** priskälla, land, om batteriet styrs eller bara läses (och vilken förinställning), skuggläge och tidstariff på/av.
+- **Ungefärliga storlekar:** batteri och elbil i intervall (t.ex. `10-15kWh`), huvudsäkringen i ampere.
+- **Fel:** var i koden ett fel uppstod (`modul.funktion`) och feltypen (t.ex. `ConnectionError`), högst en gång per dygn och fel. **Aldrig feltexten**, eftersom den kan innehålla adresser eller namn. Felen samlas och blir automatiskt ärenden här på GitHub (etiketten `auto-fel`), utan något som pekar ut ett hus.
+- Versionsnummer och en tidsstämpel.
+
+Aldrig: namn, adress, plats, IP-adresser i innehållet, mätvärden, elpriser, avgifter eller historik. Se `smartbox/telemetry.py`
+för exakt vad som skickas och `telemetry-collector/` för mottagaren (du kan köra en egen:
+`docker compose --profile telemetry-collector up -d`).
 
 Vill du inte skicka något alls, sätt `TELEMETRY_OPT_IN=false` i din `.env`.
 
