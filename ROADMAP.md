@@ -154,30 +154,18 @@ optimeraren Energyplan är stängd och används inte):
   arkitekturen (`smartbox/drivers/heatpump.py`) är byggd för det, men varje
   märke kräver en egen, verifierad implementation - bidrag välkomna.
 
-- **NIBE S-serie: drivrutin byggd, overifierad mot riktig hårdvara.**
-  `drivers/heatpump_nibe_local.py` (`nibe_local` i
-  `HEAT_PUMP_DRIVER_REGISTRY`) pratar S-seriens (S735/S1255/S1155/S320 m.fl.)
-  lokala REST-API - HTTPS-port 8443, Basic-auth, certifikatet PINNAS (SHA-256-
-  fingeravtryck, TLS-verifiering stängs aldrig av) - byggd mot
-  [srcfl/ftw](https://github.com/srcfl/ftw)s
-  [nibe-local-dokumentation](https://github.com/srcfl/ftw/blob/master/docs/nibe-local.md)
-  och den faktiska drivrutinskällan (`srcfl/device-drivers`), inte gissad.
-  **Ärlig avgränsning:** bara anslutning/enhetsidentifiering + en rå
-  datapunktsläsning är bekräftad mot källan - vi har INGEN bekräftad karta
-  mellan våra normaliserade fält (`indoor_temp`/`outdoor_temp`/driftläge) och
-  NIBE:s faktiska registernummer för dem (källan dokumenterar bara register
-  2107/2109, en solöverskott-funktion, inget annat). `read_sensors()`
-  returnerar därför bara rådata (antal datapunkter), och ALLA
-  `set_*`-metoder returnerar medvetet `False` - exakt samma princip som
-  `GenericClimateHeatPumpDriver` redan använder för Husdatas
-  registernivå-funktioner. Ansluts via `.env` (`NIBE_LOCAL_HOST`/
-  `_USERNAME`/`_PASSWORD`/`_TLS_PIN_SHA256`), inte auto-upptäckt av
-  entitetsväljaren (den pratar direkt med pumpen, aldrig via HA - samma skäl
-  som Husdata/Thermia inte är HA-upptäckt). Mockade tester bevisar att koden
-  anropar rätt endpoints med rätt fält - ALDRIG kört mot en riktig pump. Har
-  du en NIBE S-serie-pump? Hör av dig, det är precis den sortens verkliga
-  installation som behövs för att identifiera de saknade registren och
-  bekräfta resten.
+- **NIBE S-serie: lokal REST-drivrutin, ännu inte hårdvaruverifierad.**
+  `drivers/heatpump_nibe_local.py` (`nibe_local`) använder HTTPS, Basic-auth
+  och obligatorisk SHA-256-certifikatpinning före autentisering. Upptäckt sker
+  via API:ets `deviceIndex`. För S1155/S1255 finns metadata-kontrollerade
+  temperaturavläsningar och kompressorstatus; andra modeller kräver egna
+  verifierade bindningar. Explicita, valfria skrivbindningar stöder rumsmål,
+  varmvattenstart/stopp, värmestart och driftläge, med gränskontroller och
+  separat återläsning. Skrivning är avstängd som standard; inga universella
+  driftlägeskoder eller skrivregister antas. Tillfälliga boostar, AUX-blockering,
+  paus och kurvjustering ingår inte. Tester använder enbart syntetiska svar;
+  fysisk funktion och firmwarekompatibilitet återstår att verifiera.
+  Se [konfiguration och begränsningar](docs/nibe-local-rest.md).
 
 - **NIBE/Bosch/Atlantic/Daikin via myUplink - drivrutin byggd, aldrig körd mot
   ett riktigt konto.** `drivers/heatpump_myuplink.py` pratar med NIBE:s delade
