@@ -33,16 +33,49 @@ def _sync_password():
         PASSWORD, SECRET = pw, hashlib.sha256(("ewapp|" + pw).encode()).digest()
 ENGINE = create_engine(f"postgresql+psycopg://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}@{os.environ.get('POSTGRES_HOST', 'postgres-smartbox')}/{os.environ['POSTGRES_DB']}", pool_pre_ping=True, pool_size=3)
 
-CARS = {
-    "tesla": {"name": "Tesla Model Y", "charger": H.EASEE_CARPORT_ID, "status": "sensor.carport_status", "power": "sensor.carport_effekt", "soc": "sensor.tesla_model_y_battery",
-              "tracker": "device_tracker.tesla_model_y_location_tracker", "cap_kwh": 75.0, "phases": 3, "arrival": "sensor.tesla_model_y_arrival_time", "dist": "sensor.tesla_model_y_distance_to_arrival", "online": "binary_sensor.carport_online",
-              "climate": "climate.tesla_model_y_hvac_climate_system", "inside": "sensor.tesla_model_y_temperature_inside"},
-    "nissan": {"name": "Nissan Leaf", "charger": H.EASEE_LITE_ID, "status": "sensor.easee_lite_status", "power": "sensor.easee_lite_effekt", "soc": "sensor.smartbox_leaf_batteri",
-               "tracker": "device_tracker.leaf_location", "cap_kwh": 40.0, "phases": 1, "arrival": None, "dist": None, "online": "binary_sensor.easee_lite_online",
-               "climate": "climate.leaf_climate", "inside": "sensor.leaf_internal_temperature"},
-}
-WATCH_AFTER_S = {"sensor.tesla_model_y_battery": 48 * 3600}
-WATCH = ["sensor.carport_status", "sensor.easee_lite_status", "sensor.tesla_model_y_battery", "sensor.smartbox_leaf_batteri"]
+# Bilarna och deras laddboxar kommer från installationen (house_config.yaml, evs[]) - inga bilar eller entiteter är
+# inbyggda (2026-11-04). Valfria entiteter (lås, luckor, knappar, räckvidd ...) visas bara om de är valda.
+import house_config as HC
+
+HOUSE_CONFIG_PATH = os.environ.get("HOUSE_CONFIG_PATH", "/house_config.yaml")
+
+
+def _load_cars():
+    try:
+        cfg = HC.load_house_config(HOUSE_CONFIG_PATH)
+    except Exception as e:
+        print(f"⚠️ Kunde inte läsa {HOUSE_CONFIG_PATH}: {e}", flush=True)
+        cfg = {}
+    drivers = HC.build_charger_drivers(cfg)
+    specs = HC.car_specs(cfg)
+    cars = {}
+    for ev in cfg.get("evs") or []:
+        cid = ev.get("id")
+        if not cid:
+            continue
+        e = ev.get("entities") or {}
+        ch = ev.get("charger") or {}
+        ce = ch.get("entities") or {}
+        cars[cid] = {
+            "name": ev.get("name") or cid.capitalize(), "charger": getattr(drivers.get(cid), "id", "") or "",
+            "status": ce.get("status"), "power": ce.get("power_kw") or ce.get("power"), "online": ce.get("online"),
+            "soc": e.get("soc"), "tracker": e.get("tracker"), "cap_kwh": float(ev.get("battery_kwh") or 60),
+            "phases": 1 if specs.get(cid, {}).get("phases") == "1" else 3, "fixed_phases": specs.get(cid, {}).get("phases") == "1",
+            "arrival": e.get("arrival_time"), "dist": e.get("distance_to_arrival"), "destination": e.get("destination_tracker"),
+            "climate": e.get("climate"), "inside": e.get("inside_temp"),
+            "lock": e.get("lock"), "trunk": e.get("trunk"), "frunk": e.get("frunk"),
+            "facts": {k: e.get(k) for k in ("range", "outside_temp", "daily_distance") if e.get(k)},
+            "tpms": [x for x in (e.get("tpms") or []) if x],
+            "buttons": {k: e.get(f"{k}_button") for k in ("flash", "horn", "wake", "refresh", "start_charge") if e.get(f"{k}_button")},
+            "notify": ev.get("notify"),           # vilka användares telefoner som får bilens aviseringar (tomt = alla)
+            "sleeps": bool(e.get("wake_button") or e.get("update_button")),  # bilen somnar/hämtar bara på begäran - larma inte i onödan
+        }
+    return cars, drivers
+
+
+CARS, CHARGER_DRV = _load_cars()
+WATCH_AFTER_S = {c["soc"]: 48 * 3600 for c in CARS.values() if c["sleeps"] and c["soc"]}
+WATCH = [x for c in CARS.values() for x in (c["status"], c["soc"]) if x]
 
 app = FastAPI(title="EnergyWizard Mobil")
 _cache = {"t": 0.0, "states": {}}
@@ -289,19 +322,17 @@ def age_h(st: dict, e: str):
 
 
 def car_facts(key: str, st: dict) -> list:
-    """Validerade nyckeltal för första sidan (bara sådant som har ett giltigt, färskt värde)."""
-    out = []
-    if key == "tesla":
-        rng, tmp = num(st, "sensor.tesla_model_y_range"), num(st, "sensor.tesla_model_y_temperature_outside")
-        tp = [num(st, f"sensor.tesla_model_y_tpms_{p}") for p in ("front_left", "front_right", "rear_left", "rear_right")]
-        tp = [x for x in tp if x is not None]
-        if rng is not None: out.append(f"Räckvidd {rng:.0f} km")
-        if tp: out.append(f"Däck {min(tp) * 0.0689476:.1f} bar".replace(".", ","))
-        if tmp is not None: out.append(f"Ute {tmp:.0f}°")
-    else:
-        rng, dd = num(st, "sensor.leaf_range_ac_off"), num(st, "sensor.leaf_daily_distance")
-        if rng is not None: out.append(f"Räckvidd {rng:.0f} km")
-        if dd is not None and (age_h(st, "sensor.leaf_daily_distance") or 0) < 3: out.append(f"Idag {dd:.0f} km")
+    """Validerade nyckeltal för första sidan (bara sådant som har ett giltigt, färskt värde och som är valt i installationen)."""
+    c, out = CARS[key], []
+    f = c["facts"]
+    rng = num(st, f["range"]) if f.get("range") else None
+    tp = [x for x in (num(st, e) for e in c["tpms"]) if x is not None]
+    tmp = num(st, f["outside_temp"]) if f.get("outside_temp") else None
+    dd = num(st, f["daily_distance"]) if f.get("daily_distance") else None
+    if rng is not None: out.append(f"Räckvidd {rng:.0f} km")
+    if tp: out.append(f"Däck {min(tp) * 0.0689476:.1f} bar".replace(".", ","))     # psi -> bar
+    if tmp is not None: out.append(f"Ute {tmp:.0f}°")
+    if dd is not None and (age_h(st, f["daily_distance"]) or 0) < 3: out.append(f"Idag {dd:.0f} km")
     return out
 
 
@@ -374,7 +405,7 @@ def car_state(key: str, st: dict, ov: dict) -> dict:
             hz = (st.get("zone.home") or {}).get("attributes", {})
             hlat, hlon = hz.get("latitude"), hz.get("longitude")
             trk = (st.get(c["tracker"]) or {}).get("attributes", {})
-            dst = (st.get("device_tracker.tesla_model_y_destination_location_tracker") or {}).get("attributes", {}) if key == "tesla" else {}
+            dst = (st.get(c["destination"]) or {}).get("attributes", {}) if c["destination"] else {}
 
             def km(la, lo):
                 if None in (la, lo, hlat, hlon):
@@ -394,8 +425,10 @@ def car_state(key: str, st: dict, ov: dict) -> dict:
     return {"key": key, "name": c["name"], "soc": None if soc is None else round(soc), "soc_stale": soc_stale, "status": status, "plugged": plugged, "home": home, "charging": charging, "power_kw": round(power_kw, 1),
             "mode": mode, "amps": amps, "phases": phases, "eta": eta, "away": away, "online": (val(st, c["online"]) or "off") == "on", "default_phases": c["phases"],
             "climate_on": (val(st, c["climate"]) or "off") not in ("off", "unavailable"), "inside": num(st, c["inside"]),
-            "age_h": age_h(st, c["soc"] if key == "tesla" else "sensor.leaf_battery_level"), "facts": car_facts(key, st), "plan": plan_segments(key, soc, c["cap_kwh"]), "plan_all": plan_blocks_ui(key, soc, c["cap_kwh"]), "plan_slots": plan_slots(key), "solar": solar_info(ov),
-            "access": ({"locked": val(st, "lock.tesla_model_y_doors") == "locked", "trunk": val(st, "cover.tesla_model_y_trunk") == "open", "frunk": val(st, "cover.tesla_model_y_frunk") == "open"} if key == "tesla" else None)}
+            "age_h": age_h(st, c["soc"]), "facts": car_facts(key, st), "plan": plan_segments(key, soc, c["cap_kwh"]), "plan_all": plan_blocks_ui(key, soc, c["cap_kwh"]), "plan_slots": plan_slots(key), "solar": solar_info(ov),
+            "access": ({"locked": val(st, c["lock"]) == "locked", "trunk": bool(c["trunk"]) and val(st, c["trunk"]) == "open",
+                        "frunk": bool(c["frunk"]) and val(st, c["frunk"]) == "open", "has_trunk": bool(c["trunk"]), "has_frunk": bool(c["frunk"])}
+                       if c["lock"] else None)}
 
 
 PRICE_WINDOW_H = 24      # timmar framåt i pris- och laddplansgrafen (framtida dygnspriser finns först efter ca 13:00)
@@ -481,21 +514,24 @@ def car_command(car: str, kind: str, body: dict | None = None) -> dict | None:
     if kind in ("start", "max", "set"):
         amps = 16 if kind == "max" else max(6, min(16, intval(body.get("amps") or 16)))
         phases = intval(body.get("phases")) if intval(body.get("phases")) in (1, 3) else 0
-        if car == "nissan":
-            phases = 1 if phases == 0 else phases
+        if c.get("fixed_phases"):                      # laddboxen/bilen klarar bara 1-fas
+            phases = 1
         set_override(f"{car}_hold", "off")
         set_override(f"{car}_force_amps", str(amps))
         set_override(f"{car}_force_phases", str(phases))
-        ok = H.set_ev_dynamic_limit(c["charger"], amps)
-        if status in ("awaiting_start", "paused", "off", "ready_to_charge", "completed"):
-            H.turn_on_charger(c["charger"])
+        drv = CHARGER_DRV.get(car)
+        ok = drv.set_limit_a(amps) if drv else False
+        if drv and status in ("awaiting_start", "paused", "off", "ready_to_charge", "completed"):
+            drv.turn_on()
         return {"ok": bool(ok), "msg": (f"Startar laddning, {amps} A" + (f" ({phases}-fas)" if phases else "") + " – det kan ta en halv minut innan bilen börjar") if ok else "Laddaren svarade inte – försök igen"}
     if kind == "stop":
         set_override(f"{car}_force_amps", "0")
         set_override(f"{car}_force_phases", "0")
         set_override(f"{car}_hold", "on")
-        H.set_ev_dynamic_limit(c["charger"], 0)
-        H.turn_off_charger(c["charger"])
+        drv = CHARGER_DRV.get(car)
+        if drv:
+            drv.set_limit_a(0)
+            drv.turn_off()
         return {"ok": True, "msg": "Laddning stoppad (håller tills du väljer Auto)"}
     if kind == "auto":
         set_override(f"{car}_hold", "off")
@@ -523,6 +559,8 @@ async def action(car: str, request: Request):
         return r
     if kind in ("heat_on", "heat_off"):
         on = kind == "heat_on"
+        if not c["climate"]:
+            raise HTTPException(409, "Ingen värme vald för bilen - välj bilens klimatentitet i installationen")
         ok = H.set_car_climate(c["climate"], "heat_cool" if on else "off", 21.0 if on else None)
         set_override(f"{car}_climate", "21.0" if on else "off")   # smartbox/car_climate_watch.py följer upp tills bilen värmer
         _cache["t"] = 0.0
@@ -568,36 +606,40 @@ def _ha_call(domain: str, service: str, entity: str):
     r.raise_for_status()
 
 
-@app.post("/api/tesla/access")
-async def tesla_access(request: Request):
-    """Teslas lås och luckor. what: lock | unlock | trunk | frunk. Allt utom 'lock' kräver /api/secure (lösenord) de senaste 10 minuterna. Alla anrop loggas."""
+@app.post("/api/car/{car}/access")
+async def car_access(car: str, request: Request):
+    """Bilens lås och luckor (om de är valda i installationen). what: lock | unlock | trunk | frunk.
+    Allt utom 'lock' kräver /api/secure (lösenord) de senaste 10 minuterna. Alla anrop loggas."""
+    if car not in CARS:
+        raise HTTPException(404, "Okänd bil")
+    c = CARS[car]
     body = await request.json()
     what = body.get("what")
     if what not in ("lock", "unlock", "trunk", "frunk"):
         raise HTTPException(400, "Okänd åtgärd")
+    ent = c["lock"] if what in ("lock", "unlock") else c[what]
+    if not ent:
+        raise HTTPException(409, "Den här bilen har ingen sådan entitet vald i installationen")
     if what != "lock" and not _secure_ok(request):
         raise HTTPException(403, "secure")                     # appen ber om lösenord och försöker igen
     st = states()
     try:
-        if what == "lock":
-            _ha_call("lock", "lock", "lock.tesla_model_y_doors"); msg = "Bilen låst"
-        elif what == "unlock":
-            _ha_call("lock", "unlock", "lock.tesla_model_y_doors"); msg = "Bilen upplåst"
+        if what in ("lock", "unlock"):
+            _ha_call("lock", what, ent); msg = "Bilen låst" if what == "lock" else "Bilen upplåst"
         else:
-            ent = "cover.tesla_model_y_trunk" if what == "trunk" else "cover.tesla_model_y_frunk"
             is_open = val(st, ent) == "open"
             _ha_call("cover", "close_cover" if is_open else "open_cover", ent)
             msg = ("Baklucka" if what == "trunk" else "Framlucka") + (" stängs" if is_open else " öppnas")
     except Exception as e:
-        print(f"🔐 Tesla {what} MISSLYCKADES: {e}", flush=True)
+        print(f"🔐 {c['name']} {what} MISSLYCKADES: {e}", flush=True)
         raise HTTPException(502, "Bilen svarade inte (den kan sova – försök igen om en stund)")
-    print(f"🔐 Tesla {what} OK ({request.headers.get('x-forwarded-for', '?').split(',')[0]})", flush=True)
-    logact(request, f"Tesla: {msg}")
+    print(f"🔐 {c['name']} {what} OK ({request.headers.get('x-forwarded-for', '?').split(',')[0]})", flush=True)
+    logact(request, f"{c['name']}: {msg}")
     _cache["t"] = 0.0
     return {"ok": True, "msg": msg}
 
 
-# -- Hus: värme, varmvatten, spabad, gräsklippare, effekt ----------------------------------------------------------------
+# -- Hus: värme, varmvatten, spabad, effekt ----------------------------------------------------------------
 SETTING_RULES = {  # kolumn: (typ, min, max, steg)
     "peak_shaving_enabled": ("bool",), "power_limit_kw": ("float", 3.0, 25.0, 0.5), "fuse_size_a": ("float", 16.0, 63.0, 1.0),
     "temp_cheap": ("float", 17.0, 25.0, 0.5), "temp_expensive": ("float", 15.0, 24.0, 0.5), "spa_normal_temp": ("float", 20.0, 40.0, 0.5), "spa_max_temp": ("float", 30.0, 40.0, 0.5), "spa_low_temp": ("float", 10.0, 30.0, 0.5),
@@ -609,15 +651,6 @@ def get_settings_row() -> dict:
     with ENGINE.connect() as c:
         row = c.execute(text("SELECT " + ", ".join(SETTING_RULES) + ", spa_force_heat, spa_schedule_enabled, spa_target_datetime, spa_target_temp FROM system_settings WHERE id = 1")).mappings().first()
     return dict(row) if row else {}
-
-
-def mower_info() -> dict:
-    try:
-        with ENGINE.connect() as c:
-            r = c.execute(text("SELECT mower_status, mower_power_w, timestamp FROM sensor_log WHERE mower_status IS NOT NULL ORDER BY timestamp DESC LIMIT 1")).first()
-        return {"status": r[0], "power_w": r[1], "ts": r[2].astimezone(TZ).strftime("%H:%M")} if r else {}
-    except Exception:
-        return {}
 
 
 def net_now():
@@ -635,8 +668,6 @@ def home():
     st = states()
     ov = overrides()
     cfg = get_settings_row()
-    mower = mower_info()
-    plug = val(st, H.MOWER_ENTITIES["is_on"])         # klipparens Shelly-plugg (var tidigare spabadets gamla Matter-entitet: knappen nekade därför alltid)
     return {"ok": True,
             "heat": {"inside": num(st, "sensor.smartbox_inomhustemp"), "target": num(st, "sensor.smartbox_maltemperatur"), "outside": num(st, "sensor.smartbox_utetemperatur"), "mode": ov.get("heat", "auto"),
                      "pump_w": num(st, "sensor.smartbox_effekt_varmepump"), "price_mode": val(st, "sensor.smartbox_lage"), "cop": num(st, "sensor.smartbox_cop"), "temp_cheap": cfg.get("temp_cheap"), "temp_expensive": cfg.get("temp_expensive")},
@@ -644,7 +675,6 @@ def home():
             "spa": {"temp": num(st, "sensor.spa_malmgatan_34_current_temperature"), "target": num(st, "sensor.spa_malmgatan_34_target_temperature"), "heater": val(st, "water_heater.spa_malmgatan_34_heater"),
                     "force_heat": bool(cfg.get("spa_force_heat")), "eco": ov.get("spa_force_eco") == "on",
                     "ready_at": (cfg["spa_target_datetime"].astimezone(TZ).strftime("%a %H:%M") if cfg.get("spa_schedule_enabled") and cfg.get("spa_target_datetime") else None), "ready_temp": cfg.get("spa_target_temp") if cfg.get("spa_schedule_enabled") else None, "power_w": num(st, "sensor.smartbox_effekt_spa"), "error": val(st, "sensor.spa_malmgatan_34_error_s")},
-            "mower": {"status": mower.get("status"), "since": mower.get("ts"), "power_w": mower.get("power_w"), "plug": plug},
             "power": {"total_w": num(st, "sensor.smartbox_effekt_total"), "ev_w": num(st, "sensor.smartbox_effekt_elbil"), "limit_kw": cfg.get("power_limit_kw"), "peak": bool(cfg.get("peak_shaving_enabled")),
                       "solar_w": num(st, "sensor.solaredge_aktuell_effekt"), "solar_forecast_w": num(st, "sensor.smartbox_solprognos"), "saving_today": num(st, "sensor.smartbox_besparing_idag"),
                       "net_w": net_now(), "solar_limit_pct": num(st, "number.solaredge_modbus_active_power_limit"), "price_now": prices().get("now")}}
@@ -672,18 +702,6 @@ async def home_action(what: str, request: Request):
     if what == "spa_eco":
         set_override("spa_force_eco", "on" if v else "auto")
         return {"ok": True, "msg": "Spabad: Eco på" if v else "Spabad: Eco av"}
-    if what == "mower":
-        if v not in ("on", "off"):
-            raise HTTPException(400, "Ogiltigt")
-        st = states()
-        if val(st, H.MOWER_ENTITIES["is_on"]) is None:
-            raise HTTPException(409, "Klipparens eluttag (Shelly) är offline – kolla ström och wifi")
-        if v == "off" and (mower_info().get("status") == "Klipper"):
-            raise HTTPException(409, "Säkerhetsspärr: klipparen klipper just nu")
-        ok = H.toggle_mower_plug(v == "on")
-        if not ok:
-            raise HTTPException(502, "Kunde inte slå om strömmen")
-        return {"ok": True, "msg": "Klipparens ström " + ("på" if v == "on" else "av")}
     raise HTTPException(404, "Okänd åtgärd")
 
 
@@ -739,7 +757,7 @@ async def set_setting(request: Request):
 # -- Laddschema ----------------------------------------------------------------------------------------------------------
 @app.get("/api/schedule")
 def get_schedule():
-    out = {k: {d: {"enabled": False, "time": "07:00", "soc": 100} for d in range(7)} for k in ("nissan", "tesla")}
+    out = {k: {d: {"enabled": False, "time": "07:00", "soc": 100} for d in range(7)} for k in CARS}
     with ENGINE.connect() as c:
         for car, day, t, soc, en in c.execute(text("SELECT car_id, day_of_week, target_time, target_soc, enabled FROM ev_charging_schedule")):
             if car in out and 0 <= day <= 6:
@@ -760,7 +778,7 @@ def save_schedule_row(car: str, day: int, t: str, enabled: bool, soc: int) -> No
 async def set_schedule(request: Request):
     b = await request.json()
     car, day = b.get("car"), intval(b.get("day"))
-    if car not in ("nissan", "tesla") or not 0 <= day <= 6:
+    if car not in CARS or not 0 <= day <= 6:
         raise HTTPException(400, "Ogiltigt")
     t = str(b.get("time", "07:00"))
     try:
@@ -843,12 +861,29 @@ def history(hours: int = 24):
             "oven_kw": [kw(r[9]) for r in rows], "computer_kw": [kw(r[10]) for r in rows]}
 
 
-PREFIX = {"tesla": ("tesla_model_y",), "nissan": ("leaf", "nissan")}
 GROUPS = [("Batteri & laddning", ("battery", "charg", "energy", "soc", "state_of_charge", "plugged", "range", "charge_time", "scheduled_charging", "charge_limit", "charge_port")), ("Klimat & temperatur", ("climate", "temperature", "heated", "overheat", "hvac")),
           ("Plats", ("location", "tracker", "arrival", "destination", "distance_to")), ("Lås & luckor", ("lock", "frunk", "trunk", "door", "window", "valet", "sentry", "charger_door")),
           ("Körning & däck", ("odometer", "tpms", "shift", "parking", "speed", "trip", "efficiency", "user_present", "daily", "monthly")), ("System", ("update", "polling", "asleep", "online", "last_", "data_last"))]
-BUTTONS = {"tesla": {"flash": "button.tesla_model_y_flash_lights", "horn": "button.tesla_model_y_horn", "wake": "button.tesla_model_y_wake_up", "refresh": "button.tesla_model_y_force_data_update"},
-           "nissan": {"flash": "button.leaf_flash_lights", "horn": "button.leaf_honk_horn", "refresh": "button.leaf_update_data", "start_charge": "button.leaf_start_charge"}}
+_DEV_ENTS: dict = {}
+
+
+def _car_device_entities(car: str) -> list:
+    """Alla entiteter på bilens enhet i Home Assistant (samma enhet som bilens batterisensor) - inga namnprefix."""
+    hit = _DEV_ENTS.get(car)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    soc = CARS[car]["soc"] or CARS[car]["climate"]
+    ents = []
+    if soc:
+        try:
+            r = requests.post(f"{H._BASE}/template", headers=H._HEADERS, verify=False, timeout=8,
+                              json={"template": "{{ device_entities(device_id('%s')) | tojson }}" % soc})
+            r.raise_for_status()
+            ents = json.loads(r.text)
+        except Exception as e:
+            print(f"⚠️ Bilens entiteter ({car}): {e}", flush=True)
+    _DEV_ENTS[car] = (time.time(), ents)
+    return ents
 
 
 def _group(eid: str) -> str:
@@ -862,16 +897,15 @@ def _group(eid: str) -> str:
 @app.get("/api/car/{car}/entities")
 def car_entities(car: str):
     """Alla Home Assistant-entiteter för en bil, grupperade, med validering (giltigt värde + färskhet). Visas bara på begäran (Alla data); nyckeltal på första sidan kommer ur de validerade."""
-    if car not in PREFIX:
+    if car not in CARS:
         raise HTTPException(404, "Okänd bil")
     st = states()
     now = dt.datetime.now(dt.timezone.utc)
     rows = []
+    dev_ents = set(_car_device_entities(car))
     for eid, s_ in st.items():
         dom, name = eid.split(".", 1)
-        if dom not in ("sensor", "binary_sensor", "switch", "button", "lock", "cover", "climate", "number", "select", "device_tracker", "update") or not any(p in name for p in PREFIX[car]):
-            continue
-        if car == "nissan" and ("smartbox" in name or "automation" in eid):
+        if dom not in ("sensor", "binary_sensor", "switch", "button", "lock", "cover", "climate", "number", "select", "device_tracker", "update") or eid not in dev_ents:
             continue
         try:
             age = (now - dt.datetime.fromisoformat(s_["last_updated"].replace("Z", "+00:00"))).total_seconds() / 3600
@@ -883,16 +917,16 @@ def car_entities(car: str):
         rows.append({"id": eid, "name": (s_["attributes"].get("friendly_name") or eid), "state": state if len(state) < 40 else state[:38] + "…", "unit": s_["attributes"].get("unit_of_measurement") or "", "valid": bool(valid and not stale),
                      "why": "otillgänglig" if state == "unavailable" else ("inte uppdaterad på " + str(round(age)) + " h" if stale else ("okänt värde" if not valid else "")), "group": _group(eid), "age_h": None if age is None else round(age, 1)})
     rows.sort(key=lambda r: (r["group"], r["name"]))
-    return {"car": car, "rows": rows, "valid": sum(1 for r in rows if r["valid"]), "total": len(rows), "buttons": list(BUTTONS[car])}
+    return {"car": car, "rows": rows, "valid": sum(1 for r in rows if r["valid"]), "total": len(rows), "buttons": list(CARS[car]["buttons"])}
 
 
 @app.post("/api/car/{car}/press")
 async def car_press(car: str, request: Request):
     """Bilens knappar (blinka, tuta, väck, uppdatera data, start laddning i bilen). Fjärrstart/övrigt kräver inte lösenord; lås/luckor har egen spärr."""
-    if car not in BUTTONS:
+    if car not in CARS:
         raise HTTPException(404, "Okänd bil")
     which = (await request.json()).get("button")
-    ent = BUTTONS[car].get(which)
+    ent = CARS[car]["buttons"].get(which)
     if not ent:
         raise HTTPException(400, "Okänd knapp")
     try:
@@ -966,7 +1000,7 @@ def insights(st: dict, ov: dict, pr: dict) -> list:
         ai.append(b[:110])
     for b in ai[:2]:
         out.append({"i": "🤖", "t": b})
-    for key in ("tesla", "nissan"):
+    for key in CARS:
         c = CARS[key]
         seg = plan_segments(key, num(st, c["soc"]), c["cap_kwh"])
         if seg:
@@ -1251,7 +1285,7 @@ async def lights_action(request: Request):
 async def trip(request: Request):
     b = await request.json()
     car = b.get("car")
-    if car not in ("nissan", "tesla"):
+    if car not in CARS:
         raise HTTPException(400, "Okänd bil")
     try:
         dt.datetime.strptime(str(b.get("time")), "%H:%M")
@@ -1339,21 +1373,35 @@ async def stream(request: Request):
 
 
 # -- Bevakning: pushnotiser till telefonerna via Home Assistant (laddning klar, kabel lossnar, saknade sensorer) -----------------------
-NOTIFY = {"emil": "mobile_app_emils_telefon", "elin": "mobile_app_iphone_134"}
+def _phones() -> dict:
+    """Användare -> telefon i Home Assistant (notify.<tjänst>), sparat som "phones" i /data/energywizard.json,
+    t.ex. {"owner": "mobile_app_pixel", "elin": "mobile_app_iphone"}. Utan val: telefonen motorn hittar."""
+    p = (ew_settings.get("phones") if ew_settings else None) or {}
+    if not p:
+        try:
+            import notifier
+            t = notifier.target()
+            p = {"owner": t} if t else {}
+        except Exception:
+            p = {}
+    return p
 _prev: dict = {"status": {}, "bad": {}}
 
 
 def push(targets: list, title: str, msg: str) -> None:
     for t in targets:
         try:
-            requests.post(f"{H._BASE}/services/notify/{NOTIFY[t]}", headers=H._HEADERS, json={"title": title, "message": msg}, timeout=8, verify=False).raise_for_status()
+            _svc = _phones().get(t)
+            if not _svc:
+                continue
+            requests.post(f"{H._BASE}/services/notify/{_svc}", headers=H._HEADERS, json={"title": title, "message": msg}, timeout=8, verify=False).raise_for_status()
         except Exception as e:
             print(f"⚠️ push {t}: {e}", flush=True)
 
 
 def watch_once():
     st = states()
-    for key in ("tesla", "nissan"):
+    for key in CARS:
         c = CARS[key]
         cur = (val(st, c["status"]) or "unknown").lower()
         prev = _prev["status"].get(key)
@@ -1361,7 +1409,7 @@ def watch_once():
         if prev is None:
             continue
         soc = num(st, c["soc"])
-        to = ["emil", "elin"] if key == "tesla" else ["emil"]
+        to = c.get("notify") or list(_phones())
         if prev == "charging" and cur in ("completed", "ready_to_charge"):
             push(to, f"{c['name']} är fulladdad", f"Batteri {soc:.0f} %." if soc is not None else "Laddningen är klar.")
         elif prev == "charging" and cur == "disconnected":
@@ -1375,7 +1423,7 @@ def watch_once():
             first = _prev["bad"].setdefault(key, now)
             if now - first > 1800 and _prev["bad"].get(key + "_sent") is None:
                 _prev["bad"][key + "_sent"] = now
-                push(["emil"], "EnergyWizard: lampa offline", f"{(st.get(e) or {}).get('attributes', {}).get('friendly_name', e)} har varit onåbar i över 30 minuter.")
+                push(["owner"], "EnergyWizard: lampa offline", f"{(st.get(e) or {}).get('attributes', {}).get('friendly_name', e)} har varit onåbar i över 30 minuter.")
         else:
             _prev["bad"].pop(key, None); _prev["bad"].pop(key + "_sent", None)
     for e in WATCH:
@@ -1385,7 +1433,7 @@ def watch_once():
             # En sovande Tesla ger inget batterivärde: smartboxen räknar då med senast kända nivå (högst 48 h) och väcker bilen när det är dags. Larma först när det gått längre än så.
             if now - first > WATCH_AFTER_S.get(e, 900) and _prev["bad"].get(e + "_sent") is None:
                 _prev["bad"][e + "_sent"] = now
-                push(["emil"], "EnergyWizard: sensor saknas", f"{e} har saknat värde i över 15 minuter.")
+                push(["owner"], "EnergyWizard: sensor saknas", f"{e} har saknat värde i över 15 minuter.")
         else:
             _prev["bad"].pop(e, None); _prev["bad"].pop(e + "_sent", None)
 

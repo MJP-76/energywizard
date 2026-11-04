@@ -11,6 +11,7 @@ evs:
   # entiteter inbyggda. Startguiden fyller i samma fält åt nya användare.
   - id: nissan
     name: Nissan Leaf
+    notify: [owner]                    # vilka användares telefoner som får bilens aviseringar (tomt = alla)
     driver: nissan
     battery_kwh: 40
     entities:
@@ -20,6 +21,12 @@ evs:
       inside_temp: sensor.leaf_internal_temperature
       tracker: device_tracker.leaf_location
       update_button: button.leaf_update_data     # Leaf-integrationen hämtar nytt batterivärde bara när vi ber om det
+      refresh_button: button.leaf_update_data
+      flash_button: button.leaf_flash_lights
+      horn_button: button.leaf_honk_horn
+      start_charge_button: button.leaf_start_charge
+      range: sensor.leaf_range_ac_off
+      daily_distance: sensor.leaf_daily_distance
     charger:
       driver: easee
       physical: lite                   # (äldre fält, används tills motorn läser entiteterna nedan)
@@ -46,6 +53,7 @@ evs:
 
   - id: tesla
     name: Tesla Model Y
+    notify: [owner, elin]
     driver: tesla
     battery_kwh: 75
     entities:
@@ -57,6 +65,16 @@ evs:
       inside_temp: sensor.tesla_model_y_temperature_inside
       tracker: device_tracker.tesla_model_y_location_tracker
       wake_button: button.tesla_model_y_wake_up  # väcks när den är inkopplad men batterivärdet är gammalt
+      refresh_button: button.tesla_model_y_force_data_update
+      flash_button: button.tesla_model_y_flash_lights
+      horn_button: button.tesla_model_y_horn
+      destination_tracker: device_tracker.tesla_model_y_destination_location_tracker
+      lock: lock.tesla_model_y_doors
+      trunk: cover.tesla_model_y_trunk
+      frunk: cover.tesla_model_y_frunk
+      range: sensor.tesla_model_y_range
+      outside_temp: sensor.tesla_model_y_temperature_outside
+      tpms: [sensor.tesla_model_y_tpms_front_left, sensor.tesla_model_y_tpms_front_right, sensor.tesla_model_y_tpms_rear_left, sensor.tesla_model_y_tpms_rear_right]
       arrival_time: sensor.tesla_model_y_arrival_time
       distance_to_arrival: sensor.tesla_model_y_distance_to_arrival
     charger:

@@ -88,7 +88,7 @@ DB_PASS = os.environ.get("POSTGRES_PASSWORD")
 DB_NAME = os.environ.get("POSTGRES_DB")
 
 from database_engine import SessionLocal, engine
-from models import SystemSettings, Note, Override, MowerActivity
+from models import SystemSettings, Note, Override
 from sqlalchemy import select, text
 
 # --- EKONOMI OCH EFFEKTTARIFF-HJÄLPARE ---
@@ -951,13 +951,8 @@ def get_car_location_info(car_id):
     dist = calc_dist(weather.LATITUDE, weather.LONGITUDE, lat, lon) if lat and lon else 999.0
     return state, dist, get_city_from_coords(lat, lon) if dist > 0.5 else None
 
-def init_mower_db():
-    """Skapar databastabellen för gräsklipparens aktivitetslogg om den inte finns."""
-    MowerActivity.__table__.create(bind=engine, checkfirst=True)
-
 # Låt settings_module säkerställa att tabellerna är initialiserade konsekvent
 settings_module.init_settings_db()
-init_mower_db()
 
 # ── Sidinställningar ───────────────────────────────────────────────────────────
 st.set_page_config(page_title="EnergyWizard", page_icon="⚡", layout="wide")
@@ -2314,245 +2309,6 @@ def page_pump():
     else:
         st.info("Väntar på data från Smartbox...")
     render_pump_runtime()
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 🤖 ROBOTGRÄSKLIPPARE
-# ══════════════════════════════════════════════════════════════════════════════
-def render_mower_scene(scene: str) -> str:
-    """Självständig animerad HTML/CSS-scen för klipparens status.
-    Ritas helt med CSS – kräver inga bildfiler (assets)."""
-    css = """
-    <style>
-    .ewmower-box{position:relative;width:100%;height:175px;border-radius:14px;overflow:hidden;
-        font-size:34px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);}
-    .ewmower-lawn{background:repeating-linear-gradient(90deg,#2e7d32 0 14px,#388e3c 14px 28px);}
-    .ewmower-dock{background:linear-gradient(180deg,#26343f,#1b242c);}
-    .ewmower-off{background:linear-gradient(180deg,#3a3f44,#23272b);filter:grayscale(.55);}
-    .ewmower-ground{position:absolute;left:0;right:0;bottom:0;height:16px;background:rgba(0,0,0,.28);}
-    .ewmower-robot{position:absolute;bottom:16px;}
-    .ewmower-label{position:absolute;top:8px;left:12px;font-size:12px;font-weight:600;
-        color:rgba(255,255,255,.75);letter-spacing:1px;}
-    .ewmower-station{position:absolute;bottom:16px;right:20px;font-size:42px;}
-    .ewmower-bolt{position:absolute;top:16px;right:20px;animation:ewmower-pulse 1.2s ease-in-out infinite;}
-    .ewmower-zzz{position:absolute;top:24px;right:34px;font-size:20px;color:#b0bec5;
-        animation:ewmower-pulse 2.4s ease-in-out infinite;}
-    .ewmower-batt{position:absolute;top:22px;left:22px;width:26px;height:46px;
-        border:3px solid #cfd8dc;border-radius:5px;}
-    .ewmower-batt:before{content:'';position:absolute;top:-8px;left:6px;width:11px;height:5px;
-        background:#cfd8dc;border-radius:2px;}
-    .ewmower-batt i{position:absolute;left:2px;right:2px;bottom:2px;background:#4caf50;border-radius:2px;
-        animation:ewmower-fill 2.5s ease-in-out infinite alternate;}
-    .ewmower-mowing .ewmower-robot{animation:ewmower-drive 6s linear infinite;}
-    .ewmower-idle .ewmower-robot{animation:ewmower-bob 3s ease-in-out infinite;}
-    @keyframes ewmower-drive{0%{left:8%;transform:scaleX(1)}48%{left:78%;transform:scaleX(1)}
-        50%{left:78%;transform:scaleX(-1)}98%{left:8%;transform:scaleX(-1)}100%{left:8%;transform:scaleX(1)}}
-    @keyframes ewmower-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-    @keyframes ewmower-pulse{0%,100%{opacity:.35;transform:scale(.9)}50%{opacity:1;transform:scale(1.15)}}
-    @keyframes ewmower-fill{0%{height:8%}100%{height:90%}}
-    </style>"""
-    scenes = {
-        "mowing": """<div class="ewmower-box ewmower-lawn ewmower-mowing">
-            <div class="ewmower-label">KLIPPER</div><div class="ewmower-ground"></div>
-            <div class="ewmower-robot">🤖</div></div>""",
-        "charging": """<div class="ewmower-box ewmower-dock">
-            <div class="ewmower-label">LADDAR</div><div class="ewmower-batt"><i></i></div>
-            <div class="ewmower-bolt">⚡</div><div class="ewmower-ground"></div>
-            <div class="ewmower-robot" style="left:46%;">🤖</div><div class="ewmower-station">🏠</div></div>""",
-        "off": """<div class="ewmower-box ewmower-off">
-            <div class="ewmower-label">STRÖM AV</div><div class="ewmower-ground"></div>
-            <div class="ewmower-robot" style="left:46%;opacity:.6;">🤖</div>
-            <div class="ewmower-bolt" style="animation:none;opacity:.8;">⛔</div></div>""",
-        "idle": """<div class="ewmower-box ewmower-dock ewmower-idle">
-            <div class="ewmower-label">VILAR</div><div class="ewmower-zzz">z z z</div>
-            <div class="ewmower-ground"></div>
-            <div class="ewmower-robot" style="left:46%;">🤖</div><div class="ewmower-station">🏠</div></div>""",
-    }
-    html = css + scenes.get(scene, scenes["idle"])
-    # VIKTIGT: Streamlit/markdown tolkar rader som inleds med 4+ blanksteg som ett
-    # kodblock och visar då rå HTML som text. Ta bort all indragning så att HTML:en
-    # renderas korrekt (allt sammanfogas till en enda rad).
-    return "".join(line.strip() for line in html.splitlines())
-
-
-def page_mower():
-    render_refresh_button("mower")
-    st.subheader("🤖 Robotgräsklippare")
-
-    mower_power  = safe_float("sensor.shellyb1_effekt")
-    mower_is_on  = ha_state("switch.shellyb1") == "on"
-    mower_energy = safe_float("sensor.shellyb1_energi")
-
-    # Statusen bestäms av backend (smartbox/lawnmower.py) och loggas i sensor_log.
-    mower_status_db = row.get("mower_status") if row is not None else None
-    if mower_status_db not in ("Klipper", "Laddar", "Vilar", "Avstängd", "Okänd"):
-        mower_status_db = "Avstängd" if not mower_is_on else "Okänd"
-
-    status_map = {
-        "Klipper":  ("Klipper", "Klipparen är ute på gräsmattan.", "mowing"),
-        "Laddar":   ("Laddar", "Klipparen står i stationen och laddar.", "charging"),
-        "Vilar":    ("Vilar", "Klipparen är fulladdad och vilar i stationen.", "idle"),
-        "Avstängd": ("Avstängd", "Strömmen till laddstationen är avstängd.", "off"),
-        "Okänd":    ("Okänd", "Väntar på data från smart plug…", "idle"),
-    }
-    status_text, status_desc, scene = status_map[mower_status_db]
-
-    # --- Visuell status (animerad CSS-scen) ---
-    with st.container(border=True):
-        m_c1, m_c2 = st.columns([1, 1])
-        with m_c1:
-            st.markdown(render_mower_scene(scene), unsafe_allow_html=True)
-        with m_c2:
-            st.markdown(f"### Status: {status_text}")
-            st.caption(status_desc)
-            st.metric("Live-förbrukning", f"{mower_power:.1f} W")
-            st.metric("Ström till laddstation", "PÅ 🟢" if mower_is_on else "AV ⚫")
-            st.metric("Total energi", f"{mower_energy:.3f} kWh")
-
-    st.divider()
-
-    st.markdown("#### 🧠 Träna AI:n - Vad gör klipparen just nu?")
-    st.caption("Hjälp systemet att lära sig genom att manuellt logga klipparens status. Datan sparas i en databas för framtida maskininlärning.")
-
-    with st.form("mower_activity_log_form"):
-        activity = st.radio("Välj aktuell aktivitet:", ("Klipper", "Laddar", "Vilar"), horizontal=True)
-        
-        submitted = st.form_submit_button("💾 Spara observation")
-        if submitted:
-            try:
-                with SessionLocal() as db:
-                    new_activity = MowerActivity(
-                        power_w=mower_power,
-                        energy_kwh=mower_energy,
-                        activity_label=activity
-                    )
-                    db.add(new_activity)
-                    db.commit()
-                st.success(f"✅ Observation sparad: '{activity}' vid {mower_power:.1f}W.")
-            except Exception as e:
-                st.error(f"Kunde inte spara observation: {e}")
-
-    st.divider()
-
-    # --- Väderstyrning ---
-    st.markdown("#### 🌦️ Väderstyrning")
-    st.caption(
-        "När väderstyrning är PÅ stängs strömmen till laddstationen av automatiskt vid regn "
-        "eller åska – men bara om klipparen står i stationen. Strömmen slås på igen när ovädret "
-        "passerat. (Säkerhetsreglerna stänger aldrig av medan klipparen är ute och klipper.)"
-    )
-    def _mower_ov_bool(key, default=True):
-        # get_ov_bool finns bara i Aviseringsfliken; läs override direkt här.
-        try:
-            with engine.connect() as _c:
-                _r = _c.execute(text("SELECT mode FROM overrides WHERE device = :d"), {"d": key}).fetchone()
-            if not _r or _r[0] in (None, "auto"):
-                return default
-            return _r[0] == "true"
-        except Exception:
-            return default
-
-    weather_ctrl_on = _mower_ov_bool("mower_weather_control", True)
-    toggled_wctrl = st.toggle(
-        "Aktivera väderstyrning (regn/åska)", value=weather_ctrl_on, key="mower_weather_ctrl"
-    )
-    if toggled_wctrl != weather_ctrl_on:
-        set_override_db("mower_weather_control", str(toggled_wctrl).lower())
-        st.rerun()
-
-    rain_ctrl_on = _mower_ov_bool("mower_rain_control", True)
-    toggled_rain = st.toggle(
-        "🌧️ Regnreglage – parkera klipparen vid regn", value=rain_ctrl_on, key="mower_rain_ctrl",
-        help="Av = regn ignoreras (klipparen körs i regn). Åskskyddet styrs fortfarande av väderstyrningen ovan."
-    )
-    if toggled_rain != rain_ctrl_on:
-        set_override_db("mower_rain_control", str(toggled_rain).lower())
-        st.rerun()
-
-    if not toggled_wctrl:
-        st.info("⚙️ Väderstyrning är **AV** – klipparen körs oavsett väder.")
-    else:
-        is_raining = weather.is_raining_soon() and toggled_rain
-        is_thunder = weather.is_thundering_soon()
-        if is_thunder:
-            st.warning("⛈️ **Åska väntas!** Strömmen stängs av om klipparen står i stationen, för att skydda elektroniken.")
-        elif is_raining:
-            st.warning("🌧️ **Regn detekterat!** Strömmen stängs av om klipparen står i stationen, för att skydda den.")
-        else:
-            st.success("☀️ **Uppehåll.** Klipparen tillåts att köra som normalt.")
-
-    st.divider()
-
-    # --- Manuell kontroll & Inställningar ---
-    with st.expander("🔧 Manuell kontroll & Inställningar"):
-        st.markdown("##### Manuell strömbrytare")
-        st.caption("Använd denna för att manuellt slå av/på strömmen till laddstationen. Notera att säkerhetsreglerna kan komma att slå på strömmen igen automatiskt.")
-        
-        if st.button("Tvinga PÅ ström", key="mower_on_btn", disabled=mower_is_on):
-            if homeassistant.toggle_mower_plug(True):
-                st.success("✅ Strömmen är påslagen!")
-                time.sleep(1); st.rerun()
-            else:
-                st.error("Kunde inte slå på strömmen.")
-
-        if st.button("Tvinga AV ström", key="mower_off_btn", type="primary", disabled=not mower_is_on):
-            mowing_threshold = settings.get("mower_mowing_threshold_w", 3.2)
-            # Säkerhetsspärr: blockera om backend säger "Klipper" ELLER om live-effekten
-            # ser ut som klippning (plugg på men förbrukning under klippgränsen).
-            is_mowing_live = mower_is_on and mower_power < mowing_threshold
-            if mower_status_db == "Klipper" or is_mowing_live:
-                st.error("🚫 SÄKERHETSSPÄRR: Kan inte stänga av strömmen när klipparen är ute och klipper!")
-            elif homeassistant.toggle_mower_plug(False):
-                st.success("✅ Strömmen är avstängd!")
-                time.sleep(1); st.rerun()
-            else:
-                st.error("Kunde inte stänga av strömmen.")
-
-        st.divider()
-        st.markdown("##### Justera gränsvärden för status")
-        _x = float(settings.get("mower_mowing_threshold_w", 3.2))
-        _y = float(settings.get("mower_charging_threshold_w", 10.0))
-        st.markdown(
-            "Effekten avgör vilket av **tre** lägen klipparen är i. Du justerar två gränser, "
-            "**X** (klippgräns) och **Y** (laddgräns):\n\n"
-            f"- 🤖 **Klipper** – under **{_x:.1f} W** (ute på gräsmattan)\n"
-            f"- 💤 **Vilar** – mellan **{_x:.1f}** och **{_y:.1f} W** (fulladdad i stationen)\n"
-            f"- 🔌 **Laddar** – över **{_y:.1f} W**"
-        )
-        with st.form("mower_threshold_form"):
-            m_thresh_1, m_thresh_2 = st.columns(2)
-            with m_thresh_1:
-                new_mowing_w = st.number_input(
-                    "X – Klippgräns (W): under = Klipper",
-                    min_value=0.0, max_value=20.0, step=0.1,
-                    value=_x,
-                    help="UNDER detta värde antas klipparen vara ute och klippa. Mellan X och Y = Vilar."
-                )
-            with m_thresh_2:
-                new_charging_w = st.number_input(
-                    "Y – Laddgräns (W): över = Laddar",
-                    min_value=1.0, max_value=50.0, step=0.5,
-                    value=_y,
-                    help="ÖVER detta värde antas klipparen ladda. Mellan X och Y = Vilar."
-                )
-            st.caption("Spannet **mellan X och Y** (gråzonen) tolkas som 💤 **Vilar**.")
-
-            if st.form_submit_button("💾 Spara gränsvärden"):
-                if new_mowing_w >= new_charging_w:
-                    st.error("Klippgränsen (X) måste vara LÄGRE än laddgränsen (Y) – annars finns inget Vilar-spann.")
-                else:
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text("""
-                                UPDATE system_settings
-                                SET mower_mowing_threshold_w = :mow, mower_charging_threshold_w = :charge
-                                WHERE id = 1
-                            """), {"mow": new_mowing_w, "charge": new_charging_w})
-                        st.success("✅ Gränsvärden sparade!")
-                        time.sleep(1); st.rerun()
-                    except Exception as e:
-                        st.error(f"Kunde inte spara: {e}")
-
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ☀️ SOLCELLER
@@ -4824,13 +4580,6 @@ def page_notifications():
                 val_ev_full = st.toggle("✅ Laddning slutförd (Fullt batteri)", value=get_ov_bool("notify_ev_full", True))
                 val_washer = st.toggle("🧺 Tvättmaskin startar", value=settings.get("notify_washer_start", True))
 
-                st.markdown("#### 🤖 Robotgräsklippare")
-                val_mower_mowing = st.toggle("✅ Klipparen startar", value=get_ov_bool("notify_mower_mowing", True))
-                val_mower_charging = st.toggle("🔌 Klipparen laddar", value=get_ov_bool("notify_mower_charging", True))
-                val_mower_idle = st.toggle("💤 Klipparen vilar", value=get_ov_bool("notify_mower_idle", False))
-                val_mower_weather = st.toggle("🌦️ Väderstyrning av/på", value=get_ov_bool("notify_mower_weather", True))
-                val_mower_manual = st.toggle("🔌 Manuell av/på av strömmen", value=get_ov_bool("notify_mower_manual", True))
-                val_mower_failsafe = st.toggle("🚨 Failsafe-larm (5 min)", value=get_ov_bool("notify_mower_failsafe", True))
 
             with c2:
                 st.markdown("#### 💸 Elpriser & System")
@@ -4857,12 +4606,6 @@ def page_notifications():
                 set_override_db("notify_pump_alarm", str(val_pump_alarm).lower())
                 set_override_db("notify_pump_mode", str(val_pump_mode).lower())
                 set_override_db("notify_solar_error", str(val_solar_err).lower())
-                set_override_db("notify_mower_mowing", str(val_mower_mowing).lower())
-                set_override_db("notify_mower_charging", str(val_mower_charging).lower())
-                set_override_db("notify_mower_idle", str(val_mower_idle).lower())
-                set_override_db("notify_mower_weather", str(val_mower_weather).lower())
-                set_override_db("notify_mower_manual", str(val_mower_manual).lower())
-                set_override_db("notify_mower_failsafe", str(val_mower_failsafe).lower())
                 set_override_db("notify_solar_limit", str(val_solar_lim).lower())
                 st.success("✅ Aviseringsinställningarna är sparade!")
                 time.sleep(1)
@@ -5019,9 +4762,8 @@ def page_prognos():
     with _vader:  page_weather()
 
 def page_system():
-    _ha, _mower, _docs = st.tabs(["🏠 Home Assistant", "🤖 Robotgräsklippare", "📖 Driftsinstruktioner"])
+    _ha, _docs = st.tabs(["🏠 Home Assistant", "📖 Driftsinstruktioner"])
     with _ha:    page_ha()
-    with _mower: page_mower()
     with _docs:  page_docs()
 
 _nav = st.navigation([

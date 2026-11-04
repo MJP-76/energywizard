@@ -56,11 +56,3 @@ class Override(Base):
     device = Column(String, primary_key=True)
     mode = Column(String)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-class MowerActivity(Base):
-    __tablename__ = 'mower_activity'
-    id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    power_w = Column(Float)
-    energy_kwh = Column(Float)
-    activity_label = Column(String)

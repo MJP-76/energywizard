@@ -16,7 +16,6 @@ import homeassistant    # Hämtar data från Home Assistant (temperaturer + Ease
 import notifier         # Skickar push-notiser till Emil
 import telemetry        # Strikt opt-in: fel + aktiva drivrutinkategorier, se telemetry.py
 from urllib.parse import urlsplit, urlunsplit
-import lawnmower        # Logik för robotgräsklippare
 import decisions        # Besluts- och styrlogik för pump och radiatorer
 import gpm              # Global Priority Manager (Master Logic Tree)
 import ha_publisher      # Publicerar härledda värden (priser, effektfördelning, COP, besparing) till HA
@@ -499,31 +498,6 @@ def _persist_solar_state(active, amps, phases, now):
             c.execute(_t("INSERT INTO overrides (device, mode, updated_at) VALUES (:d, :m, NOW()) ON CONFLICT (device) DO UPDATE SET mode = EXCLUDED.mode, updated_at = NOW()"), {"d": k, "m": v})
 
 
-mower_state = {
-    'status': 'Okänd',
-    'status_candidate': None,
-    'status_candidate_since': None,
-    'power_off_by_weather': False,
-    'power_off_since': None,
-    'weather_recovery_notified': False,  # Dedup för väder-på-notisen (en per väderhändelse)
-    'long_offline_notified': False,  # Dedup för 15-minuterslarmet (en notis per av-händelse)
-    'failsafe_notified': False,      # Dedup för 5-min-failsafe-notisen (en per av-händelse)
-    'prev_is_on': None,              # Föregående pluggstatus – för att upptäcka manuella av/på
-    'last_command_power': None,      # Senaste strömkommando vi själva skickade ('on'/'off'/None)
-    'low_power_since': None,         # FIX (symmetri): sätts/läses av lawnmower laddcykel-detektorn
-}
-
-# Återställ failsafe-/larmtimern över omstarter: om pluggen redan varit av en stund
-# ska vi inte nollställa 5-/15-minutersklockorna bara för att processen startat om.
-try:
-    _mower_off_since = logger.get_mower_power_off_since()
-    if _mower_off_since is not None:
-        if _mower_off_since.tzinfo is None:
-            _mower_off_since = _mower_off_since.replace(tzinfo=zoneinfo.ZoneInfo("UTC"))
-        mower_state['power_off_since'] = _mower_off_since.astimezone(SWE_TZ)
-        print(f"🤖 Återställde klipparens av-tid från DB: {mower_state['power_off_since']}")
-except Exception as e:
-    print(f"⚠️ Kunde inte återställa klipparens av-tid: {e}")
 
 
 
@@ -904,98 +878,7 @@ while True:
                                    f"Spabadets skyddssensor(er) har löst ut: {', '.join(_fmap[f] for f in _spa_faults)}.")
                 last_spa_safety_notify = now
             miele_data   = homeassistant.read_miele()
-            mower_data   = homeassistant.read_mower_data()
             trackers     = homeassistant.read_ev_trackers()
-
-            # ============================================================
-            # 🤖 ROBOTGRÄSKLIPPARE – Status, säkerhet & väderstyrning
-            # ============================================================
-            if mower_data is not None:
-                try:
-                    mower_power_w = mower_data.get("power_w")
-                    mower_is_on   = bool(mower_data.get("is_on"))
-
-                    # Väderstyrning kan slås av/på i dashboarden (override 'mower_weather_control').
-                    # Är den av matar vi in "inget oväder", så väderregeln aldrig stänger av – och
-                    # en plugg som redan stängts av p.g.a. väder slås på igen nästa varv.
-                    if all_overrides.get("mower_weather_control", "auto") != "false":
-                        mower_raining, mower_thunder = weather.get_mower_weather_block(now)
-                    else:
-                        mower_raining, mower_thunder = False, False
-                    # Separat regnreglage ('mower_rain_control'): av = regn ignoreras, åska styrs fortfarande av väderstyrningen.
-                    if all_overrides.get("mower_rain_control", "auto") == "false":
-                        mower_raining = False
-
-                    new_mower_state, mower_actions = lawnmower.update_status_and_decide_action(
-                        mower_state, mower_power_w, mower_is_on,
-                        mower_raining, mower_thunder, cfg, now
-                    )
-                    mower_state.update(new_mower_state)
-
-                    # Gör statusen tillgänglig för minutloggen (sensor_log) → dashboarden
-                    mower_data["status"] = mower_state["status"]
-
-                    # --- Manuell av/på-detektering (förändring vi inte själva beordrade) ---
-                    prev_is_on = mower_state.get("prev_is_on")
-                    last_cmd   = mower_state.get("last_command_power")
-                    if prev_is_on is not None and mower_is_on != prev_is_on:
-                        changed_to = "on" if mower_is_on else "off"
-                        if last_cmd != changed_to:  # inte vårt eget kommando → manuellt/externt
-                            if should_notify("notify_mower_manual", True):
-                                notifier.notify_mower_manual_toggle(mower_is_on)
-
-                    # --- Statusbyte-notiser (max 1 per händelse, styrs av växlar) ---
-                    new_status = mower_actions.get("new_lawnmower_status")
-                    status_notify_keys = {
-                        "Klipper": ("notify_mower_mowing", True),
-                        "Laddar":  ("notify_mower_charging", True),
-                        "Vilar":   ("notify_mower_idle", False),  # "Vilar" är av som standard (matchar dashboarden)
-                    }
-                    if new_status in status_notify_keys:
-                        _key, _default = status_notify_keys[new_status]
-                        if should_notify(_key, _default):
-                            notifier.notify_mower_status_change(new_status, mower_power_w or 0.0)
-
-                    # --- Väderstyrning slog av/på strömmen ---
-                    if mower_actions.get("notify_weather_off") and should_notify("notify_mower_weather", True):
-                        notifier.notify_mower_weather_change(False)
-                    if mower_actions.get("notify_weather_on") and should_notify("notify_mower_weather", True):
-                        notifier.notify_mower_weather_change(True)
-
-                    # --- 5-minuters failsafe slog på strömmen igen (bara en notis per av-händelse) ---
-                    if mower_actions.get("notify_failsafe_on") and not mower_state.get("failsafe_notified"):
-                        if should_notify("notify_mower_failsafe", True):
-                            notifier.notify_mower_failsafe_reboot()
-                        mower_state["failsafe_notified"] = True
-
-                    # --- 15-minuterslarm: skickas ALLTID, men bara en gång per av-händelse ---
-                    if mower_actions.get("notify_long_offline"):
-                        if not mower_state.get("long_offline_notified"):
-                            notifier.notify_mower_long_offline()
-                            mower_state["long_offline_notified"] = True
-                    if mower_is_on:
-                        mower_state["long_offline_notified"] = False
-                        mower_state["failsafe_notified"] = False
-
-                    # --- Verkställ strömkommando (absolut förbud mot avstängning under
-                    #     "Klipper" är redan inbakat i lawnmower.update_status_and_decide_action) ---
-                    cmd = mower_actions.get("power")
-                    toggle_ok = True
-                    if cmd == "off":
-                        toggle_ok = homeassistant.toggle_mower_plug(False)
-                    elif cmd == "on":
-                        toggle_ok = homeassistant.toggle_mower_plug(True)
-
-                    # Spara tillstånd inför nästa varv (för manuell-detekteringen). Registrera
-                    # bara kommandot om det faktiskt gick fram – annars skulle ett misslyckat
-                    # kommando dölja en efterföljande manuell omkoppling i samma riktning.
-                    mower_state["last_command_power"] = cmd if (cmd and toggle_ok) else None
-                    mower_state["prev_is_on"]         = mower_is_on
-
-                    # Logga till klipparens egen historik-tabell
-                    logger.log_mower_status(mower_state["status"], mower_power_w, mower_is_on)
-                except Exception as e:
-                    print(f"🔥 Fel i gräsklipparlogiken: {e}")
 
             # Spabad Watchdog
             if gecko_data is None or gecko_data.get("current_temp") is None:
@@ -2088,7 +1971,6 @@ while True:
                 shelly_l1_a=avg_hl1, shelly_l2_a=avg_hl2, shelly_l3_a=avg_hl3,
                 ev_avail_a=sum(ev_amps.values()),
                 forecast_temp=forecast_temp, gecko=gecko_data, spa_power_w=spa_power_w,
-                mower_data=mower_data,
                 ai_action_log="\n\n".join(ai_thoughts_list),
                 active_mode=current_mode, active_decision=current_decision,
                 decision_summary=json.dumps(current_decision_items, ensure_ascii=False),

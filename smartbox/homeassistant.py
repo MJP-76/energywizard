@@ -153,15 +153,6 @@ GECKO_ENTITIES = {
 # switch.shelly_plug_s_gen3, men den noden finns inte längre i Matter-servern (otillgänglig sedan dess), så omstarten av spabadet fungerade aldrig.
 SPA_PLUG = "switch.shelly2"
 
-# --- ROBOTGRÄSKLIPPARE ---
-# Shelly-plugg som matar klipparens laddstation.
-# Entitets-id verifierade direkt mot Home Assistant (live).
-MOWER_ENTITIES = {
-    "power_w": "sensor.shellyb1_effekt",
-    "is_on":   "switch.shellyb1",
-    "energy":  "sensor.shellyb1_energi",
-}
-
 def normalize_ha_url(url: str) -> str:
     """'192.168.1.10' -> 'http://192.168.1.10:8123'. En adress med http:// eller https://
     lämnas som den är (den kan ligga bakom en proxy på port 443)."""
@@ -570,22 +561,6 @@ def read_spa_activities():
         'ozone':     _on('binary_sensor.spabad_ozone'),
     }
 
-def read_mower_data():
-    """Läser av robotgräsklipparens smart plug.
-
-    Returnerar dict med 'power_w' (W), 'is_on' (bool) och 'energy_kwh' (kWh),
-    eller None om avläsningen helt misslyckas. 'is_on' baseras på switchens
-    rå-tillstånd ('on'/'off') – inte på effekten – så att en klippare som är ute
-    och drar 0 W ändå räknas som påslagen plugg."""
-    try:
-        return {
-            "power_w":    _get_numeric_state(MOWER_ENTITIES["power_w"]),
-            "is_on":      _get_raw_state(MOWER_ENTITIES["is_on"]) == "on",
-            "energy_kwh": _get_numeric_state(MOWER_ENTITIES["energy"]),
-        }
-    except Exception:
-        return None
-
 def read_ev_trackers():
     """Läser av GPS-positioner för bilarna för Smart Hemkomst-prognos."""
     return {
@@ -797,7 +772,7 @@ def turn_on_lights(entity_ids: list):
 
 def toggle_spa_plug(turn_on: bool):
     """Slår på eller av strömmen till spabadets smartplug (Shelly, SPA_PLUG). Samma
-    mönster som toggle_mower_plug - main.py:s egen ha_toggle_switch() gör samma sak
+    mönster som turn_on_charger - main.py:s egen ha_toggle_switch() gör samma sak
     men via sina egna råa env-anrop (bygger inte på _VERIFY/SUPERVISOR_TOKEN); den
     här versionen används av SpaDriver istället, inte en ersättning för den befintliga."""
     service = "turn_on" if turn_on else "turn_off"
@@ -837,7 +812,7 @@ def set_climate_temperature(entity_id: str, target_c: float) -> bool:
 
 def set_switch(entity_id: str, turn_on: bool) -> bool:
     """Genuint generisk switch.turn_on/turn_off på en valfri entitet - samma HA-anrop
-    som toggle_mower_plug/toggle_spa_plug/turn_on_charger redan gör var för sig mot
+    som toggle_spa_plug/turn_on_charger redan gör var för sig mot
     hårdkodade entiteter, men återanvändbar av GENERISKA drivrutiner (laddare m.fl.)
     som får sin entitet från husets config istället."""
     service = "turn_on" if turn_on else "turn_off"
@@ -922,23 +897,6 @@ def set_select(entity_id: str, option: str) -> bool:
         print(f"❌ Fel vid select.select_option på {entity_id}: {e}")
         return False
 
-
-def toggle_mower_plug(turn_on: bool):
-    """Slår på eller av strömmen till robotgräsklipparen."""
-    service = "turn_on" if turn_on else "turn_off"
-    try:
-        r = requests.post(
-            f"{_BASE}/services/switch/{service}",
-            headers=_HEADERS,
-            json={"entity_id": MOWER_ENTITIES["is_on"]},
-            timeout=5,
-            verify=_VERIFY,
-        )
-        r.raise_for_status()
-        return True
-    except Exception as e:
-        print(f"❌ Fel vid styrning av robotgräsklipparens plugg: {e}")
-        return False
 
 
 

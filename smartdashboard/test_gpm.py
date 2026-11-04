@@ -32,6 +32,9 @@ def test_peak_shaving_throttles_ev_and_spa():
         'tesla_connected': True,
         'nissan_phases': 'SinglePhase',
         'tesla_phases': 'ThreePhase',
+        # bilarna ur installationen (gpm har inga bilnamn inbyggda sedan 2026-11-04)
+        'car_ids': ['nissan', 'tesla'],
+        'car_specs': {'nissan': {'name': 'Nissan', 'max_a': 20, 'phases': '1'}, 'tesla': {'name': 'Tesla', 'max_a': 16, 'phases': 'auto'}},
         'indoor_temp': 21.0,               # Inget akut frys-läge
         'indoor_min': 19.0,
         'spa_temp': 38.0,

@@ -125,11 +125,13 @@ services:
       - ${DASHBOARD_ENV_PATH:-./secrets/dashboard.env}
     volumes:
       - ./smartbox:/smartbox:ro
+      - ${HOUSE_CONFIG_HOST_PATH:-./config/examples/emil_house.yaml}:/house_config.yaml:ro   # bilarna och laddboxarna ur installationen
       - ew_data:/data
     depends_on:
       postgres-smartbox:
         condition: service_healthy
     environment:
+      - HOUSE_CONFIG_PATH=/house_config.yaml
       - PYTHONUNBUFFERED=1
       - POSTGRES_HOST=postgres-smartbox
       - POSTGRES_USER=${POSTGRES_USER}

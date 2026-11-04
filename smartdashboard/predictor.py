@@ -396,6 +396,16 @@ def simulate_ev_soc_plan(now_dt, ev_schedule, nissan_soc, tesla_soc, cfg, nissan
         'nissan_plugged_in': nissan_plugged_in,
         'tesla_plugged_in': tesla_plugged_in
     }
+    # Bilarnas egenskaper ur installationen (laddplanen har inga bilnamn inbyggda sedan 2026-11-04)
+    try:
+        import os
+        import house_config
+        _hc = house_config.load_house_config(os.environ.get("HOUSE_CONFIG_PATH", "/house_config.yaml"))
+        car_data['car_specs'] = house_config.car_specs(_hc)
+        car_data['car_ids'] = [c for c in ('nissan', 'tesla') if c in car_data['car_specs']]
+    except Exception as e:
+        print(f"⚠️ Kunde inte läsa installationen för laddplanen: {e}")
+        car_data['car_ids'], car_data['car_specs'] = [], {}
     df_plan = decisions.calculate_ev_charge_plan(now_dt, ev_schedule, car_data, cfg)
     
     if df_plan.empty:

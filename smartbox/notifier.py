@@ -252,30 +252,6 @@ def alert_indoor_temp_sensor_offline():
         "EnergyWizard har inte fått några giltiga temperaturvärden (>0°C) från innegivarna (Home Assistant) på över 15 minuter. Värmepumpen använder nu sin egen inbyggda givare som tillfällig backup."
     )
 
-def notify_mower_status_change(new_status: str, power_w: float):
-    """Notis när robotgräsklipparen byter status."""
-    status_map = { # Mappning från status i lawnmower.py till notistext
-        'Klipper': ("✅ Roboten klipper", f"Klipparen har lämnat stationen (förbrukning: {power_w:.1f}W)."),
-        'Laddar': ("🔌 Roboten laddar", f"Klipparen har återvänt till stationen och laddar nu ({power_w:.1f}W)."),
-        'Vilar': ("💤 Roboten vilar", f"Klipparen är fulladdad och vilar i stationen ({power_w:.1f}W).")
-    } # Avstängd hanteras av andra notiser
-    title, message = status_map.get(new_status, (None, None))
-    if title:
-        send_emil(title, message)
-
-def notify_mower_weather_change(is_on: bool):
-    """Notis när väderstyrningen slår av/på klipparen."""
-    if is_on:
-        send_emil("☀️ Roboten återaktiverad", "Regnet har upphört. Strömmen till klipparen är nu påslagen igen.")
-    else:
-        send_emil("🌧️ Roboten parkerad", "Regn/åska detekterat. Strömmen till klipparen stängs av för att skydda den.")
-
-def notify_mower_failsafe_reboot():
-    send_emil("🤖 Roboten Failsafe", "Strömmen till klipparen var avstängd utan anledning i över 5 minuter. Systemet har automatiskt slagit på den igen.")
-
-def notify_mower_long_offline():
-    send_emil("🚨 Roboten Offline?", "Strömmen till klipparen har varit avstängd i över 15 minuter. Kontrollera att allt är OK.")
-
 def alert_price_fallback():
     """Notis när dagens elpriser saknas och systemet kör på gårdagens prisprofil."""
     send_emil(
@@ -294,12 +270,6 @@ def alert_indoor_cold(indoor_temp: float, floor: float, pump_is_manual: bool = F
         f"Inomhustemperaturen har sjunkit till {indoor_temp:.1f}°C (under {floor:.0f}°C).{extra}"
     )
 
-def notify_mower_manual_toggle(is_on: bool):
-    """Notis när strömmen till klipparen slås av/på manuellt (utanför systemets egna regler)."""
-    if is_on:
-        send_emil("🔌 Klippare: Ström PÅ (manuellt)", "Strömmen till robotgräsklipparens laddstation har slagits PÅ manuellt.")
-    else:
-        send_emil("⚫ Klippare: Ström AV (manuellt)", "Strömmen till robotgräsklipparens laddstation har stängts AV manuellt.")
 def alert_peak_shaving_warning(consumed_kwh, current_limit):
     """Notis när tim-medeleffekten riskerar att slå aktuellt effekttak."""
     send_emil(

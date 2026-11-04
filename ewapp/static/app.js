@@ -2,7 +2,7 @@
 // Hem, Plan och Historik får scrolla. Poll medan sidan syns.
 const $ = (s) => document.querySelector(s), app = $("#app");
 const LS = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "nissan", HIST = null, SET = null, PL = null, SV = null, HX = null;
+let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null;
 let svPeriod = LS.get("ew_sv_period", "week"), hxPeriod = LS.get("ew_hx_period", "today"), hxRange = LS.get("ew_hx_range", "24h");
 // gamla flikar (före fem-flik-layouten) pekas om så ingen hamnar på en tom sida
 page = ({ ljus: "hem", energi: "hem", schema: "plan", grafer: "historik" })[page] || page;
@@ -45,7 +45,7 @@ const TABS = { owner: ["hem", "bil", "hus", "plan", "historik"], family: ["hem",
 const TABNAME = { hem: "Hem", bil: "Bil", hus: "Hus", plan: "Plan", historik: "Historik" };
 const primary = () => LS.get("ew_primary", "");
 function chooseCar() {
-  app.innerHTML = `<div class="card" style="text-align:center;display:grid;gap:14px;margin-top:10dvh"><h2 style="margin:0">Vilken bil kör du mest?</h2><div class="note">Den visas stor överst. Du kan byta senare.</div><button class="big" data-p="tesla">Tesla</button><button class="big" data-p="nissan" style="background:linear-gradient(135deg,#a5b4fc,#38bdf8)">Nissan</button></div>`;
+  app.innerHTML = `<div class="card" style="text-align:center;display:grid;gap:14px;margin-top:10dvh"><h2 style="margin:0">Vilken bil kör du mest?</h2><div class="note">Den visas stor överst. Du kan byta senare.</div>${((S && S.cars) || []).map((c, i) => `<button class="big" data-p="${esc(c.key)}"${i % 2 ? ' style="background:linear-gradient(135deg,#a5b4fc,#38bdf8)"' : ""}>${esc(c.name)}</button>`).join("")}</div>`;
   app.querySelectorAll("[data-p]").forEach((b) => b.onclick = () => { LS.set("ew_primary", b.dataset.p); start(); });
 }
 // ---- Bil -------------------------------------------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ function planChart(p, cars) {
   const segs = (c) => { const out = []; (c.plan_slots || []).forEach((q) => { const l = out[out.length - 1]; if (l && q.t - l.e <= 60000) { l.e = q.t + 900000; l.kw += q.kw; l.n++; } else out.push({ s: q.t, e: q.t + 900000, kw: q.kw, n: 1 }); }); return out; };
   const sunH = hs.map((h) => h.sun || 0), sunMax = Math.max(...sunH, 1), hasSun = sunH.some((v) => v > 0), sw = sunWindow(p);
   const sunTxt = sw ? `☀ sol ca ${sw.txt}` : null;
-  const lanes = cars.map((c) => { const g = segs(c).filter((x) => x.e > t0 && x.s < t0 + span), col = c.key === "tesla" ? "var(--acc)" : "var(--acc2)";
+  const lanes = cars.map((c) => { const g = segs(c).filter((x) => x.e > t0 && x.s < t0 + span), col = cars.indexOf(c) % 2 === 0 ? "var(--acc)" : "var(--acc2)";
     const bars = g.map((x) => `<i style="left:${(Math.max(x.s, t0) - t0) / span * 100}%;width:${(Math.min(x.e, t0 + span) - Math.max(x.s, t0)) / span * 100}%;background:${col}" title="${f1(x.kw / x.n)} kW"></i>`).join("");
     const pa = c.plan_all && c.plan_all.blocks && c.plan_all.blocks.length ? c.plan_all : null;
     const full = c.soc != null && c.soc >= 98;
@@ -157,9 +157,8 @@ function limitChip(pw) {
 }
 function pageHus() {
   if (!H) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
-  const h = H.heat, w = H.water, sp = H.spa, m = H.mower, pw = H.power;
+  const h = H.heat, w = H.water, sp = H.spa, pw = H.power;
   const pct = pw.limit_kw && pw.total_w != null ? Math.min(100, (pw.total_w / 1000 / pw.limit_kw) * 100) : 0;
-  const mowerTxt = m.status ? `${esc(m.status)}${m.since ? ` · ${m.since}` : ""}` : "okänd";
   return `<div class="page"><div class="grid2">
   <section class="card tile"><h4>Värme inne <button class="link" data-a="rooms" style="padding:0 0 0 6px;font-size:.8rem">alla rum</button></h4><div class="v">${f1(h.inside)}<small> °C</small></div><div class="note">Mål ${f1(h.target)}° · ute ${f1(h.outside, 0)}° · pump ${h.pump_w != null ? Math.round(h.pump_w) : "–"} W</div>${seg("heat", h.mode, [["auto", "Auto"], ["on", "Varm"], ["off", "Sänkt"]])}</section>
   <section class="card tile"><h4>Varmvatten</h4><div class="v">${f1(w.temp, 0)}<small> °C</small></div><div class="note">COP ${f1(h.cop)}</div>${seg("hotwater", w.mode, [["auto", "Auto"], ["on", "Till"], ["off", "Från"]])}</section>
@@ -247,7 +246,8 @@ const DAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 function schemaInner() {
   if (!SCH) return "";
   const s = SCH[schCar];
-  return `<div class="seg"><button data-a="schcar" data-v="nissan" class="${schCar === "nissan" ? "on" : ""}">Nissan</button><button data-a="schcar" data-v="tesla" class="${schCar === "tesla" ? "on" : ""}">Tesla</button></div>
+  const _cs = (S && S.cars) || []; if (!_cs.some((c) => c.key === schCar) && _cs.length) schCar = _cs[0].key;
+  return `<div class="seg">${_cs.map((c) => `<button data-a="schcar" data-v="${esc(c.key)}" class="${schCar === c.key ? "on" : ""}">${esc(c.name)}</button>`).join("")}</div>
   <div class="note" style="text-align:center">Klar till vald tid och batterinivå. Av = laddar bara enligt pris/Auto.</div>
   <div class="sched">${DAYS.map((d, i) => { const x = s[i]; return `<div class="card srow"><b>${d}</b><button class="sw ${x.enabled ? "on" : ""}" data-a="sch" data-d="${i}" data-f="enabled" aria-label="${d} på/av"></button><button class="tm" data-a="schclock" data-d="${i}" aria-label="${d} klar kl"><span>${x.time}</span></button><div class="step"><button data-a="sch" data-d="${i}" data-f="soc-">−</button><span>${x.soc}%</span><button data-a="sch" data-d="${i}" data-f="soc+">+</button></div></div>`; }).join("")}</div>`;
 }
@@ -328,10 +328,10 @@ async function hardReload() {
   location.reload();
 }
 let doneShortcut = false, grAt = 0;
-function runShortcut() {                              // genvägar från ikonens långtryck: ./?do=goodnight, windows_on, windows_off, tesla_start, nissan_start
+function runShortcut() {                              // genvägar från ikonens långtryck: ./?do=goodnight, windows_on, windows_off, <bil>_start
   const q = new URLSearchParams(location.search).get("do"); if (!q) return; history.replaceState(null, "", location.pathname);
   if (["windows_on", "windows_off", "goodnight"].includes(q) && can("lights")) { api("lights", { action: q }).then((r) => toast(r.msg)).catch((e) => toast(e.message)); return; }
-  const m = /^(tesla|nissan)_start$/.exec(q); if (m && can("start")) { const nm = m[1] === "tesla" ? "Teslan" : "Nissan"; sheet(`<h3>Ladda ${nm} nu?</h3><div class="note">Startar laddning direkt, oavsett schema.</div><button class="big" data-x="ok">Ja, ladda</button><button class="mini" data-x="no">Avbryt</button>`); $("#sheet").onclick = (e) => { const b = e.target.closest("[data-x]"); if (!b) { if (e.target.id === "sheet") closeSheet(); return; } closeSheet(); if (b.dataset.x === "ok") act(m[1], "start"); }; }
+  const m = /^(.+)_start$/.exec(q), _sc = m && S && S.cars.find((c) => c.key === m[1]); if (m && _sc && can("start")) { const nm = _sc.name; sheet(`<h3>Ladda ${nm} nu?</h3><div class="note">Startar laddning direkt, oavsett schema.</div><button class="big" data-x="ok">Ja, ladda</button><button class="mini" data-x="no">Avbryt</button>`); $("#sheet").onclick = (e) => { const b = e.target.closest("[data-x]"); if (!b) { if (e.target.id === "sheet") closeSheet(); return; } closeSheet(); if (b.dataset.x === "ok") act(m[1], "start"); }; }
 }
 async function loadGreeting() { if (Date.now() - grAt < 120000) return; grAt = Date.now(); try { GR = await api("greeting?lang=" + I18N.lang + (ROLE === "owner" && VIEWAS ? "&as=" + VIEWAS : "")); render(); } catch {} }
 async function load() {
@@ -357,7 +357,7 @@ window.addEventListener("popstate", (e) => {                                    
 });
 function powerSheet(key) {
   const c = S.cars.find((x) => x.key === key); let amps = c.amps || 16, ph = c.phases || c.default_phases;
-  const draw = () => sheet(`<h3>Välj laddeffekt – ${esc(c.name)}</h3><div class="seg">${[6, 10, 16].map((a) => `<button data-v="a${a}" class="${amps === a ? "on" : ""}">${a} A</button>`).join("")}</div>${c.default_phases === 3 ? `<div class="seg">${[1, 3].map((f) => `<button data-v="p${f}" class="${ph === f ? "on" : ""}">${f}-fas</button>`).join("")}</div>` : `<div class="note">Nissan laddar på 1-fas.</div>`}<div class="note">≈ ${f1((amps * 230 * (c.default_phases === 3 ? ph : 1)) / 1000)} kW</div><button class="big" data-v="go">Starta laddning</button>`);
+  const draw = () => sheet(`<h3>Välj laddeffekt – ${esc(c.name)}</h3><div class="seg">${[6, 10, 16].map((a) => `<button data-v="a${a}" class="${amps === a ? "on" : ""}">${a} A</button>`).join("")}</div>${c.default_phases === 3 ? `<div class="seg">${[1, 3].map((f) => `<button data-v="p${f}" class="${ph === f ? "on" : ""}">${f}-fas</button>`).join("")}</div>` : `<div class="note">${esc(c.name)} laddar på 1-fas.</div>`}<div class="note">≈ ${f1((amps * 230 * (c.default_phases === 3 ? ph : 1)) / 1000)} kW</div><button class="big" data-v="go">Starta laddning</button>`);
   draw();
   $("#sheet").onclick = async (e) => { const b = e.target.closest("[data-v]"); if (!b) { if (e.target.id === "sheet") closeSheet(); return; } const v = b.dataset.v; if (v[0] === "a") { amps = +v.slice(1); draw(); } else if (v[0] === "p") { ph = +v.slice(1); draw(); } else if (v === "go") { closeSheet(); await act(key, "set", { amps, phases: c.default_phases === 3 ? ph : 1 }); } };
 }
@@ -380,7 +380,7 @@ async function carDataSheet(key, first = true) {
     sheet(`<h3>${esc(car.name)} – all data</h3><div class="note">${d.valid} av ${d.total} entiteter har giltigt värde. ✓ = validerad, ⚠ = otillgänglig eller gammal.</div>
   <div class="seg" style="grid-auto-flow:row;grid-template-columns:1fr 1fr">${d.buttons.map((b) => `<button data-p="${b}">${BTN[b] || b}</button>`).join("")}</div>
   <div class="chips">${names.map((g) => `<button class="chip ${g === cdGroup ? "on" : ""}" data-g="${esc(g)}" style="padding:4px 10px;font-size:.78rem">${esc(g)}</button>`).join("")}</div>
-  ${rows.map((r) => `<div class="setrow"><span>${r.valid ? "✓" : "⚠"} ${esc(r.name.replace(/^(Tesla MY|Leaf|Nissan) ?/i, ""))}</span><span class="note" style="text-align:right;${r.valid ? "" : "color:var(--warn)"}">${esc(r.state)} ${esc(r.unit)}${r.why ? ` · ${esc(r.why)}` : ""}</span></div>`).join("")}
+  ${rows.map((r) => `<div class="setrow"><span>${r.valid ? "✓" : "⚠"} ${esc(r.name.replace(new RegExp("^(" + car.name.split(" ").map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")( |$)+", "i"), ""))}</span><span class="note" style="text-align:right;${r.valid ? "" : "color:var(--warn)"}">${esc(r.state)} ${esc(r.unit)}${r.why ? ` · ${esc(r.why)}` : ""}</span></div>`).join("")}
   ${pages > 1 ? `<div class="seg"><button data-pg="-1" ${cdPage === 0 ? "disabled" : ""}>‹</button><button disabled>${cdPage + 1} / ${pages}</button><button data-pg="1" ${cdPage >= pages - 1 ? "disabled" : ""}>›</button></div>` : ""}`);
   };
   fitSheet(draw, sheetRows(360, 52));
@@ -421,14 +421,15 @@ function spaReadySheet() {
     if (v === "t+") { temp = Math.min(40, temp + 0.5); draw(); } else if (v === "t-") { temp = Math.max(20, temp - 0.5); draw(); }
     else if (v === "go" || v === "off") { try { const r = await api("home/spa_ready", v === "off" ? { off: true } : { when, temp }); closeSheet(); toast(r.msg); H = await api("home"); render(); } catch (er) { toast(er.message); } } };
 }
-function accessSheet() {
-  const c = S.cars.find((x) => x.key === "tesla"); if (!c || !c.access) return; const a = c.access;
-  sheet(`<h3>Tesla – lås & luckor</h3><div class="note">Bilen är ${a.locked ? "<b>låst</b>" : "<b style='color:var(--warn)'>upplåst</b>"}. Upplåsning och luckor kräver lösenordet (gäller i 10 min).</div><div class="seg"><button data-x="${a.locked ? "unlock" : "lock"}">${a.locked ? "Lås upp" : "Lås"}</button></div><div class="seg"><button data-x="trunk">${a.trunk ? "Stäng baklucka" : "Öppna baklucka"}</button><button data-x="frunk">${a.frunk ? "Stäng framlucka" : "Öppna framlucka"}</button></div>`);
+let ACCESS_CAR = null;
+function accessSheet(key) {
+  const c = S.cars.find((x) => x.key === key) || S.cars.find((x) => x.access); if (!c || !c.access) return; const a = c.access; ACCESS_CAR = c.key;
+  sheet(`<h3>${esc(c.name)} – lås & luckor</h3><div class="note">Bilen är ${a.locked ? "<b>låst</b>" : "<b style='color:var(--warn)'>upplåst</b>"}. Upplåsning och luckor kräver lösenordet (gäller i 10 min).</div><div class="seg"><button data-x="${a.locked ? "unlock" : "lock"}">${a.locked ? "Lås upp" : "Lås"}</button></div>${a.has_trunk || a.has_frunk ? `<div class="seg">${a.has_trunk ? `<button data-x="trunk">${a.trunk ? "Stäng baklucka" : "Öppna baklucka"}</button>` : ""}${a.has_frunk ? `<button data-x="frunk">${a.frunk ? "Stäng framlucka" : "Öppna framlucka"}</button>` : ""}</div>` : ""}`);
   $("#sheet").onclick = async (e) => { const b = e.target.closest("[data-x]"); if (!b) { if (e.target.id === "sheet") closeSheet(); return; } closeSheet(); await access(b.dataset.x); };
 }
 async function access(what) {
   if (busy) return; busy = true; buzz(30);
-  try { let r; try { r = await api("tesla/access", { what }); } catch (e) { if (e.message !== "secure") throw e; busy = false; return askPassword(what); } toast(r.msg); setTimeout(async () => { try { S = await api("state"); if (!sheetOpen()) render(); } catch {} }, 4000); }
+  try { let r; try { r = await api(`car/${ACCESS_CAR}/access`, { what }); } catch (e) { if (e.message !== "secure") throw e; busy = false; return askPassword(what); } toast(r.msg); setTimeout(async () => { try { S = await api("state"); if (!sheetOpen()) render(); } catch {} }, 4000); }
   catch (e) { toast(e.message); } finally { busy = false; }
 }
 function askPassword(what) {
@@ -464,7 +465,7 @@ async function settingsSheet() {
       `<div class="setrow"><span>Elpriser inkl. moms${v.nordpool_vat_enabled == null ? ' <span class="note">(nuvarande läge okänt)</span>' : ""}</span><button class="sw${v.nordpool_vat_enabled ? " on" : ""}" data-set="nordpool_vat_enabled" data-bool="1">${v.nordpool_vat_enabled == null ? "?" : ""}</button></div>` +
       `<div class="note">Styr Home Assistants egen Nord Pool-integration direkt (radera+återskapa, ingen enkel "ändra ett fält"-knapp finns i HA) - priserna växlar om efter några sekunder. Kan inte visa nuvarande läge förrän du växlat minst en gång härifrån.</div>`,
     notiser: () => `${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`,
-    appen: () => `<div class="seg"><button data-s="tesla" class="${primary() === "tesla" ? "on" : ""}">Huvudbil: Tesla</button><button data-s="nissan" class="${primary() === "nissan" ? "on" : ""}">Huvudbil: Nissan</button></div><div class="seg"><button data-s="glass" class="${LS.get("ew_glass", "1") !== "0" ? "on" : ""}">Glasdesign</button><button data-s="ambient" class="${LS.get("ew_ambient", "1") !== "0" ? "on" : ""}">Dygnsfärger</button></div><div class="seg"><button data-s="simple" class="${LS.get("ew_simple", "") === "1" ? "on" : ""}">Enkel vy (bara huvudbilen)</button>${standalone ? "" : `<button data-s="install">${installEvt ? "Installera appen" : "Lägg till på hemskärmen"}</button>`}</div><div class="seg"><button data-s="reload">Ladda om appen</button></div>
+    appen: () => `<div class="seg">${((S && S.cars) || []).map((c) => `<button data-s="car:${esc(c.key)}" class="${primary() === c.key ? "on" : ""}">Huvudbil: ${esc(c.name)}</button>`).join("")}</div><div class="seg"><button data-s="glass" class="${LS.get("ew_glass", "1") !== "0" ? "on" : ""}">Glasdesign</button><button data-s="ambient" class="${LS.get("ew_ambient", "1") !== "0" ? "on" : ""}">Dygnsfärger</button></div><div class="seg"><button data-s="simple" class="${LS.get("ew_simple", "") === "1" ? "on" : ""}">Enkel vy (bara huvudbilen)</button>${standalone ? "" : `<button data-s="install">${installEvt ? "Installera appen" : "Lägg till på hemskärmen"}</button>`}</div><div class="seg"><button data-s="reload">Ladda om appen</button></div>
       <div class="note" style="margin-top:6px">Språk / Language</div><div class="seg" data-noi18n>${Object.entries(I18N.languages).map(([k, v]) => `<button data-s="lang:${k}" class="${I18N.lang === k ? "on" : ""}">${esc(v)}</button>`).join("")}</div>
       <div class="seg"><a class="mini" href="${I18N.TRANSLATE_URL}" target="_blank" rel="noopener">Hjälp till att översätta</a><a class="mini" href="${SPONSOR_URL}" target="_blank" rel="noopener">❤️ Sponsra EnergyWizard</a></div>
       ${ER() === "owner" ? `<div class="seg"><button data-s="sponsornotice" class="${SPONSOR && SPONSOR.enabled ? "on" : ""}">Påminn mig en gång i månaden</button></div>` : ""}`,
@@ -480,7 +481,7 @@ async function settingsSheet() {
     if (s.startsWith("lang:")) { const l = s.slice(5); if (ER() === "owner") { try { await api("setup/language", { language: l }); } catch {} } I18N.set(l); return; }
     if (s === "sponsornotice") { try { const r = await api("sponsor/notice", { enabled: !(SPONSOR && SPONSOR.enabled) }); SPONSOR = { ...(SPONSOR || {}), enabled: r.enabled }; } catch (er) { toast(er.message); } settingsSheet(); return; }
     if (s === "glass" || s === "ambient") { LS.set("ew_" + s, LS.get("ew_" + s, "1") !== "0" ? "0" : "1"); applyLook(); }
-    if (s === "tesla" || s === "nissan") LS.set("ew_primary", s); if (s === "simple") LS.set("ew_simple", LS.get("ew_simple", "") === "1" ? "" : "1");
+    if (s.startsWith("car:")) LS.set("ew_primary", s.slice(4)); if (s === "simple") LS.set("ew_simple", LS.get("ew_simple", "") === "1" ? "" : "1");
     if (s === "install") { installApp(); return; }
     if (s === "reload") { hardReload(); return; }
     if (s === "logout") { try { await api("logout", {}); } catch {} hardReload(); return; } closeSheet();
@@ -508,11 +509,10 @@ document.addEventListener("click", async (e) => {
   if (a === "swap") { LS.set("ew_primary", c); return render(); }
   if (a === "settings") return settingsSheet();
   if (a === "health") return healthSheet();
-  if (a === "access") return accessSheet();
+  if (a === "access") return accessSheet(c);
   if (a === "cardata") return carDataSheet(c);
   if (a === "home") { buzz(); try { const r = await api("home/" + b.dataset.k, { value: v }); toast(r.msg); H = await api("home"); render(); } catch (er) { toast(er.message); } return; }
   if (a === "spa") { buzz(); try { const r = await api("home/" + b.dataset.k, { value: v === "1" }); toast(r.msg); H = await api("home"); render(); } catch (er) { toast(er.message); } return; }
-  if (a === "mower") { buzz(); try { const r = await api("home/mower", { value: v }); toast(r.msg); setTimeout(async () => { try { H = await api("home"); render(); } catch {} }, 1500); } catch (er) { toast(er.message); } return; }
   if (a === "energy" && b.dataset.k === "limit" && +v < 100 && !b.dataset.ok) {      // 0–75 % stryper solelen: kräver bekräftelse så att det inte sker av misstag
     sheet(`<h3>Begränsa solelen till ${v} %?</h3><div class="note">Exporten och solproduktionen begränsas tills du väljer 100 % igen. AI:n släpper begränsningen själv bara vid minuspris.</div><button class="big stop" data-x="ok">Ja, begränsa till ${v} %</button><button class="mini" data-x="no">Avbryt</button>`);
     $("#sheet").onclick = (e) => { const x = e.target.closest("[data-x]"); if (e.target.id === "sheet" || (x && x.dataset.x === "no")) return closeSheet(); if (x) { closeSheet(); b.dataset.ok = "1"; b.click(); delete b.dataset.ok; } };

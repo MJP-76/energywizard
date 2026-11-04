@@ -62,8 +62,25 @@ class Auth:
         user = (user or role).replace(".", "_")
         return f"{exp}.{role}.{user}.{hmac.new(self.secret, f'{exp}.{role}.{user}'.encode(), hashlib.sha256).hexdigest()}"
 
+    # Home Assistant Ingress (issue #118): som tillägg öppnas webben inuti HA ("Öppna webbgränssnittet"), och HA har
+    # redan loggat in användaren. Sådana anrop kommer från Supervisorns interna adress med X-Ingress-Path - adressen
+    # går inte att förfalska från nätet (det är TCP-avsändaren, inte en header). Bara när vi kör som tillägg.
+    INGRESS_PEER = "172.30.32.2"
+
+    @classmethod
+    def ingress_user(cls, request: Request):
+        if not os.environ.get("SUPERVISOR_TOKEN"):
+            return None
+        peer = request.client.host if request.client else ""
+        if peer != cls.INGRESS_PEER or not request.headers.get("x-ingress-path"):
+            return None
+        return (request.headers.get("x-remote-user-name") or "owner").replace(".", "_")[:40]
+
     def session(self, request: Request):
-        """(roll, användare) ur kakan, eller (None, None)."""
+        """(roll, användare) ur kakan, eller (None, None). Via HA Ingress: ägaren (HA har redan loggat in)."""
+        iu = self.ingress_user(request)
+        if iu:
+            return "owner", iu
         v = request.cookies.get(self.cookie, "")
         try:
             exp, role, user, sig = v.split(".", 3)
@@ -152,7 +169,9 @@ class Auth:
 OPEN_PATHS = ("/api/setup/status", "/api/setup/password", "/api/setup/language")
 
 SECURITY_HEADERS = {
-    "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+    # SAMEORIGIN, inte DENY: HA visar tillägg via Ingress i en ram på sin egen sida (samma ursprung) - DENY blockerade
+    # "Öppna webbgränssnittet" helt (issue #118). Andra webbplatser kan fortfarande inte rama in sidan.
+    "X-Content-Type-Options": "nosniff", "X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "no-referrer",
     "Strict-Transport-Security": "max-age=31536000",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
 }

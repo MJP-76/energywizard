@@ -19,8 +19,8 @@ DB_NAME = os.environ.get("POSTGRES_DB")
 LATITUDE  = 57.6797
 LONGITUDE = 14.1293
 
-# Robotgräsklippare: SMHI rapporterar åska som en sannolikhet i procent (parametern "tstm").
-# Över denna gräns betraktar vi det som åska och stänger av klipparens plugg.
+# SMHI rapporterar åska som en sannolikhet i procent (parametern "tstm").
+# Över denna gräns betraktar vi det som åska.
 THUNDER_PROB_THRESHOLD = 20.0
 
 from logger import get_db, get_db_pool
@@ -287,38 +287,3 @@ def is_thundering_soon(hours_ahead=2):
             return cur.fetchone() is not None
     except Exception:
         return False
-
-def get_mower_weather_block(now=None):
-    """
-    Avgör om robotgräsklipparen bör skyddas mot vädret just nu.
-
-    Tittar på aktuell timmes prognos (och nästa timme, för att hinna parkera innan
-    ovädret är framme). Returnerar tupeln (is_raining, is_thunder).
-
-    FAIL-SAFE: Om prognosdata saknas eller är inaktuell returneras (False, False),
-    dvs. klipparen tillåts köra. Vi vill hellre missa en avstängning än att felaktigt
-    parkera klipparen p.g.a. en trasig/inaktuell väderkälla.
-    """
-    if now is None:
-        now = datetime.now(SWE_TZ)
-    this_hour = now.replace(minute=0, second=0, microsecond=0)
-    next_hour = this_hour + timedelta(hours=1)
-    try:
-        with get_db() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT precipitation_category, thunder_probability
-                FROM weather_forecast
-                WHERE timestamp IN (%s, %s)
-                """,
-                (this_hour, next_hour),
-            )
-            rows = cur.fetchall()
-        if not rows:
-            return False, False
-        is_raining = any(r[0] is not None and float(r[0]) >= 3 for r in rows)
-        is_thunder = any(r[1] is not None and float(r[1]) >= THUNDER_PROB_THRESHOLD for r in rows)
-        return is_raining, is_thunder
-    except Exception as e:
-        print(f"❌ Fel vid väderkoll för gräsklippare: {e}")
-        return False, False

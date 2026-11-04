@@ -1037,9 +1037,6 @@ NOTIFY_LABELS = {
     "notify_high_low": "Höglast/baslast byter", "notify_peak_shaving": "Effektvakten griper in",
     "notify_pump_alarm": "Värmepumpen larmar", "notify_pump_mode": "Värmepumpen byter läge",
     "notify_solar_error": "Solcellsväxelriktaren svarar inte", "notify_solar_limit": "Solexporten begränsas/släpps",
-    "notify_mower_mowing": "Robotgräsklipparen klipper", "notify_mower_charging": "Robotgräsklipparen laddar",
-    "notify_mower_idle": "Robotgräsklipparen vilar", "notify_mower_weather": "Robotgräsklipparen pausar pga väder",
-    "notify_mower_manual": "Robotgräsklipparen körs manuellt", "notify_mower_failsafe": "Robotgräsklipparens failsafe",
 }
 
 
