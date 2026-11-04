@@ -171,8 +171,12 @@ def _is_real_house(h: str) -> bool:
 def _norm(rest: str) -> str:
     """'easee@Easee' -> 'easee': märket är samma som drivrutinens namn och ska inte ge en egen rad."""
     drv, _, brand = rest.partition("@")
-    b = brand.lower().replace(" ", "")
-    return drv if brand and (b.startswith(drv.lower()) or drv.lower().startswith(b)) else rest
+    maker, _, model = brand.partition("#")             # "Easee#Home" = märke + modell
+    b = maker.lower().replace(" ", "")
+    same = brand and (b.startswith(drv.lower()) or drv.lower().startswith(b))
+    if same:
+        return f"{drv}@{maker}#{model}" if model else drv
+    return rest
 
 
 @app.get("/api/stats")

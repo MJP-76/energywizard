@@ -142,13 +142,14 @@ Hjälper utvecklaren att se vilken utrustning som används och att hitta fel hos
 Skickas en gång per dygn och vid start, till `https://energywizzard.profitalgos.com/telemetry`:
 
 - **Ett slumpat installations-ID** (skapas vid första start och sparas i `/data/energywizard.json`, skickas hashat). Inget som går att koppla till dig.
-- **Utrustningen:** drivrutin per kategori och märket enligt Home Assistants enhetsregister, t.ex. `battery:generic@Solis`, `meter:ha@Tibber`. Inga entitets-ID:n.
+- **Utrustningen:** drivrutin per kategori, märke och modell enligt Home Assistants enhetsregister, t.ex. `heatpump:generic_climate@NIBE#S1255`, `meter:ha@Tibber`, och var innetemperaturen kommer ifrån (givare i HA, värmepumpens givare eller ingen). Inga entitets-ID:n.
 - **Inställningar:** priskälla, land, om batteriet styrs eller bara läses (och vilken förinställning), skuggläge och tidstariff på/av.
 - **Ungefärliga storlekar:** batteri och elbil i intervall (t.ex. `10-15kWh`), huvudsäkringen i ampere.
+- **Temperaturer:** inne och ute, avrundade till hela grader, en gång per dygn.
 - **Fel:** var i koden ett fel uppstod (`modul.funktion`) och feltypen (t.ex. `ConnectionError`), högst en gång per dygn och fel. **Aldrig feltexten**, eftersom den kan innehålla adresser eller namn. Felen samlas och blir automatiskt ärenden här på GitHub (etiketten `auto-fel`), utan något som pekar ut ett hus.
 - Versionsnummer och en tidsstämpel.
 
-Aldrig: namn, adress, plats, IP-adresser i innehållet, mätvärden, elpriser, avgifter eller historik. Se `smartbox/telemetry.py`
+Aldrig: namn, adress, plats, IP-adresser i innehållet, andra mätvärden, elpriser, avgifter eller historik. Se `smartbox/telemetry.py`
 för exakt vad som skickas och `telemetry-collector/` för mottagaren (du kan köra en egen:
 `docker compose --profile telemetry-collector up -d`).
 

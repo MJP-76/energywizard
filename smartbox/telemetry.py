@@ -96,8 +96,12 @@ def _brand(section: dict, maker_fn) -> str:
         m = (maker_fn(e) or "").strip()
     except Exception:
         return ""
-    m = "".join(ch for ch in m if ch.isalnum() or ch in " -_.")[:40].strip()
-    return f"@{m}" if m else ""
+    m, _, model = m.partition("|")                     # _ha_maker: "tillverkare|modell"
+    clean = lambda x, n: "".join(ch for ch in x if ch.isalnum() or ch in " -_.")[:n].strip()
+    m, model = clean(m, 40), clean(model, 40)
+    if model and m and model.lower().startswith(m.lower()):
+        model = model[len(m):].strip()
+    return (f"@{m}" + (f"#{model}" if model else "")) if m else ""
 
 
 def _ha_maker(entity_id: str) -> str:
@@ -105,7 +109,8 @@ def _ha_maker(entity_id: str) -> str:
     import homeassistant
     if not homeassistant.configured() or not re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", entity_id or ""):
         return ""
-    template = "{{ device_attr(device_id('%s'), 'manufacturer') or '' }}" % entity_id
+    template = ("{%% set d = device_id('%s') %%}{{ device_attr(d, 'manufacturer') or '' }}|{{ device_attr(d, 'model') or '' }}"
+                % entity_id)
     r = requests.post(f"{homeassistant._BASE}/template", headers=homeassistant._HEADERS, timeout=5,
                       verify=homeassistant._VERIFY, json={"template": template})
     r.raise_for_status()
@@ -148,6 +153,34 @@ def _bucket(v, edges, unit):
             return f"{lo}-{e}{unit}"
         lo = e
     return f"{lo}+{unit}"
+
+
+# Senaste läget ur huvudloopen (note_state), avrundat när det skickas. Bara med i den dagliga rapporten.
+_state: dict = {}
+_state_sent = {"with_temps": False}
+
+
+def note_state(indoor=None, outdoor=None, indoor_source=None, indoor_sensors=0, indoor_entities=None):
+    """Anropas varje varv: innetemperatur, ute, varifrån innetemperaturen kommer (ha_sensors/heatpump/none)
+    och vilka givare (bara för att slå upp märket - entiteterna skickas aldrig)."""
+    _state.update(indoor=indoor, outdoor=outdoor, indoor_source=indoor_source, indoor_sensors=indoor_sensors,
+                  indoor_entities=list(indoor_entities or [])[:6])
+
+
+def _state_summary(maker_fn=None) -> list[str]:
+    out = []
+    src = _state.get("indoor_source")
+    if src:
+        brands = sorted({b for b in (_brand({"entities": {"e": e}}, maker_fn) for e in _state.get("indoor_entities") or []) if b})
+        n = _state.get("indoor_sensors") or 0
+        out.append(f"indoor:{src}" + (f"_{n}" if src == "ha_sensors" else "") + (brands[0] if len(brands) == 1 else ""))
+        if len(brands) > 1:
+            out.append(f"indoor:mixed@{'+'.join(x.lstrip('@').split('#')[0] for x in brands)[:60]}")
+    for key, name in (("indoor", "temp:inne"), ("outdoor", "temp:ute")):
+        v = _state.get(key)
+        if isinstance(v, (int, float)) and -60 < v < 60:
+            out.append(f"{name}_{int(round(v))}C")
+    return out
 
 
 def _setup_summary(cfg: dict) -> list[str]:
@@ -196,8 +229,13 @@ def maybe_send_daily(cfg: dict, now: datetime | None = None) -> None:
     """Anropas varje varv i huvudloopen: skickar översikten igen när ett dygn gått (signalen "aktiv")."""
     global _last_snapshot
     now = now or datetime.now(timezone.utc)
-    if not (OPT_IN and ENDPOINT) or (_last_snapshot is not None and now - _last_snapshot < SNAPSHOT_EVERY):
+    if not (OPT_IN and ENDPOINT):
         return
+    # Startrapporten skickas innan något är uppmätt: skicka en gång till när temperaturerna finns (sedan dygnsvis).
+    first_temps = not _state_sent["with_temps"] and _state.get("indoor_source") is not None
+    if not first_temps and _last_snapshot is not None and now - _last_snapshot < SNAPSHOT_EVERY:
+        return
+    _state_sent["with_temps"] = _state_sent["with_temps"] or first_temps
     _last_snapshot = now                              # sätts direkt: en långsam HA ska inte ge flera trådar
     import threading
     threading.Thread(target=send_driver_snapshot, args=(cfg,), daemon=True, name="telemetry-daily").start()
@@ -213,7 +251,7 @@ def send_driver_snapshot(cfg: dict) -> None:
         payload = {
             "house": house_hash(cfg),
             "version": _software_version(),
-            "drivers": _driver_summary(cfg, _ha_maker),
+            "drivers": _driver_summary(cfg, _ha_maker) + _state_summary(_ha_maker),
             "ts": datetime.now(timezone.utc).isoformat(),
         }
         requests.post(f"{ENDPOINT}/ingest/drivers", json=payload, timeout=5)

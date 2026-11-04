@@ -104,13 +104,14 @@ Helps the developer see which equipment is used and find errors in other install
 Sent once a day and at start, to `https://energywizzard.profitalgos.com/telemetry`:
 
 - **A random installation ID** (created at first start, stored in `/data/energywizard.json`, sent hashed). Nothing that can be tied to you.
-- **Equipment:** the driver per category and the brand from Home Assistant's device registry, e.g. `battery:generic@Solis`, `meter:ha@Tibber`. No entity ids.
+- **Equipment:** the driver per category, brand and model from Home Assistant's device registry, e.g. `heatpump:generic_climate@NIBE#S1255`, `meter:ha@Tibber`, and where the indoor temperature comes from (sensors in HA, the heat pump's sensor or none). No entity ids.
 - **Settings:** price source, country, whether the battery is controlled or only read (and which preset), shadow mode and time-of-use tariff on/off.
 - **Approximate sizes:** battery and car in ranges (e.g. `10-15kWh`), the main fuse in amperes.
+- **Temperatures:** indoor and outdoor, rounded to whole degrees, once a day.
 - **Errors:** where in the code an error happened (`module.function`) and its type (e.g. `ConnectionError`), at most once a day per error. **Never the error message**, as it can contain addresses or names. Errors are collected and automatically become issues here on GitHub (label `auto-fel`), with nothing that identifies a house.
 - Version number and a timestamp.
 
-Never: names, addresses, location, measurements, electricity prices, fees or history. See `smartbox/telemetry.py` for exactly
+Never: names, addresses, location, other measurements, electricity prices, fees or history. See `smartbox/telemetry.py` for exactly
 what is sent. To send nothing at all, set `TELEMETRY_OPT_IN=false` in your `.env`.
 
 ## 🌍 Translate

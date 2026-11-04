@@ -209,3 +209,17 @@ def test_felkroken_skickar_plats_och_typ_aldrig_texten(monkeypatch):
         builtins.print = orig
     assert sent == [("test_telemetry.ladda", "ConnectionError")]
     assert not any("192.168" in m or "hemlig" in m for m, _ in sent)
+
+
+def test_modell_innegivare_och_avrundade_temperaturer(monkeypatch):
+    t = _reload(monkeypatch)
+    makers = {"sensor.vp": "NIBE Energy Systems|S1255", "sensor.a": "Aqara|Temp sensor", "sensor.b": "Aqara|T1"}
+    assert t._brand({"entities": {"x": "sensor.vp"}}, makers.get) == "@NIBE Energy Systems#S1255"
+    assert t._brand({"entities": {"x": "sensor.z"}}, {"sensor.z": "Gecko|"}.get) == "@Gecko"
+    t._state.clear()
+    t.note_state(indoor=21.64, outdoor=-3.4, indoor_source="ha_sensors", indoor_sensors=2, indoor_entities=["sensor.a", "sensor.b"])
+    out = t._state_summary(makers.get)
+    assert out[0].startswith("indoor:ha_sensors_2") and "temp:inne_22C" in out and "temp:ute_-3C" in out
+    assert not any("21.6" in x or "sensor." in x for x in out)
+    t.note_state(indoor=20.0, indoor_source="heatpump")
+    assert t._state_summary(None)[0] == "indoor:heatpump"

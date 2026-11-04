@@ -1238,10 +1238,17 @@ async function renderInstalls() {
   const prettyDrv = (drv) => {
     if (DRIVER_NAMES[drv]) return DRIVER_NAMES[drv];
     if (drv.startsWith("preset_")) return "förinställning " + drv.slice(7);
+    let m;
+    if ((m = drv.match(/^ha_sensors_(\d+)$/))) return `${m[1]} givare i HA`;
+    if (drv === "heatpump") return "värmepumpens givare";
+    if (drv === "none") return "ingen";
+    if (drv === "mixed") return "flera märken";
+    if ((m = drv.match(/^(inne|ute)_(-?\d+)C$/))) return `${m[1]} ${m[2]} °C`;
     const pre = Object.keys(SIZE_PRE).find((p) => drv.startsWith(p));
     return pre ? SIZE_PRE[pre] + drv.slice(pre.length).replace(/(\d)(kWh|A)$/, "$1 $2") : drv;
   };
-  const labelOf = (k) => { const [drv, brand] = k.split("@"); const dn = prettyDrv(drv);
+  const labelOf = (k) => { const [drv, brandModel] = k.split("@"); const dn = prettyDrv(drv);
+    const brand = brandModel ? brandModel.replace("#", " ") : brandModel;
     return brand && brand.toLowerCase() !== dn.toLowerCase() ? `<b>${esc(brand)}</b> <span class="note">${esc(dn)}</span>` : `<b>${esc(dn)}</b>`; };
   const big = (n, t) => `<div><div style="font-size:2rem;font-weight:800">${n}</div><div class="note">${t}</div></div>`;
   const summary = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
@@ -1252,7 +1259,7 @@ async function renderInstalls() {
     const n = Object.values(h.devices).reduce((a, l) => a + l.length, 0);
     const rows = INSTALL_CATS.map(([cat, ico, name]) => {
       const list = h.devices[cat] || [];
-      if (!list.length && ["meter", "price", "country", "size", "mode"].includes(cat)) return "";   // äldre versioner skickar inte dessa
+      if (!list.length && ["meter", "price", "country", "size", "indoor", "temp", "mode"].includes(cat)) return "";   // äldre versioner skickar inte dessa
       const counts = {}; list.forEach((x) => counts[x] = (counts[x] || 0) + 1);
       const val = list.length ? Object.entries(counts).map(([k, c]) => labelOf(k) + (c > 1 ? ` × ${c}` : "")).join(", ") : `<span class="note">–</span>`;
       return `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${ico}</span>
@@ -1276,7 +1283,7 @@ async function renderInstalls() {
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
 const INSTALL_CATS = [["heatpump", "🌡️", "Värmepump"], ["spa", "🛁", "Spabad"], ["solar", "☀️", "Solceller / växelriktare"],
   ["battery", "🔋", "Husbatteri"], ["charger", "🔌", "Laddbox"], ["car", "🚗", "Elbil"], ["meter", "📟", "Elmätare"],
-  ["price", "💶", "Priskälla"], ["country", "🌍", "Land"], ["size", "📏", "Storlek"], ["mode", "⚙️", "Körs som"]];
+  ["price", "💶", "Priskälla"], ["country", "🌍", "Land"], ["size", "📏", "Storlek"], ["indoor", "🏠", "Innegivare"], ["temp", "🌡️", "Temperatur"], ["mode", "⚙️", "Körs som"]];
 const DRIVER_NAMES = { thermia_husdata: "Thermia (Husdata)", generic_climate: "climate i HA", nibe_local: "NIBE S (lokalt)",
   myuplink: "myUplink", heishamon: "Panasonic (HeishaMon)", solaredge: "SolarEdge", generic_number: "exportgräns i HA",
   huawei_solar: "Huawei", modbus_register: "Modbus-register", gecko: "Gecko", balboa: "Balboa", switch: "relä/brytare",
@@ -1666,7 +1673,7 @@ function setupHA(total, prev) {
        scrolla längst ner till <b>Långlivade åtkomsttoken</b> och tryck <b>Skapa token</b>. Kopiera den och klistra in här.
      </details>
      <details class="note"><summary>Vad skickas till utvecklaren?</summary>
-       <p style="margin:6px 0">En gång per dygn: vilken utrustning du har (drivrutin och märke, t.ex. "Solis"), priskälla och land, ungefärliga storlekar (t.ex. batteri 10–15 kWh, huvudsäkring 25 A) och om skuggläget, batteristyrningen eller tidstariffen är på. Vid fel: var i koden felet uppstod och vilken typ, aldrig feltexten. Felen blir automatiskt ärenden på GitHub så att de kan rättas. Aldrig namn, adress, entiteter eller mätvärden.</p><p style="margin:6px 0">Stäng av med TELEMETRY_OPT_IN=false.</p></details>`,
+       <p style="margin:6px 0">En gång per dygn: vilken utrustning du har (drivrutin, märke och modell, t.ex. "NIBE S1255"), var innetemperaturen kommer ifrån, priskälla och land, ungefärliga storlekar (t.ex. batteri 10–15 kWh, huvudsäkring 25 A), inne- och utetemperatur i hela grader och om skuggläget, batteristyrningen eller tidstariffen är på. Vid fel: var i koden felet uppstod och vilken typ, aldrig feltexten. Felen blir automatiskt ärenden på GitHub så att de kan rättas. Aldrig namn, adress, entiteter eller andra mätvärden.</p><p style="margin:6px 0">Stäng av med TELEMETRY_OPT_IN=false.</p></details>`,
     "Testa och spara", async () => {
       const j = await postJSON("api/setup/ha", { url: document.getElementById("s_url").value, token: document.getElementById("s_tok").value });
       document.getElementById("setupok").textContent = j.message || "Kopplat!";

@@ -1261,6 +1261,17 @@ while True:
             except Exception as _he:
                 print(f"⚠️ Hälsokoll misslyckades: {_he}")
 
+            try:   # telemetrin: varifrån innetemperaturen kommer + avrundade temperaturer i dygnsrapporten
+                telemetry.note_state(
+                    indoor=(statistics.median(temps_to_avg) if len(temps_to_avg) >= 3 else sum(temps_to_avg) / len(temps_to_avg))
+                    if temps_to_avg else pump_indoor_temp,
+                    outdoor=(pump_data or {}).get("outdoor_temp"),
+                    indoor_source="ha_sensors" if temps_to_avg else ("heatpump" if pump_indoor_temp is not None else "none"),
+                    indoor_sensors=len(temps_to_avg),
+                    indoor_entities=[e for k, e in homeassistant.TEMPERATURE_ENTITIES.items()
+                                     if k != "ute" and isinstance(ha_temps.get(k), (int, float)) and ha_temps.get(k) > 0])
+            except Exception:
+                pass
             if pump_data and pump_data.get("outdoor_temp") is not None:
                 last_heartbeat = now
                 if temps_to_avg:
