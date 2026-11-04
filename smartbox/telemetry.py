@@ -73,6 +73,12 @@ def _software_version() -> str:
     v = os.environ.get("APP_VERSION", "").strip()          # satt av bildbygget; git finns inte i bilden
     if v and v != "dev":
         return v[:7] if len(v) == 40 and all(c in "0123456789abcdef" for c in v) else v[:40]
+    try:                                                    # HA-tillägget: commit skriven vid bygget (ha-addon/smartbox/Dockerfile)
+        f = Path(__file__).parent / "VERSION"
+        if f.exists() and f.read_text().strip():
+            return f.read_text().strip()[:40]
+    except OSError:
+        pass
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=3, cwd=Path(__file__).parent)
         return r.stdout.strip() or "unknown"

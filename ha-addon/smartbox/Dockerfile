@@ -27,6 +27,7 @@ RUN echo "EnergyWizard ${ENERGYWIZARD_REPO} ${ENERGYWIZARD_REF} ${ENERGYWIZARD_C
 # sys.path.insert(0, "/smartbox") och importerar motorns moduler därifrån
 # (i compose: ./smartbox monterad på /smartbox), så motorn ligger i /smartbox.
 RUN cp -r /src/smartbox /smartbox \
+    && (git -C /src rev-parse --short HEAD > /smartbox/VERSION || true) \
     && cp -r /src/ewapp /ewapp \
     && cp -r /src/webdashboard /webdashboard \
     && rm -rf /src
