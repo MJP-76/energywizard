@@ -48,22 +48,32 @@ if not EASEE_LITE_ID: EASEE_LITE_ID = "EHLS9NVL"
 EASEE_CARPORT_ID = os.environ.get("EASEE_CARPORT_ID") # Tesla
 if not EASEE_CARPORT_ID: EASEE_CARPORT_ID = "EHLU7JCT"
 
-TEMPERATURE_ENTITIES = {
-    "indoor_1":     "sensor.tempsensor_1_temperatur",
-    "ute":          "sensor.tempsensor_2_ute_temperatur",
-    "matter_1":     "sensor.timmerflotte_temp_hmd_sensor_temperatur",
-    "matter_2":     "sensor.timmerflotte_temp_hmd_sensor_temperatur_2",
-    "matter_3":     "sensor.timmerflotte_temp_hmd_sensor_temperatur_3",
-    "esp":          "sensor.esp_tempsensor",
-}
+# Givare väljs av användaren (Inställningar -> Givare, sparas som "sensors" i /data/energywizard.json):
+#   {"indoor": [{"key": "in_1", "entity": "sensor.x_temperature", "label": "Vardagsrum",
+#                "humidity": "sensor.x_humidity", "offset": -0.6, "esphome_ip": "192.168.1.50"}, ...],
+#    "outdoor": "sensor.ute_temperatur"}
+# Inget är hårdkodat (2026-11-04: förut låg utvecklarens egna givare här, och alla andra fick ingen innetemperatur
+# utom värmepumpens). "key" styr loggkolumnen - indoor_1/matter_1..3/esp har egna kolumner i sensor_log.
+def sensor_config() -> dict:
+    try:
+        import ew_settings
+        cfg = ew_settings.get("sensors") or {}
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
 
-HUMIDITY_ENTITIES = {
-    "indoor_1": "sensor.tempsensor_1_luftfuktighet",
-    "matter_1": "sensor.timmerflotte_temp_hmd_sensor_luftfuktighet",
-    "matter_2": "sensor.timmerflotte_temp_hmd_sensor_luftfuktighet_2",
-    "matter_3": "sensor.timmerflotte_temp_hmd_sensor_luftfuktighet_3",
-    "esp":      "sensor.athom_temperature_humidity_sensor_4b73a0_humidity",
-}
+
+def indoor_sensors() -> list:
+    out = []
+    for i, s in enumerate(sensor_config().get("indoor") or [], start=1):
+        if isinstance(s, dict) and (s.get("entity") or s.get("esphome_ip")):
+            out.append({**s, "key": str(s.get("key") or f"in_{i}"), "label": s.get("label") or s.get("entity") or f"Givare {i}"})
+    return out
+
+
+def indoor_sensor_labels() -> dict:
+    return {s["key"]: s["label"] for s in indoor_sensors()}
+
 
 EASEE_LITE_ENTITIES = {
     "power_kw":        "sensor.easee_lite_effekt",
@@ -302,11 +312,21 @@ def _get_numeric_attribute(entity_id, attribute):
         return None
 
 def read_temperatures():
-    return {key: _get_numeric_state(entity) for key, entity in TEMPERATURE_ENTITIES.items()}
+    """Råvärden per vald innegivare (nyckel = givarens key) + "ute". Korrigeringen (offset) läggs på i main.py,
+    så att loggen behåller givarens eget värde. ESPHome-adressen används när entiteten saknar värde."""
+    out = {}
+    for s in indoor_sensors():
+        v = _get_numeric_state(s["entity"]) if s.get("entity") else None
+        if v is None and s.get("esphome_ip"):
+            v = read_esphome_temp(s["esphome_ip"])
+        out[s["key"]] = v
+    ute = sensor_config().get("outdoor")
+    out["ute"] = _get_numeric_state(ute) if ute else None
+    return out
 
 def read_humidities():
-    """Luftfuktighet (%) per inomhussensor, samma nycklar som TEMPERATURE_ENTITIES."""
-    return {key: _get_numeric_state(entity) for key, entity in HUMIDITY_ENTITIES.items()}
+    """Luftfuktighet (%) per innegivare som har en fuktentitet, samma nycklar som read_temperatures."""
+    return {s["key"]: _get_numeric_state(s["humidity"]) for s in indoor_sensors() if s.get("humidity")}
 
 # Fasläge: HA:s Easee-integration (0.9.74, efter HA-uppdateringen 2026-10-14) har inga select-entiteter längre (select.*_allowed_charging_phases finns inte),
 # så fasläget går inte att läsa. Vi minns det senast satta värdet per laddare; utan minne (efter omstart) returneras None (okänt).
@@ -922,7 +942,7 @@ def toggle_mower_plug(turn_on: bool):
 
 
 
-def read_esphome_temp(ip="192.168.1.125"):
+def read_esphome_temp(ip):
     """Försöker läsa temperaturen direkt från ESPHome:s inbyggda webbserver som fallback."""
     endpoints = ["temperature", "temperatur", "esp_tempsensor_temperature"]
     for ep in endpoints:

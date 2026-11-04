@@ -303,8 +303,7 @@ _pv_hist = []   # de senaste minutvärdena för solproduktion (för att upptäck
 _meter_freeze = health.MeterFreeze()   # upptäcker en nätmätare (Tibber) som står still på samma värden (falsk 'oförklarad last')
 _sensor_watch = health.SensorWatch(grace_min=30)   # varnar när en sensor som fungerat tystnat >30 min
 _link_watch = health.LinkWatch(min_outage_min=5)   # sammanfattar HA-avbrott >5 min när HA är tillbaka
-SENSOR_LABELS = {"indoor_1": "Tempsensor 1 (Zigbee)", "matter_1": "Timmerflotte 1", "matter_2": "Timmerflotte 2",
-                 "matter_3": "Timmerflotte 3", "esp": "ESP-sensorn"}
+SENSOR_LABELS = homeassistant.indoor_sensor_labels()   # användarens valda innegivare (uppdateras varje varv)
 
 def _seed_sensor_watch():
     """Läser när varje sensor senast rapporterade (databasen) så att en redan död sensor varnar direkt efter start."""
@@ -1218,24 +1217,13 @@ while True:
 
             # Inomhustemperatur
             pump_indoor_temp = pump_data.get("indoor_temp") if pump_data else None
-            if ha_temps.get("esp") is None:
-                ha_temps["esp"] = homeassistant.read_esphome_temp("192.168.1.125")
-                
-            # ESP-sensorn mäter ~0.6°C högre än husets medel (uppmätt mot Zigbee-sensorn t.o.m. 16 sep).
-            # Är Zigbee-sensorn borta består medelvärdet bara av ESP -> korrigera så att Prio 5
-            # inte felaktigt tror att det är för varmt inne.
-            esp_temp = ha_temps.get("esp")
-            if esp_temp is not None and ha_temps.get("indoor_1") is None:
-                esp_temp -= 0.6
+            # Innetemperatur ur användarens valda givare, med varje givares korrigering (t.ex. en givare som
+            # visar 0,6 °C för mycket). Råvärdet loggas oförändrat.
+            _indoor_sensors = homeassistant.indoor_sensors()
+            SENSOR_LABELS = {x["key"]: x["label"] for x in _indoor_sensors}
+            sensor_values = [(ha_temps.get(x["key"]) + float(x.get("offset") or 0)) if isinstance(ha_temps.get(x["key"]), (int, float)) else None
+                             for x in _indoor_sensors]
 
-            sensor_values = [
-                ha_temps.get("indoor_1"),
-                ha_temps.get("matter_1"),
-                ha_temps.get("matter_2"),
-                ha_temps.get("matter_3"),
-                esp_temp,
-            ]
-            
             temps_to_avg = [t for t in sensor_values if t is not None and isinstance(t, (int, float)) and t > 0]
 
             # Luftfuktighet: median (>=3 sensorer) annars medel; sparas i ha_temps så loggern tar med den.
@@ -1268,8 +1256,8 @@ while True:
                     outdoor=(pump_data or {}).get("outdoor_temp"),
                     indoor_source="ha_sensors" if temps_to_avg else ("heatpump" if pump_indoor_temp is not None else "none"),
                     indoor_sensors=len(temps_to_avg),
-                    indoor_entities=[e for k, e in homeassistant.TEMPERATURE_ENTITIES.items()
-                                     if k != "ute" and isinstance(ha_temps.get(k), (int, float)) and ha_temps.get(k) > 0])
+                    indoor_entities=[x["entity"] for x in _indoor_sensors
+                                     if x.get("entity") and isinstance(ha_temps.get(x["key"]), (int, float)) and ha_temps.get(x["key"]) > 0])
             except Exception:
                 pass
             if pump_data and pump_data.get("outdoor_temp") is not None:

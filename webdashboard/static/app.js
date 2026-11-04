@@ -1061,6 +1061,52 @@ async function mountShadow() {
 }
 
 // Elpris och avgifter per land (smartbox/nordpool.py cost_settings): land, elområde, moms, avgifter.
+// Givare: innegivare (med korrigering och fukt), utegivare. Inget förval i koden - förslagen kommer från namnen i HA.
+async function mountSensorSettings() {
+  let d;
+  try { d = await api("api/sensors"); } catch (e) { return; }
+  const card = document.getElementById("sensorcard"), body = document.getElementById("sensorbody");
+  if (!card || !d || !d.ok) { if (card && d && d.error) { card.hidden = false; body.innerHTML = `<div class="note">${esc(d.error)}</div>`; } return; }
+  card.hidden = false;
+  const sel = {}; (d.selected.indoor || []).forEach((x) => sel[x.entity] = x);
+  const num = (v) => v == null ? "–" : `${String(v).replace(".", ",")} °C`;
+  // Fuktgivaren på samma enhet hittas på namnet (…_temperature -> …_humidity)
+  const humFor = (e) => { const base = e.replace(/_(temperature|temperatur|temp)(_\d+)?$/, "");
+    const h = d.humidities.find((x) => x.entity.startsWith(base) && /humid|fukt/.test(x.entity)); return h ? h.entity : ""; };
+  const anySel = Object.keys(sel).length > 0;
+  const rows = d.temperatures.map((t) => {
+    const on = sel[t.entity] || (!anySel && t.suggest_indoor);
+    const cur = sel[t.entity] || {};
+    return `<div class="sensrow" data-e="${esc(t.entity)}" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:7px 0;border-top:1px solid var(--line)">
+      <label style="display:flex;gap:8px;align-items:center;flex:1 1 220px;min-width:0"><input type="checkbox" class="senson"${on ? " checked" : ""}>
+        <span style="min-width:0;overflow-wrap:anywhere">${t.suggest_indoor ? "⭐ " : ""}${esc(t.name)} <span class="note">${num(t.value)}</span></span></label>
+      <label class="note" style="display:flex;gap:6px;align-items:center">Korrigering <input class="sensoff" inputmode="decimal" style="width:64px" value="${cur.offset ? String(cur.offset).replace(".", ",") : ""}" placeholder="0"> °C</label>
+      <input type="hidden" class="senshum" value="${esc(cur.humidity || humFor(t.entity))}"></div>`;
+  }).join("");
+  const outdoor = d.selected.outdoor || (d.temperatures.find((t) => t.suggest_outdoor) || {}).entity || "";
+  body.innerHTML = `
+    <div class="note" style="margin-bottom:6px">${d.temperatures.length} temperaturgivare i Home Assistant${anySel ? "" : " - förslagen är förkryssade, kontrollera och spara"}.</div>
+    <input id="sensfilter" placeholder="Sök givare…" style="width:100%;margin-bottom:6px">
+    <div id="senslist" style="max-height:420px;overflow-y:auto">${rows || `<div class="note">Inga temperaturgivare hittades.</div>`}</div>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:12px"><span class="note">Utegivare (annars används värmepumpens)</span>
+      <select id="sensout"><option value="">– ingen –</option>${d.temperatures.map((t) => `<option value="${esc(t.entity)}"${t.entity === outdoor ? " selected" : ""}>${t.suggest_outdoor ? "⭐ " : ""}${esc(t.name)} (${num(t.value)})</option>`).join("")}</select></label>
+    <button class="icobtn" id="senssave" style="margin-top:10px">Spara givare</button>`;
+  document.getElementById("sensfilter").oninput = (ev) => {
+    const q = ev.target.value.toLowerCase();
+    body.querySelectorAll(".sensrow").forEach((r) => r.hidden = q && !r.textContent.toLowerCase().includes(q) && !r.dataset.e.includes(q));
+  };
+  document.getElementById("senssave").onclick = async () => {
+    const indoor = [...body.querySelectorAll(".sensrow")].filter((r) => r.querySelector(".senson").checked).map((r) => {
+      const t = d.temperatures.find((x) => x.entity === r.dataset.e);
+      return { entity: r.dataset.e, label: (sel[r.dataset.e] || {}).label || t.name, offset: r.querySelector(".sensoff").value, humidity: r.querySelector(".senshum").value };
+    });
+    try {
+      const j = await postJSON("api/sensors", { indoor, outdoor: document.getElementById("sensout").value });
+      toast(j.message || "Sparat"); mountSensorSettings();
+    } catch (e) { toast(e.message); }
+  };
+}
+
 async function mountPriceSettings() {
   let d;
   try { d = await api("api/price-settings"); } catch (e) { return; }
@@ -1357,6 +1403,11 @@ async function renderInstallningar() {
         <label class="switch" style="flex:0 0 auto"><input type="checkbox" id="shadowtoggle"><span class="slider"></span></label></div>
       <div id="shadowlist" style="margin-top:10px"></div>
     </div>
+    <div class="card" style="margin-bottom:16px" id="sensorcard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">🏠 Givare inne och ute</div>
+      <div class="note" style="margin-top:4px">Välj vilka temperaturgivare som visar husets innetemperatur (medianen används när du har tre eller fler) och vilken som sitter ute. Förslagen är markerade ⭐.</div>
+      <div id="sensorbody" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="pricecard" hidden>
       <div style="font-size:1.1rem;font-weight:700">💶 Elpris och avgifter</div>
       <div class="note" style="margin-top:4px">Gör spotpriset till din verkliga kostnad. Nätavgift, energiskatt och påslag står på elräkningen.</div>
@@ -1403,6 +1454,7 @@ async function renderInstallningar() {
   mountLangSelect("setlang", true);
   mountBatteryPlanSettings();
   mountPriceSettings();
+  mountSensorSettings();
   mountShadow();
   mountMqtt();
   if (window.I18N && I18N.lang !== "sv") {

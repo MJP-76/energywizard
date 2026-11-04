@@ -374,6 +374,91 @@ async def price_entities():
             str(ew_settings.get("price_includes_vat", True)).lower() not in ("0", "false")}
 
 
+# ---- Givare (2026-11-04): innegivare, utegivare och fukt väljs av användaren - inget är hårdkodat --------------------
+_INDOOR_HINT = re.compile(r"inne|inomhus|vardagsrum|sovrum|kök|kok|hall|kontor|living|bedroom|kitchen|room|rum|indoor|matter|zigbee|aqara|timmerflotte", re.I)
+_OUTDOOR_HINT = re.compile(r"\bute\b|utomhus|outdoor|outside|ute_|_ute", re.I)
+_NOT_ROOM = re.compile(r"cpu|processor|battery|batteri|tesla|leaf|car|bil|inverter|växelriktare|framledning|retur|forward|return|"
+                       r"brine|köldbärare|varmvatten|hot ?water|dhw|spa|pool|bad|tank|frys|kyl|freezer|fridge|motor|chip|disk|nas|router|"
+                       r"compressor|kompressor|wled|esp32 internal|board", re.I)
+
+
+@app.get("/api/sensors")
+async def sensors_get(request: Request):
+    """Temperatur- och fuktgivare i Home Assistant med förslag (innegivare, utegivare), plus nuvarande val."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    try:
+        r = requests.get(f"{homeassistant._BASE}/states", headers=homeassistant._HEADERS, timeout=20, verify=homeassistant._VERIFY)
+        r.raise_for_status()
+        states = r.json()
+    except Exception as e:
+        return {"ok": False, "error": f"Kunde inte läsa Home Assistant: {e}"}
+    temps, hums = [], []
+    for st in states:
+        e, a = st.get("entity_id", ""), st.get("attributes") or {}
+        if not e.startswith("sensor."):
+            continue
+        name = a.get("friendly_name") or e
+        try:
+            val = float(st.get("state"))
+        except (TypeError, ValueError):
+            val = None
+        dc, unit = a.get("device_class"), a.get("unit_of_measurement")
+        text_ = f"{e} {name}"
+        if dc == "temperature" or unit in ("°C", "°F"):
+            room = bool(_INDOOR_HINT.search(text_)) and not _NOT_ROOM.search(text_) and not _OUTDOOR_HINT.search(text_)
+            temps.append({"entity": e, "name": name, "value": val, "suggest_indoor": room and val is not None and 10 <= val <= 30,
+                          "suggest_outdoor": bool(_OUTDOOR_HINT.search(text_)) and not _NOT_ROOM.search(text_)})
+        elif dc == "humidity" or (unit == "%" and re.search(r"humid|fukt", text_, re.I)):
+            hums.append({"entity": e, "name": name, "value": val})
+    temps.sort(key=lambda x: (not x["suggest_indoor"], not x["suggest_outdoor"], x["name"].lower()))
+    hums.sort(key=lambda x: x["name"].lower())
+    return {"ok": True, "temperatures": temps, "humidities": hums, "selected": homeassistant.sensor_config()}
+
+
+@app.post("/api/sensors")
+async def sensors_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra givare"}, status_code=403)
+    body = await request.json()
+    ent_ok = lambda x: isinstance(x, str) and re.fullmatch(r"sensor\.[a-z0-9_]+", x)
+    old = {s.get("entity"): s for s in (homeassistant.sensor_config().get("indoor") or []) if isinstance(s, dict)}
+    used, indoor = set(), []
+    for item in (body.get("indoor") or [])[:12]:
+        e = item.get("entity")
+        if not ent_ok(e):
+            return JSONResponse({"error": f"Ogiltig givare: {e}"}, status_code=400)
+        prev = old.get(e, {})
+        key = prev.get("key")
+        if not key or key in used:                       # behåll nyckeln (loggkolumnen) för givare som redan var valda
+            n = 1
+            while f"in_{n}" in used or any(s.get("key") == f"in_{n}" for s in old.values() if s.get("entity") != e):
+                n += 1
+            key = f"in_{n}"
+        used.add(key)
+        s = {"key": key, "entity": e, "label": str(item.get("label") or prev.get("label") or e)[:60]}
+        if ent_ok(item.get("humidity")):
+            s["humidity"] = item["humidity"]
+        try:
+            off = float(str(item.get("offset") or 0).replace(",", "."))
+        except ValueError:
+            return JSONResponse({"error": "Ogiltig korrigering"}, status_code=400)
+        if not -5 <= off <= 5:
+            return JSONResponse({"error": "Korrigeringen ska vara mellan -5 och 5 °C"}, status_code=400)
+        if off:
+            s["offset"] = off
+        if prev.get("esphome_ip"):
+            s["esphome_ip"] = prev["esphome_ip"]
+        indoor.append(s)
+    outdoor = body.get("outdoor")
+    if outdoor and not ent_ok(outdoor):
+        return JSONResponse({"error": "Ogiltig utegivare"}, status_code=400)
+    ew_settings.update(sensors={"indoor": indoor, **({"outdoor": outdoor} if outdoor else {})})
+    return {"ok": True, "message": "Sparat - motorn använder givarna från nästa varv."}
+
+
 @app.post("/api/price-source")
 async def price_source_set(request: Request):
     """Väljer prissensor i HA (tom = standard: elprisetjustnu.se i Sverige) och om priset i den är inklusive moms."""
