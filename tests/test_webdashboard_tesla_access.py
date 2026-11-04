@@ -99,7 +99,9 @@ def test_secure_for_manga_fel_ger_429(wd):
 
 def test_lock_kraver_inte_secure(wd):
     req = _FakeRequest({"what": "lock"}, {wd.AUTH.cookie: _owner_cookie(wd)})
-    with patch("webdashboard_app.requests.post", return_value=_resp(json_data={"ok": True, "msg": "Bilen låst"})):
+    # bilen med lås väljs ur installationen (mobilappens /api/state) - sedan 2026-11-04, inga inbyggda bilnamn
+    with patch("webdashboard_app._ewapp_cars", return_value=[{"key": "tesla", "access": {"locked": True}}]), \
+         patch("webdashboard_app.requests.post", return_value=_resp(json_data={"ok": True, "msg": "Bilen låst"})):
         r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 200
 
@@ -114,11 +116,13 @@ def test_unlock_utan_ew2_ger_403_secure(wd):
 def test_unlock_med_giltig_ew2_proxas_till_ewapp(wd):
     ew2 = _ew2_cookie(wd)
     req = _FakeRequest({"what": "unlock"}, {wd.AUTH.cookie: _owner_cookie(wd), "ew2": ew2})
-    with patch("webdashboard_app.requests.post", return_value=_resp(json_data={"ok": True, "msg": "Bilen upplåst"})) as mock_post:
+    with patch("webdashboard_app._ewapp_cars", return_value=[{"key": "tesla", "access": {"locked": True}}]), \
+         patch("webdashboard_app.requests.post", return_value=_resp(json_data={"ok": True, "msg": "Bilen upplåst"})) as mock_post:
         r = _run(wd.proxy_tesla_access(req))
     assert r.status_code == 200
-    _, kwargs = mock_post.call_args
+    args, kwargs = mock_post.call_args
     assert kwargs["cookies"]["ew2"] == ew2
+    assert args[0].endswith("/api/car/tesla/access")
 
 
 def test_unlock_med_utganget_ew2_ger_403_secure(wd):
