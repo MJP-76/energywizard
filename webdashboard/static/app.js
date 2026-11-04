@@ -349,7 +349,7 @@ function flowSvg(d) {
       <path d="M44 56 L70 34 L96 56 V86 H44 Z" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round"/>
       <text x="70" y="108" text-anchor="middle" font-size="15" font-weight="800" fill="var(--txt)">${hk} kW</text>
     </g>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Energiflöde just nu">${paths}${dots}${hubSvg}${cards}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W * 1.1}px;height:auto;display:block;margin:0 auto" role="img" aria-label="Energiflöde just nu">${paths}${dots}${hubSvg}${cards}</svg>`;
 }
 
 async function mountFlow(slotId) {
