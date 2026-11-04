@@ -8,6 +8,22 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 - **Licens: AGPL-3.0 - beslutat 2026-11-03.** LICENSE-filen finns i repots rot. Samma licens som
   [FTW](https://github.com/srcfl/ftw), så kod därifrån får nu också återanvändas (med källhänvisning).
 
+## Att göra (önskemål från Discord och Emil, 2026-11-04)
+
+- **Planklockan går att dra i, och finns även i mobilappen.** Man drar visaren till ett klockslag och ser vad som händer
+  då: pris, vad batteriet och bilen gör (laddar/laddar ur/vilar, kW) och batteriets nivå. Idag finns klockan bara på
+  webben och visar bara nuläget. Inspiration: FTW-appens "Plan ahead" (skärminspelning från Emil). Bygg i vår egen stil,
+  utan att kopiera deras.
+- **Egen färg när batteriet laddar ur och säljer till nätet** (Anders på Discord): orange = laddar ur för eget bruk,
+  en annan färg = laddar ur och säljer överskottet. Gäller planklockan, remsan och batteriraden.
+- **Batteriraden: kort och tydlig** (HannesB): "Laddar ur till 09:45 · 80 → 35 % · 8,6 kWh · toppris 431 öre" finns
+  sedan 2026-11-04 på webben. Ta samma rad till mobilappen och lägg till "billigast 00–02" och "planerad 18:14, planerar
+  om var 15:e minut".
+- **Max laddström och faser känns av själv** per bil och laddbox (laddboxens och bilens egna gränser, och mätning:
+  enfasbil om bara en fas drar ström), visas i startguiden och går att ändra. Idag `max_a`/`phases` i installationen.
+- **Rum, lampor och familjens namn i mobilappen** ur installationen: rumslistan, fönsterlamporna, användarnamnen och de
+  personliga hälsningarna är fortfarande Emils egna.
+
 ## Övervägs, väntar på fler verkliga hus att verifiera mot
 
 Från genomgången av [FTW](https://github.com/srcfl/ftw) 2026-11-03 (AGPL-3.0-only, får återanvändas med källhänvisning;
