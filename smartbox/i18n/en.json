@@ -210,6 +210,8 @@
  "EnergyWizard": "EnergyWizard",
  "EnergyWizard läser det (# %) och räknar med det, men skriver aldrig.": "EnergyWizard reads it (# %) and takes it into account, but never writes.",
  "EnergyWizard läser och styr allt via Home Assistant.": "EnergyWizard reads and controls everything through Home Assistant.",
+ "EnergyWizard uppdateras genom att hämta de nya bilderna (docker compose pull && docker compose up -d), eller automatiskt med Watchtower.": "EnergyWizard is updated by pulling the new images (docker compose pull && docker compose up -d), or automatically with Watchtower.",
+ "EnergyWizard uppdateras som tillägg i Home Assistant: Inställningar → Tillägg → EnergyWizard → Uppdatera.": "EnergyWizard is updated as a Home Assistant add-on: Settings → Add-ons → EnergyWizard → Update.",
  "EnergyWizard är gratis och byggs på fritiden. Ett litet bidrag hjälper till att betala för utvecklingen.": "EnergyWizard is free and built in spare time. A small contribution helps pay for the development.",
  "Enkel vy (bara huvudbilen)": "Simple view (main car only)",
  "Entitetsväljare": "Entity picker",
@@ -257,6 +259,7 @@
  "Förbrukning # kWh": "Consumption # kWh",
  "Förbrukning # kWh · sol # kWh · elbil # kWh · spotkostnad ca # kr · snittpris # kr/kWh": "Consumption # kWh · solar # kWh · EV # kWh · spot cost approx. # SEK · average price # SEK/kWh",
  "Försiktig": "Careful",
+ "Första telefonen i Home Assistant": "First phone in Home Assistant",
  "GPM Failsafe: Nissan API offline (SOC saknas). Antar att laddning behövs.": "GPM failsafe: Nissan API offline (no SOC). Assuming charging is needed.",
  "GPM Failsafe: Nissan SOC < #%, återställer 'charge_completed' flaggan.": "GPM failsafe: Nissan SOC < #%, resetting the 'charge_completed' flag.",
  "GPM Failsafe: Tesla API offline (SOC saknas). Antar att laddning behövs.": "GPM failsafe: Tesla API offline (no SOC). Assuming charging is needed.",
@@ -882,6 +885,7 @@
  "Vilar": "Resting",
  "Vilar till #:#": "Idle until #:#",
  "Vilken bil kör du mest?": "Which car do you drive most?",
+ "Vilken telefon i Home Assistant som får EnergyWizards aviseringar.": "Which phone in Home Assistant gets EnergyWizard's notifications.",
  "Visa alla AI-beslut": "Show all AI decisions",
  "Visa alla laddblock": "Show all charging blocks",
  "Visa familjelogg": "Show family log",
@@ -1054,5 +1058,6 @@
  "Övrigt": "Other",
  "ägare": "owner",
  "– ingen –": "– none –",
- "🏠 Givare inne och ute": "🏠 Indoor and outdoor sensors"
+ "🏠 Givare inne och ute": "🏠 Indoor and outdoor sensors",
+ "📱 Aviseringar till": "📱 Notifications to"
 }

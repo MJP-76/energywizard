@@ -121,6 +121,7 @@ def _build_or_null(name, build, null):
 heat_pump_driver = _build_or_null("Värmepumpen", house_config.build_heat_pump_driver, house_config.NullHeatPumpDriver)
 solar_driver = _build_or_null("Solcellerna", house_config.build_solar_driver, house_config.NullSolarDriver)
 spa_driver = _build_or_null("Spabadet", house_config.build_spa_driver, house_config.NullSpaDriver)
+HAS_SPA = not isinstance(spa_driver, house_config.NullSpaDriver)   # inget spa i installationen: ingen spa-bevakning eller -styrning
 battery_driver = _build_or_null("Batteriet", house_config.build_battery_driver, house_config.NullBatteryDriver)
 
 
@@ -912,8 +913,8 @@ while True:
                     trackers[f"{_ev['id']}_lat"] = homeassistant._get_numeric_attribute(_tr, "latitude")
                     trackers[f"{_ev['id']}_lon"] = homeassistant._get_numeric_attribute(_tr, "longitude")
 
-            # Spabad Watchdog
-            if gecko_data is None or gecko_data.get("current_temp") is None:
+            # Spabad Watchdog (bara med ett spabad i installationen - annars såg "inget spa" ut som "spa offline", #123)
+            if HAS_SPA and (gecko_data is None or gecko_data.get("current_temp") is None):
                 if spa_offline_since is None:
                     spa_offline_since = now
                     print("📡 Spabad verkar offline. Startar 15-minuters timer för återstart...")
@@ -1266,7 +1267,13 @@ while True:
                         logger.set_override("winter_heat_stop", "auto")
 
             outdoor_temp = pump_data.get("outdoor_temp") if pump_data else None
-            house_consumption_w = solar_prod_w + avg_net
+            # Huset = sol + nät - batteriets effekt (+ = laddar): laddar batteriet går en del av solen/nätet dit, laddar
+            # det ur får huset mer än sol + nät (issue #125: översikten och historiken visade fel med batteri).
+            try:
+                _battery_early = battery_driver.read_state() or {}
+            except Exception:
+                _battery_early = {}
+            house_consumption_w = solar_prod_w + avg_net - (_battery_early.get("power_w") or 0.0)
             grid_import_w = max(0, avg_net) 
             
             pi_p_term, pi_i_term = 0.0, 0.0
@@ -1561,7 +1568,7 @@ while True:
                 'current_solar_limit_pct': current_solar_limit_pct, 'current_target_limit': current_target_limit,
                 'ev_min_charge_a': EV_MIN_CHARGE_AMPS, 'ev_max_charge_a': EV_MAX_CHARGE_AMPS, 'ev_plan': ev_charge_plan,
                 # Bilarna ur installationen: vilka som finns och deras laddboxars faser/maxström (gpm har inga bilnamn)
-                'car_ids': list(car_ids), 'car_specs': CAR_SPECS,
+                'car_ids': list(car_ids), 'car_specs': CAR_SPECS, 'has_spa': HAS_SPA,
             }
             for _c in car_ids:      # per bil: <bil>_soc, _connected, _phases ... (samma nycklar gpm alltid läst)
                 gpm_state.update({
@@ -1584,7 +1591,7 @@ while True:
             # --- Husbatteriet: beslut med hela husets läge som indata (battery_control.py) ---
             battery_state = {}
             try:
-                battery_state = battery_driver.read_state() or {}
+                battery_state = _battery_early or battery_driver.read_state() or {}   # redan läst ovan (husets förbrukning)
                 if solar_data is not None:
                     solar_data["battery_soc"] = battery_state.get("soc_pct")
                     solar_data["battery_power_w"] = battery_state.get("power_w")

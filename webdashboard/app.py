@@ -374,6 +374,35 @@ async def price_entities():
             str(ew_settings.get("price_includes_vat", True)).lower() not in ("0", "false")}
 
 
+# ---- Aviseringar till vilken telefon (issue #123: förut den första mobile_app_* i HA - kunde vara fel persons) ----
+@app.get("/api/notify-target")
+async def notify_target_get(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    try:
+        r = requests.get(f"{homeassistant._BASE}/services", headers=homeassistant._HEADERS, timeout=15, verify=homeassistant._VERIFY)
+        r.raise_for_status()
+        svcs = next((d.get("services") or {} for d in r.json() if d.get("domain") == "notify"), {})
+    except Exception as e:
+        return {"ok": False, "error": f"Kunde inte läsa Home Assistant: {e}"}
+    phones = sorted(n for n in svcs if n.startswith("mobile_app_"))
+    return {"ok": True, "phones": phones, "selected": ew_settings.get("notify_target") or "",
+            "env": os.environ.get("NOTIFY_TARGET", "")}
+
+
+@app.post("/api/notify-target")
+async def notify_target_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan välja telefon"}, status_code=403)
+    t = str((await request.json()).get("target") or "").strip()
+    if t and not re.fullmatch(r"mobile_app_[a-z0-9_]+", t):
+        return JSONResponse({"error": "Ogiltig telefon"}, status_code=400)
+    ew_settings.update(notify_target=t or None)
+    return {"ok": True, "message": "Sparat - aviseringarna går till " + (t or "den första telefonen i Home Assistant")}
+
+
 # ---- Givare (2026-11-04): innegivare, utegivare och fukt väljs av användaren - inget är hårdkodat --------------------
 _INDOOR_HINT = re.compile(r"inne|inomhus|vardagsrum|sovrum|kök|kok|hall|kontor|living|bedroom|kitchen|room|rum|indoor|matter|zigbee|aqara|timmerflotte", re.I)
 _OUTDOOR_HINT = re.compile(r"\bute\b|utomhus|outdoor|outside|ute_|_ute", re.I)
@@ -632,6 +661,8 @@ async def overview(request: Request):
 async def updates(request: Request, force: bool = False):
     """System-sidan: vilka containrar på hela NUC:en (inte bara EnergyWizard) har en
     nyare image enligt Watchtower. Cachas 10 min - force=1 kollar om direkt."""
+    if not WATCHTOWER_TOKEN:          # ingen Watchtower här (HA-tillägget, de flesta installationer) - inget fel (#121)
+        return {"ok": True, "configured": False, "addon": bool(homeassistant.SUPERVISOR_TOKEN)}
     now = time.time()
     if force or _wt_cache["data"] is None or now - _wt_cache["ts"] > WT_CACHE_TTL:
         try:
@@ -920,7 +951,25 @@ async def api_flow():
         row = _latest_row(c)
     if row is None:
         return {"ok": False, "error": "Ingen data i sensor_log än"}
-    d = live_flow.nodes(row, _json_list(row.get("decision_summary")))
+    # Bilarna och spabadet ur installationen (bara det huset har). Laddboxarna loggas i installationens ordning:
+    # första -> ev_power_kw, andra -> ev_carport_power_kw (smartbox/main.py).
+    cars, has_spa = None, None
+    try:
+        hc = house_config.load_house_config(HOUSE_CONFIG_FILE)
+        has_spa = bool((hc.get("spa") or {}).get("enabled"))
+        order = list(house_config.build_physical_charger_drivers(hc))
+        home = {c: p for p, c in house_config.build_default_car_per_charger(hc).items()}
+        cols = ["ev_power_kw", "ev_carport_power_kw"]
+        cars = []
+        for ev in hc.get("evs") or []:
+            cid = ev.get("id")
+            if not cid:
+                continue
+            idx = order.index(home[cid]) if home.get(cid) in order else -1
+            cars.append((cid, ev.get("name") or cid.capitalize(), cols[idx] if 0 <= idx < len(cols) else None))
+    except Exception as e:
+        print(f"⚠️ Översiktens bilar/spa ur installationen: {e}", flush=True)
+    d = live_flow.nodes(row, _json_list(row.get("decision_summary")), cars=cars, has_spa=has_spa)
     return {"ok": True, "ts": str(row.get("sthlm_time"))[:16], **d}
 
 

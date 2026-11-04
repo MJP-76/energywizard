@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.3 (2026-11-04)
+- **Utan spabad syns inget spabad** (#122, #123): ingen spa-bevakning, inga "spabad frånkopplat"-meddelanden och inga
+  spabeslut när inget spa är valt. Översiktens bild visar bara installationens bilar och spa.
+- **Välj vilken telefon som får aviseringarna** under Inställningar (#123) - förut den första telefonen i HA.
+- **Husets förbrukning räknar med batteriet** (#125): sol + nät - batteri, i översikten och historiken.
+- **System-fliken**: inget fel när Watchtower saknas (#121) - visar hur man uppdaterar i stället.
+- Motorn: bilar och laddboxar läses helt ur installationen (inga inbyggda bilar kvar).
+
 ## 1.2.2 (2026-11-04)
 - **NIBE S1155/S1255 via pumpens lokala REST-API** (tack lazgeo, #115): läser temperaturer och kompressorstatus,
   certifikatet kontrolleras innan lösenordet skickas. Styrning är avstängd tills man slår på den. Se docs/nibe-local-rest.md.

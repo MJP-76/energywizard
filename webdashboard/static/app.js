@@ -1061,6 +1061,23 @@ async function mountShadow() {
 }
 
 // Elpris och avgifter per land (smartbox/nordpool.py cost_settings): land, elområde, moms, avgifter.
+async function mountPhoneSetting() {
+  let d;
+  try { d = await api("api/notify-target"); } catch (e) { return; }
+  const card = document.getElementById("phonecard"), body = document.getElementById("phonebody");
+  if (!card || !d) return;
+  card.hidden = false;
+  if (!d.ok) { body.innerHTML = `<div class="note">${esc(d.error || "")}</div>`; return; }
+  if (d.env) { body.innerHTML = `<div class="note">Styrs av NOTIFY_TARGET i miljön: ${esc(d.env)}</div>`; return; }
+  body.innerHTML = `<select id="phonesel" style="width:100%"><option value="">Första telefonen i Home Assistant${d.phones[0] ? " (" + esc(d.phones[0]) + ")" : ""}</option>
+      ${d.phones.map((p) => `<option value="${esc(p)}"${p === d.selected ? " selected" : ""}>${esc(p.replace(/^mobile_app_/, ""))}</option>`).join("")}</select>
+    <button class="icobtn" id="phonesave" style="margin-top:10px">Spara</button>`;
+  document.getElementById("phonesave").onclick = async () => {
+    try { const j = await postJSON("api/notify-target", { target: document.getElementById("phonesel").value }); toast(j.message || "Sparat"); }
+    catch (e) { toast(e.message); }
+  };
+}
+
 // Givare: innegivare (med korrigering och fukt), utegivare. Inget förval i koden - förslagen kommer från namnen i HA.
 async function mountSensorSettings() {
   let d;
@@ -1363,6 +1380,12 @@ async function loadUpdates(force) {
   const main = document.getElementById("main");
   const d = await api(`api/updates${force ? "?force=1" : ""}`);
   if (!d.ok) { main.innerHTML = `<div class="placeholder">${d.error}</div>`; return; }
+  if (d.configured === false) {
+    main.innerHTML = `<div class="card">${d.addon
+      ? "EnergyWizard uppdateras som tillägg i Home Assistant: Inställningar → Tillägg → EnergyWizard → Uppdatera."
+      : "EnergyWizard uppdateras genom att hämta de nya bilderna (docker compose pull && docker compose up -d), eller automatiskt med Watchtower."}</div>`;
+    return;
+  }
   const when = d.checked_at ? new Date(d.checked_at * 1000).toLocaleString("sv-SE") : "–";
   const rows = d.pending.length
     ? d.pending.map(n => `<div class="card" style="margin-bottom:8px">🆕 <b>${n}</b> <span class="note">har en nyare version - Watchtower uppdaterar den vid nästa schemalagda körning (08:00)</span></div>`).join("")
@@ -1402,6 +1425,11 @@ async function renderInstallningar() {
           Bra för att prova säkert innan du låter EnergyWizard ta över.</div></div>
         <label class="switch" style="flex:0 0 auto"><input type="checkbox" id="shadowtoggle"><span class="slider"></span></label></div>
       <div id="shadowlist" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="margin-bottom:16px" id="phonecard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">📱 Aviseringar till</div>
+      <div class="note" style="margin-top:4px">Vilken telefon i Home Assistant som får EnergyWizards aviseringar.</div>
+      <div id="phonebody" style="margin-top:10px"></div>
     </div>
     <div class="card" style="margin-bottom:16px" id="sensorcard" hidden>
       <div style="font-size:1.1rem;font-weight:700">🏠 Givare inne och ute</div>
@@ -1455,6 +1483,7 @@ async function renderInstallningar() {
   mountBatteryPlanSettings();
   mountPriceSettings();
   mountSensorSettings();
+  mountPhoneSetting();
   mountShadow();
   mountMqtt();
   if (window.I18N && I18N.lang !== "sv") {

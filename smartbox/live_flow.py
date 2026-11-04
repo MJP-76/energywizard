@@ -20,7 +20,9 @@ def _f(v):
         return None
 
 
-def nodes(row, decision_items=None):
+def nodes(row, decision_items=None, cars=None, has_spa=None):
+    """cars = [(id, namn, effektkolumn)] och has_spa ur installationen (issue #122: andra såg Emils Tesla, Nissan och
+    spabad). Utan dem (äldre anrop): som förut."""
     """row = senaste sensor_log-raden som dict. Returnerar {'nodes': [...], 'why': {nyckel: text}}."""
     r = row or {}
     out = []
@@ -65,18 +67,19 @@ def nodes(row, decision_items=None):
                 f"{wt:.0f} °C" + (" · värms" if heating_water else ""), "varmepump")
 
     spa_t = _f(r.get("spa_temp"))
-    if spa_t is not None or r.get("spa_power_w") is not None:
+    if has_spa is not False and (spa_t is not None or r.get("spa_power_w") is not None):
         spa_w = _f(r.get("spa_power_w")) or 0.0
         on = bool(r.get("spa_heater_running")) or spa_w > 500
         add("spabad", "Spabad", "🛁", spa_w, on, (f"{spa_t:.1f} °C" if spa_t is not None else "–") + (" · värms" if on else ""), "spabad")
 
-    for col, car, soc_col in (("ev_power_kw", "nissan", "nissan_soc"), ("ev_carport_power_kw", "tesla", "tesla_soc")):
-        kw = _f(r.get(col))
-        soc = _f(r.get(soc_col))
+    car_list = cars if cars is not None else [("nissan", "Nissan", "ev_power_kw"), ("tesla", "Tesla", "ev_carport_power_kw")]
+    for car, car_name, col in car_list:
+        kw = _f(r.get(col)) if col else None
+        soc = _f(r.get(f"{car}_soc"))
         if kw is None and soc is None:
             continue
         kw = (kw or 0.0) / 1000.0 if (kw or 0) > 100 else (kw or 0.0)       # vissa rader loggade W
-        add(f"ev_{car}", car.capitalize(), "🚗", kw * 1000.0, kw > 0.05,
+        add(f"ev_{car}", car_name, "🚗", kw * 1000.0, kw > 0.05,
             (f"Laddar {kw:.1f} kW" if kw > 0.05 else "Laddar inte") + (f" · {soc:.0f} %" if soc is not None else ""), "elbil")
 
     why = {}

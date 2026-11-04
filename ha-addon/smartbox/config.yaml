@@ -1,5 +1,5 @@
 name: "EnergyWizard"
-version: "1.2.2"
+version: "1.2.3"
 slug: "smartbox"
 description: "Minut-för-minut styrning av elbil, värmepump, solcellsexport, spabad och huvudsäkring efter spotpriset - helt via Home Assistants egna entiteter."
 url: "https://github.com/murre87/energywizard"
