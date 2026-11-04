@@ -1,0 +1,243 @@
+{
+  "reference_commit": "daf9e33",
+  "slots": [
+    {
+      "t": "t0",
+      "buy": -0.2,
+      "sell": -0.2,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 0
+    },
+    {
+      "t": "t1",
+      "buy": 0.4,
+      "sell": 0.1,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 3
+    },
+    {
+      "t": "t2",
+      "buy": 0.7,
+      "sell": 0.3,
+      "load_kw": 0.5,
+      "solar_kw": 4,
+      "ev_kw": 0
+    },
+    {
+      "t": "t3",
+      "buy": 1,
+      "sell": 0.7,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 0
+    },
+    {
+      "t": "t4",
+      "buy": 3,
+      "sell": 2,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 0
+    },
+    {
+      "t": "t5",
+      "buy": 2,
+      "sell": 1.5,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 0
+    },
+    {
+      "t": "t6",
+      "buy": 0.3,
+      "sell": 0.1,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 0
+    },
+    {
+      "t": "t7",
+      "buy": 0.8,
+      "sell": 0.5,
+      "load_kw": 0.5,
+      "solar_kw": 0,
+      "ev_kw": 0
+    }
+  ],
+  "cases": [
+    {
+      "options": {
+        "terminal_pct": 25,
+        "allow_export": true,
+        "cycle_cost": 0.3
+      },
+      "result": {
+        "rows": [
+          {
+            "t": "t0",
+            "action": "charge",
+            "soc_kwh": 2.45,
+            "battery_kw": 2,
+            "grid_kw": 2.5,
+            "cost": -0.125,
+            "buy": -0.2
+          },
+          {
+            "t": "t1",
+            "action": "charge",
+            "soc_kwh": 2.9000000000000004,
+            "battery_kw": 2,
+            "grid_kw": 5.5,
+            "cost": 0.55,
+            "buy": 0.4
+          },
+          {
+            "t": "t2",
+            "action": "charge",
+            "soc_kwh": 3.35,
+            "battery_kw": 2,
+            "grid_kw": -1.5,
+            "cost": -0.11249999999999999,
+            "buy": 0.7
+          },
+          {
+            "t": "t3",
+            "action": "discharge",
+            "soc_kwh": 2.8000000000000003,
+            "battery_kw": -2,
+            "grid_kw": -1.5,
+            "cost": -0.11249999999999996,
+            "buy": 1
+          },
+          {
+            "t": "t4",
+            "action": "discharge",
+            "soc_kwh": 2.25,
+            "battery_kw": -2,
+            "grid_kw": -1.5,
+            "cost": -0.6,
+            "buy": 3
+          },
+          {
+            "t": "t5",
+            "action": "discharge",
+            "soc_kwh": 1.7000000000000002,
+            "battery_kw": -2,
+            "grid_kw": -1.5,
+            "cost": -0.4125,
+            "buy": 2
+          },
+          {
+            "t": "t6",
+            "action": "hold",
+            "soc_kwh": 1.7000000000000002,
+            "battery_kw": 0.0,
+            "grid_kw": 0.5,
+            "cost": 0.0375,
+            "buy": 0.3
+          },
+          {
+            "t": "t7",
+            "action": "hold",
+            "soc_kwh": 1.7000000000000002,
+            "battery_kw": 0.0,
+            "grid_kw": 0.5,
+            "cost": 0.1,
+            "buy": 0.8
+          }
+        ],
+        "cost": -0.6749999999999999,
+        "baseline_cost": 0.4624999999999999,
+        "saving_kr": 1.14
+      }
+    },
+    {
+      "options": {
+        "terminal_pct": 50,
+        "allow_export": false,
+        "cycle_cost": 0.75
+      },
+      "result": {
+        "rows": [
+          {
+            "t": "t0",
+            "action": "charge",
+            "soc_kwh": 2.45,
+            "battery_kw": 2,
+            "grid_kw": 2.5,
+            "cost": -0.125,
+            "buy": -0.2
+          },
+          {
+            "t": "t1",
+            "action": "charge",
+            "soc_kwh": 2.9000000000000004,
+            "battery_kw": 2,
+            "grid_kw": 5.5,
+            "cost": 0.55,
+            "buy": 0.4
+          },
+          {
+            "t": "t2",
+            "action": "auto",
+            "soc_kwh": 3.35,
+            "battery_kw": 2,
+            "grid_kw": -1.5,
+            "cost": -0.11249999999999999,
+            "buy": 0.7
+          },
+          {
+            "t": "t3",
+            "action": "auto",
+            "soc_kwh": 3.2,
+            "battery_kw": -0.5,
+            "grid_kw": 0.0,
+            "cost": 0.09375,
+            "buy": 1
+          },
+          {
+            "t": "t4",
+            "action": "auto",
+            "soc_kwh": 3.0500000000000003,
+            "battery_kw": -0.5,
+            "grid_kw": 0.0,
+            "cost": 0.09375,
+            "buy": 3
+          },
+          {
+            "t": "t5",
+            "action": "auto",
+            "soc_kwh": 2.9000000000000004,
+            "battery_kw": -0.5,
+            "grid_kw": 0.0,
+            "cost": 0.09375,
+            "buy": 2
+          },
+          {
+            "t": "t6",
+            "action": "charge",
+            "soc_kwh": 3.35,
+            "battery_kw": 2,
+            "grid_kw": 2.5,
+            "cost": 0.1875,
+            "buy": 0.3
+          },
+          {
+            "t": "t7",
+            "action": "charge",
+            "soc_kwh": 3.8000000000000003,
+            "battery_kw": 2,
+            "grid_kw": 2.5,
+            "cost": 0.5,
+            "buy": 0.8
+          }
+        ],
+        "cost": 1.28125,
+        "baseline_cost": 0.8,
+        "saving_kr": 1.12
+      }
+    }
+  ]
+}

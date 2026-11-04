@@ -110,6 +110,27 @@ def test_invalid_wear_cost_rejected():
             optimize(_slots([1.0]), 5, 10, 2, 10, 1, 1, discharge_wear_cost_sek_per_kwh=value)
 
 
+def test_zero_new_costs_preserve_original_main_rows():
+    """Golden rows generated from main daf9e33, before direction-state expansion.
+
+    Keep the reference independent of the current optimizer and available without Git.
+    Both cases cover prices, PV, EV load, terminal styles and different export policies.
+    """
+    import json
+    from pathlib import Path
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "battery_plan_legacy.json").read_text())
+    for case in fixture["cases"]:
+        result = optimize(fixture["slots"], 2, 4, 1, 4, 2, 2, **case["options"],
+                          charge_wear_cost_sek_per_kwh=0, discharge_wear_cost_sek_per_kwh=0,
+                          reversal_cost_sek=0)
+        expected = case["result"]
+        # Extra diagnostic columns are additive; all original row values must be exact.
+        legacy_rows = [{key: row[key] for key in expected["rows"][0]} for row in result["rows"]]
+        assert legacy_rows == expected["rows"]
+        for key in ("cost", "baseline_cost", "saving_kr"):
+            assert result[key] == expected[key]
+
+
 def test_legacy_discharge_cost_and_new_wear_are_additive_with_losses():
     import math
     import pytest

@@ -47,11 +47,17 @@ Five timed runs after warmup on Windows 11 / Python 3.13.12, Intel Family 6 Mode
 
 | Version | Median | Range |
 | --- | --- | --- |
-| Main (`daf9e33`) | 0.0692 s | 0.0673–0.0820 s |
-| Addition, new settings at defaults | 0.2442 s | 0.2300–0.2533 s |
-| Addition, new costs enabled | 0.2428 s | 0.2377–0.2577 s |
+| Original A-state main (`daf9e33`) | 0.0589 s | 0.0571–0.0623 s |
+| Addition, new settings at defaults | 0.0616 s | 0.0588–0.0633 s |
+| Addition, new costs enabled | 0.1996 s | 0.1980–0.2044 s |
 
 Enabled costs were 0.05 SEK/stored kWh charged, 0.10 discharged and 0.50 per reversal;
-all runs used `cycle_cost=0.30`. Roughly 3.5× CPU time reflects the three direction
-states and their accounting. This measures the pure planner, excluding database,
-forecast and driver I/O. It is not a target-device benchmark.
+all runs used `cycle_cost=0.30`. The original A-state recurrence is used whenever
+`reversal_cost_sek` is zero, including with nonzero optional wear rates. Direction
+state expands to 3×A only when reversal pricing is enabled. Default runtime is close
+to the original planner (about 5% difference in this run), rather than paying for the
+expanded state space. Reconstruction still reports physical reversals as diagnostics.
+This measures the pure planner, excluding database, forecast and driver I/O. It is
+not a target-device benchmark. Golden rows from original main are checked in tests;
+an additional offline comparison matched all original output fields across 18
+36-hour combinations of terminal percentile, export policy and legacy cycle cost.
