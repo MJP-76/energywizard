@@ -1210,10 +1210,26 @@ while True:
                 except Exception as e:
                     print(f"❌ Fel i klimatschema för {car_id}: {e}")
 
-            n_lat = trackers.get('nissan_lat')
-            n_lon = trackers.get('nissan_lon')
-            n_dist = calc_distance(weather.LATITUDE, weather.LONGITUDE, n_lat, n_lon)
-            handle_car_climate('nissan', climate_schedules.get('nissan', {'enabled':False}), nissan_data, nissan_charger_data, "climate.leaf_climate", outdoor_temp_for_climate, n_dist)
+            # Varje bil med en klimatentitet i installationen (ingen hårdkodad bil, 2026-11-04). Avståndet ur bilens
+            # device_tracker om den valts (entities.tracker), annars de gamla trackers-nycklarna.
+            for _ev in house_cfg.get("evs", []) or []:
+                _cid, _ents = _ev.get("id"), _ev.get("entities") or {}
+                _cent = _ents.get("climate")
+                if not _cid or not _cent:
+                    continue
+                try:
+                    if _ents.get("tracker"):
+                        _lat = homeassistant._get_numeric_attribute(_ents["tracker"], "latitude")
+                        _lon = homeassistant._get_numeric_attribute(_ents["tracker"], "longitude")
+                    else:
+                        _lat, _lon = trackers.get(f"{_cid}_lat"), trackers.get(f"{_cid}_lon")
+                    _dist = calc_distance(weather.LATITUDE, weather.LONGITUDE, _lat, _lon)
+                    _cstate = {"climate_state": homeassistant._get_raw_state(_cent),
+                               "climate_temp": homeassistant._get_numeric_attribute(_cent, "current_temperature")}
+                    handle_car_climate(_cid, climate_schedules.get(_cid, {'enabled': False}), _cstate, car_charger_data.get(_cid),
+                                       _cent, outdoor_temp_for_climate, _dist)
+                except Exception as _hce:
+                    print(f"❌ Klimatschemat för {_cid}: {_hce}")
 
             # Inomhustemperatur
             pump_indoor_temp = pump_data.get("indoor_temp") if pump_data else None
