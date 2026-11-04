@@ -412,6 +412,9 @@ _PULSE_PATTERNS = {
     "voltage": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:spanning_fas|voltage_phase|voltage_l)([123])$"),
     "current": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:strom_fas|current_phase|current_l)([123])$"),
     "hour": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:ackumulerad_forbrukning_under_aktuell_timme|accumulated_consumption_current_hour)$"),
+    # Verklig köp- och säljeffekt (W). Pulsens fasström saknar tecken, så U x I kan inte se export (issue #114).
+    "import": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:power|effekt)$"),
+    "export": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:power_production|effekt_produktion|produktionseffekt)$"),
 }
 
 
@@ -423,11 +426,14 @@ def detect_tibber_pulse(entity_ids) -> dict:
         for kind, rx in _PULSE_PATTERNS.items():
             m = rx.match(eid)
             if m:
-                key = f"{kind}_l{m.group(2)}" if kind != "hour" else "hour_kwh"
+                key = {"hour": "hour_kwh", "import": "import_w", "export": "export_w"}.get(kind) or f"{kind}_l{m.group(2)}"
                 found.setdefault(m.group(1), {})[key] = eid
     for prefix in sorted(found):
         e = found[prefix]
         if all(f"{k}_l{n}" in e for k in ("voltage", "current") for n in (1, 2, 3)):
+            if not ("import_w" in e and "export_w" in e):       # köp utan sälj räcker inte - då U x I som förut
+                e.pop("import_w", None)
+                e.pop("export_w", None)
             return e
     return {}
 
@@ -448,7 +454,14 @@ def read_power_meter():
         e = POWER_METER
     try:
         cur = [_get_numeric_state(e[k]) if e.get(k) else None for k in ("current_l1", "current_l2", "current_l3")]
-        if all(e.get(k) for k in ("voltage_l1", "voltage_l2", "voltage_l3", "current_l1", "current_l2", "current_l3")):
+        if e.get("import_w") and e.get("export_w"):
+            # Verklig köp- och säljeffekt går före U x I: fasströmmen (t.ex. Tibber Pulse) saknar ofta tecken, så
+            # export syns inte, och U x I är skenbar effekt (issue #114).
+            imp, exp = _get_numeric_state(e["import_w"]), _get_numeric_state(e["export_w"])
+            if imp is None and exp is None:
+                return None
+            net = (imp or 0.0) - (exp or 0.0)
+        elif all(e.get(k) for k in ("voltage_l1", "voltage_l2", "voltage_l3", "current_l1", "current_l2", "current_l3")):
             volt = [_get_numeric_state(e[k]) for k in ("voltage_l1", "voltage_l2", "voltage_l3")]
             if None in volt or None in cur:
                 return None

@@ -498,7 +498,7 @@ def state(request: Request):
         v = val(st, e)
         if v is None:
             health.append(("Saknas i Home Assistant: " if e not in st else "Otillgänglig: ") + e)
-    return {"ok": True, "role": _role(request), "user": _session(request)[1], "ts": int(time.time()), "version": os.environ.get("APP_VERSION", "dev"), "cars": [car_state("tesla", st, ov), car_state("nissan", st, ov)], "price": prices(), "health": health,
+    return {"ok": True, "role": _role(request), "user": _session(request)[1], "ts": int(time.time()), "version": os.environ.get("APP_VERSION", "dev"), "cars": [car_state(k, st, ov) for k in CARS], "price": prices(), "health": health,
             "solar_w": num(st, "sensor.solaredge_aktuell_effekt")}
 
 

@@ -711,6 +711,17 @@ def _price_24h(c):
     return [{"t": r[0].isoformat(), "p": float(r[1])} for r in rows]
 
 
+def _ewapp_cars() -> list:
+    """Bilarna som mobilappen räknar fram ur installationen (house_config.yaml) och Home Assistant."""
+    try:
+        r = requests.get(f"{EWAPP_URL}/api/state", cookies={"ew": _ewapp_cookie()}, timeout=25)
+        r.raise_for_status()
+        return r.json().get("cars", []) or []
+    except Exception as e:
+        print(f"⚠️ Bilarna från mobilappen: {e}", flush=True)
+        return []
+
+
 @app.get("/api/car")
 async def api_car():
     """Elbil-sidan: SoC/laddstatus för båda bilarna + dagens schema (ev_charging_schedule)
@@ -736,16 +747,13 @@ async def api_car():
             c.rollback()
             slots, plan_prices = [], []
     planned_by_car = {p["car_id"]: _n(p["kwh"]) for p in planned}
-    cars = [
-        {"id": "tesla", "name": "Tesla Model Y", "soc": _n(row.get("tesla_soc")), "stale": bool(row.get("tesla_soc_stale")),
-         # sensor_log: ev_* = Nissans laddbox, ev_carport_* = Teslas (logger.log_status får bilens egen box,
-         # även när bilarna bytt plats). Förut var de omkastade här, så Tesla visade Nissans effekt.
-         "power_kw": _n(row.get("ev_carport_power_kw")), "status": row.get("ev_carport_status"),
-         "climate_temp": _n(row.get("tesla_climate_temp")), "climate_state": row.get("tesla_climate_state")},
-        {"id": "nissan", "name": "Nissan Leaf", "soc": _n(row.get("nissan_soc")), "stale": bool(row.get("nissan_soc_stale")),
-         "power_kw": _n(row.get("ev_power_kw")), "status": row.get("ev_status"),
-         "climate_temp": _n(row.get("nissan_climate_temp")), "climate_state": row.get("nissan_climate_state")},
-    ]
+    # Bilarna ur installationen, live från mobilappens /api/state (samma bilar och entiteter som där) - inga
+    # inbyggda bilnamn eller loggkolumner per bil (issue #113: andra såg Emils Tesla/Nissan utan värden).
+    cars = []
+    for c in _ewapp_cars():
+        cars.append({"id": c.get("key"), "name": c.get("name"), "soc": _n(c.get("soc")), "stale": bool(c.get("soc_stale")),
+                     "power_kw": _n(c.get("power_kw")), "status": c.get("status"),
+                     "climate_temp": _n(c.get("inside")), "climate_state": "heat_cool" if c.get("climate_on") else "off"})
     for car in cars:
         car["planned_kwh_today"] = planned_by_car.get(car["id"])
     schedule = [{"car_id": s["car_id"], "target_time": str(s["target_time"]) if s["target_time"] else None,
@@ -1070,7 +1078,7 @@ async def set_notification(key: str, request: Request):
 async def proxy_car_action(car: str, request: Request):
     """Elbil-sidan: start/max/stop/auto-laddning + värm/stoppa klimatet - ewapp:s egen
     car_command()/heat_on/heat_off, bara anropad härifrån också."""
-    if car not in ("tesla", "nissan"):
+    if not re.fullmatch(r"[a-z0-9_]{1,40}", car or ""):
         return JSONResponse({"detail": "Okänd bil"}, status_code=404)
     body = await request.json()
     if body.get("kind") not in ("start", "max", "set", "stop", "auto", "heat_on", "heat_off"):
@@ -1151,7 +1159,10 @@ async def proxy_tesla_access(request: Request):
         return JSONResponse({"detail": "Okänd åtgärd"}, status_code=400)
     if what != "lock" and not _secure_ok(request):
         return JSONResponse({"detail": "secure"}, status_code=403)
-    return await _ewapp_proxy("/api/tesla/access", body, extra_cookies={"ew2": request.cookies.get("ew2", "")})
+    car = next((c.get("key") for c in _ewapp_cars() if c.get("access")), None)   # bilen som har lås valda i installationen
+    if not car:
+        return JSONResponse({"detail": "Ingen bil har lås valda i installationen"}, status_code=404)
+    return await _ewapp_proxy(f"/api/car/{car}/access", body, extra_cookies={"ew2": request.cookies.get("ew2", "")})
 
 
 @app.get("/api/tesla/access-state")
@@ -1165,8 +1176,8 @@ async def tesla_access_state():
         data = r.json()
     except Exception as e:
         return JSONResponse({"detail": f"Nådde inte ewapp: {e}"}, status_code=502)
-    tesla = next((c for c in data.get("cars", []) if c.get("key") == "tesla"), None)
-    return {"ok": True, "access": tesla.get("access") if tesla else None}
+    car = next((c for c in data.get("cars", []) if c.get("access")), None)
+    return {"ok": True, "access": car.get("access") if car else None, "car": car.get("name") if car else None}
 
 
 @app.post("/api/discover")

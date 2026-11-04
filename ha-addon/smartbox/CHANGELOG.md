@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.1 (2026-11-04)
+- **Nätet visades fel med Tibber Pulse när man säljer solel** (#114): pulsens fasström saknar tecken, så export syntes
+  som köp. Har pulsen köp- och säljeffekt används de nu; installationen hittar dem själv.
+- **Loggningen föll varje minut** med en generisk värmepump (`invalid input syntax for type smallint: "auto"`, #112).
+- **Elbil-sidan visade Tesla och Nissan** för alla (#113): bilarna kommer nu från installationen, i webben och appen.
+- Mobilappen startade inte efter 1.2.0 i vissa fall (pymodbus) - rättat. Lås/luckor i webben fungerar igen.
+
 ## 1.2.0 (2026-11-04)
 - **Öppna webbgränssnittet fungerar inuti Home Assistant** (Ingress, issue #118): även via Nabu Casa, https och HA-appen,
   och HA:s inloggning gäller. EnergyWizard får en egen panel i sidomenyn.

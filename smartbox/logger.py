@@ -370,7 +370,9 @@ def log_status(
             "spa_heater_running": (1 if (spa_power_w is not None and spa_power_w > 500)
                                    else (1 if str(g.get("heater_state", "")).lower() == "heating" else 0)),
             "ai_action_log": ai_action_log,
-            "operating_mode": pump_operating_mode,
+            # Thermias heltalskod; en generisk climate-pump rapporterar text ("auto") - den hör inte hemma i
+            # den här SMALLINT-kolumnen (issue #112: loggningen föll varje minut).
+            "operating_mode": pump_operating_mode if isinstance(pump_operating_mode, int) and not isinstance(pump_operating_mode, bool) else None,
             "degree_minutes": p.get("degree_minutes"),
             "circ_pump_speed": p.get("circ_pump_speed"),
             "brine_pump_speed": p.get("brine_pump_speed"),
