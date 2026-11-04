@@ -1245,7 +1245,7 @@ def _lights_work(a, who_req_log):
     if not plan:
         raise HTTPException(400, "Okänd åtgärd")
     ents, svc, msg = plan
-    if a == "windows_on" and dt.datetime.now(TZ).hour < 8:       # Charlie sover aldrig längre än till kl 08: hennes fönsterlampa tänds inte före dess
+    if a == "windows_on" and (dt.datetime.now(TZ).hour < 8 or dt.datetime.now(TZ).hour >= 18):   # Charlie sover kl 18-08: hennes fönsterlampa tänds inte då
         ents = [e for e in ents if e != "light.fonsterlampa_charlie"]
     want = "on" if svc == "turn_on" else "off"
     cur = lambda e: (states().get(e) or {}).get("state")
