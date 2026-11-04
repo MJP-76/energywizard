@@ -32,8 +32,8 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   heartbeat som måste skrivas oftare än gatewayens meddelandetid, annars släpper batteriet (samma princip som `keepalive_s`
   för Solis). Källor: evcc-issue [#22240](https://github.com/evcc-io/evcc/issues/22240) (stängd, ingen Pixii-kod mergad
   i evcc) och FTW:s drivrutin `pixii` (Modbus, 2.1.9, overifierad på hårdvara). Licensen för srcfl/device-drivers är oklar
-  (NOASSERTION), så ingen kod kopieras därifrån utan klartecken. Bygg läsningen från SunSpec-specen och be Pixii eller en
-  testare om registerkartan för styrningen.
+  (NOASSERTION), men **Sourceful har gett Emil ok att använda dem (2026-11-04)**. Utgå från FTW:s `pixii`-drivrutin med
+  källhänvisning, och verifiera mot en testare med Pixii innan styrningen slås på.
 - **Ensidigt exportskydd för batteriet.** När export inte är tillåten får batteriets urladdning aldrig ge export, inte
   heller inom toleransbandet: tillåt lite import och aldrig export, eller sikta på några tiotal watt import. Lärdom från en
   FTW-rapport 2026-11-04, där batteriet sålde 1–1,5 kWh om dagen till spotpris, som annars hade täckt dyra timmar senare.
