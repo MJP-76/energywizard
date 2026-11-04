@@ -21,6 +21,19 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   om var 15:e minut".
 - **Max laddström och faser känns av själv** per bil och laddbox (laddboxens och bilens egna gränser, och mätning:
   enfasbil om bara en fas drar ström), visas i startguiden och går att ändra. Idag `max_a`/`phases` i installationen.
+- **Drivrutiner från evcc** ([evcc-io/evcc](https://github.com/evcc-io/evcc), MIT, får användas i AGPL med upphovsrättsraden
+  kvar). evcc har YAML-mallar för 211 laddboxar, 251 mätare, växelriktare och batterier och 72 bilar, som pratar direkt
+  med enheten via Modbus, HTTP eller MQTT. Mest värde ger det där Home Assistant bara kan läsa men inte styra:
+  batterier och växelriktare som Victron, Sigenergy, Pixii, Huawei och GoodWe. Två vägar:
+  (1) en liten tolk för evcc:s Modbus/HTTP-mallar i Python, som ger många mätare och batterier på en gång;
+  (2) en körande evcc som laddbackend via dess API eller MQTT. Börja med (1) för batterierna som betatestarna har.
+- **Ensidigt exportskydd för batteriet.** När export inte är tillåten får batteriets urladdning aldrig ge export, inte
+  heller inom toleransbandet: tillåt lite import och aldrig export, eller sikta på några tiotal watt import. Lärdom från en
+  FTW-rapport 2026-11-04, där batteriet sålde 1–1,5 kWh om dagen till spotpris, som annars hade täckt dyra timmar senare.
+  Kontrollera battery_control.py och battery_plan.
+- **Tomt fält får aldrig sparas som 0.** Samma rapport visar att ett tomt fält sparades som 0 och blev ett laddtak som
+  stoppade all laddning. Gå igenom alla inställningsformulär (vi sparar tomt som "använd standard" i elpriset, men
+  kontrollera batteri, laddning och säkring).
 - **Rum, lampor och familjens namn i mobilappen** ur installationen: rumslistan, fönsterlamporna, användarnamnen och de
   personliga hälsningarna är fortfarande Emils egna.
 
