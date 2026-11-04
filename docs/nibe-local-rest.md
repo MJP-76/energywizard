@@ -1,5 +1,9 @@
 # NIBE local REST driver
 
+This implementation primarily targets the NIBE S1255. It has not been verified
+against other heaters. The S1155 read preset follows the published register map,
+but is not hardware-validated; no compatibility with other models is claimed.
+
 `heat_pump.driver: nibe_local` connects directly to the heater over HTTPS (normally
 8443), using Basic authentication and a required SHA-256 certificate pin. Enable
 local REST in installer menu 7.5.15. This driver uses standard Python libraries and
