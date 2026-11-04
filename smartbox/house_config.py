@@ -98,6 +98,24 @@ def build_car_drivers(cfg: dict) -> list:
     return out
 
 
+def car_specs(cfg: dict) -> dict:
+    """{bil_id: {"name", "max_a", "phases"}} för gpm.py. phases ur evs[].charger.phases: 1 = alltid 1-fas
+    (t.ex. Nissan Leaf), 3 = alltid 3-fas, auto = laddboxen får växla. max_a ur evs[].charger.max_a (standard 16)."""
+    out = {}
+    for ev in (cfg or {}).get("evs", []) or []:
+        cid = ev.get("id")
+        if not cid:
+            continue
+        ch = ev.get("charger") or {}
+        ph = str(ch.get("phases", "auto")).strip().lower()
+        try:
+            max_a = int(ch.get("max_a") or 16)
+        except (TypeError, ValueError):
+            max_a = 16
+        out[cid] = {"name": ev.get("name") or cid.capitalize(), "max_a": max_a, "phases": ph if ph in ("1", "3", "auto") else "auto"}
+    return out
+
+
 def build_charger_drivers(cfg: dict) -> dict:
     """{car_id: ChargerDriver}, en per bil som har en charger-sektion i sin config."""
     out = {}

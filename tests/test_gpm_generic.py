@@ -28,8 +28,8 @@ def test_noll_bilar_ger_tom_ev_dict_men_rör_inte_befintlig_logik():
         "indoor_temp": 21.0, "indoor_min": 19.0,
     })
     assert actions["ev"] == {}
-    # Den gamla platta nyckeln påverkas inte av car_ids - oförändrad algoritm körs ändå
-    assert "nissan_limit_a" in actions
+    # 2026-11-04: inga hårdkodade bilar - utan bilar finns inga bilnycklar alls
+    assert "nissan_limit_a" not in actions and "tesla_limit_a" not in actions
 
 
 def test_manuell_tvangsladdning_funkar_for_en_tredje_bil():
@@ -80,3 +80,41 @@ def test_default_car_ids_speglar_nissan_tesla_som_idag():
     assert set(actions["ev"].keys()) == {"nissan", "tesla"}
     assert actions["ev"]["nissan"]["limit_a"] == actions["nissan_limit_a"]
     assert actions["ev"]["tesla"]["limit_a"] == actions["tesla_limit_a"]
+
+
+
+def _engine():
+    from unittest.mock import patch
+    with patch.object(GlobalPriorityManager, "_restore_compressor_lock", lambda self: None):
+        return GlobalPriorityManager()
+
+
+def test_plan_laddar_bilar_med_andra_namn_och_egna_faser():
+    """Generisk N-bilsladdning: en Kia på 3-fas och en Volvo på 1-fas enligt laddplanen."""
+    import pandas as pd
+    now = datetime(2026, 11, 4, 2, 7, tzinfo=timezone.utc)
+    slot = now.replace(minute=0, tzinfo=None)
+    plan = pd.DataFrame([{"t_slot": slot, "kia_kw": 11.0, "volvo_kw": 3.7}])
+    a = _engine().evaluate({"now": now, "current_price": 0.3, "all_prices": [0.3] * 24, "avg_net_w": 800,
+                            "house_load_a": 4, "ev_actual_a": 0, "max_fuse_a": 35, "ev_plan": plan,
+                            "car_ids": ["kia", "volvo"],
+                            "car_specs": {"kia": {"name": "Kia", "max_a": 16, "phases": "3"},
+                                          "volvo": {"name": "Volvo", "max_a": 16, "phases": "1"}},
+                            "kia_soc": 40, "kia_connected": True, "volvo_soc": 60, "volvo_connected": True,
+                            "kia_prio": 1, "volvo_prio": 2})
+    assert a["kia_limit_a"] >= 6 and a["volvo_limit_a"] >= 6
+    assert a["ev"]["kia"]["limit_a"] == a["kia_limit_a"]
+    assert any("Sätter Kia:" in l and "Volvo:" in l for l in a["log"])
+
+
+def test_solladdning_vaxlar_bara_bilar_som_kan():
+    """En 1-fasbil (phases "1") växlas aldrig till 3-fas, en bil med phases "auto" får växla."""
+    now = datetime(2026, 7, 4, 12, 0, tzinfo=timezone.utc)
+    eng = _engine()
+    st = {"now": now, "current_price": 0.3, "all_prices": [0.3] * 24, "avg_net_w": -9000, "house_load_a": 2,
+          "ev_actual_a": 0, "max_fuse_a": 25, "car_ids": ["zoe", "id4"],
+          "car_specs": {"zoe": {"name": "Zoe", "max_a": 16, "phases": "1"}, "id4": {"name": "ID4", "max_a": 16, "phases": "auto"}},
+          "zoe_soc": 50, "zoe_connected": True, "zoe_phases": "SinglePhase",
+          "id4_soc": 50, "id4_connected": True, "id4_phases": "SinglePhase"}
+    a = eng.evaluate(dict(st))
+    assert a.get("zoe_set_phases") in (None, 1) and a.get("id4_set_phases") == 3

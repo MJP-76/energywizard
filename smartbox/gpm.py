@@ -68,6 +68,62 @@ NO_SENSOR_COLD_LIMIT_C = -5.0          # kallare än så: högst 1 °C sänkning
 NO_SENSOR_NO_DROP_C = -15.0            # kallare än så: ingen sänkning alls
 
 
+def _car_specs(state, car_ids):
+    """Varje bils egenskaper ur installationen (main.py bygger car_specs ur house_config: laddboxens faser och
+    maxström). phases: "1" = alltid 1-fas, "3" = alltid 3-fas, "auto" = kan växla. Inga bilnamn i koden."""
+    specs = state.get('car_specs') or {}
+    out = {}
+    for cid in car_ids:
+        s = specs.get(cid) or {}
+        ph = str(s.get('phases', 'auto')).lower()
+        out[cid] = {"name": s.get("name") or cid.capitalize(), "max_a": int(s.get("max_a") or 16),
+                    "phases": ph if ph in ("1", "3", "auto") else "auto"}
+    return out
+
+
+def _primary_car(cars, prios):
+    """Den prioriterade bilen: den första med prioritet 1, annars den sista bland dem med lägst siffra
+    (samma val som förut med två bilar: Nissan bara om den har prio 1, annars Tesla)."""
+    for cid in cars:
+        if prios.get(cid) == 1:
+            return cid
+    low = min(prios.get(c, 9) for c in cars)
+    return [c for c in cars if prios.get(c, 9) == low][-1]
+
+
+def _split_amps(final, cars, prios, specs, min_a, other_share=None):
+    """Fördelar final A mellan bilarna som ska laddas. Två bilar: exakt den gamla regeln (den prioriterade
+    får 60 %, den andra other_share eller resten; når någon inte min_a får den andra allt). Fler: i prioritetsordning."""
+    out = {c: 0 for c in cars}
+    if not cars:
+        return out
+    cap = lambda c: specs[c]["max_a"]
+    if len(cars) == 1:
+        out[cars[0]] = min(final, cap(cars[0]))
+        return out
+    if len(cars) == 2:
+        p = _primary_car(cars, prios)
+        o = cars[1] if cars[0] == p else cars[0]
+        out[p] = min(int(final * 0.6), cap(p))
+        out[o] = min(final - out[p], cap(o)) if other_share is None else min(int(final * other_share), cap(o))
+        if out[cars[0]] < min_a:
+            out[cars[0]] = 0
+            out[cars[1]] = min(final, cap(cars[1]))
+        if out[cars[1]] < min_a:
+            out[cars[1]] = 0
+            out[cars[0]] = min(final, cap(cars[0]))
+        for c in cars:
+            out[c] = min(out[c], cap(c))
+        return out
+    left = final
+    for c in sorted(cars, key=lambda c: (prios.get(c, 9), cars.index(c))):
+        a = min(left, cap(c))
+        if a >= min_a:
+            out[c] = a
+            left -= a
+    return out
+
+
 def no_sensor_heat(mode, outdoor_c, cheap_t, expensive_t, lowered_since, recover_until, now):
     """(läge, måltemp, lowered_since, recover_until, förklaring) för ett hus utan innegivare."""
     if mode != "EXPENSIVE":
@@ -204,22 +260,25 @@ class GlobalPriorityManager:
             
         base_pump_mode = self.last_price_mode
         
+        # --- Bilarna: valfritt antal, egenskaper ur installationen (car_specs) ---
+        car_ids = list(state['car_ids']) if 'car_ids' in state else []
+        specs = _car_specs(state, car_ids)
+
         # --- 3. INITIERA MED RÄTT PRISLÄGE (Kostnadsoptimerat) ---
         actions = {
             "spa_target": state.get('spa_low_temp', 15.0),
             "spa_eco": True,
-            "nissan_limit_a": 0,
-            "tesla_limit_a": 0,
             "pump_target_temp": state.get('temp_cheap', 22.0) if base_pump_mode == "CHEAP" else state.get('temp_expensive', 20.0),
             "water_target_temp": state.get('water_target_normal', 50.0) if base_pump_mode == "CHEAP" else (state.get('water_target_normal', 50.0) - 10.0),
             "pump_mode": base_pump_mode,
             "spa_solar_boost_active": False,
             "pump_run_water": False,
             "solar_limit_pct": 100,
-            "nissan_set_phases": None,
-            "tesla_set_phases": None,
             "log": []
         }
+        for cid in car_ids:
+            actions[f"{cid}_limit_a"] = 0
+            actions[f"{cid}_set_phases"] = None
         
         if base_pump_mode == "CHEAP":
             actions["log"].append(f"🟢 Grundläge: Billig el ({price:.2f} kr <= {dyn_limit - hysteresis:.2f} kr). Värmepump och Varmvatten i normaldrift.")
@@ -251,38 +310,24 @@ class GlobalPriorityManager:
             self.high_load_start_time = None
             self.high_load_notified = False
 
-        # --- EnergyWizard Open: generisk bil-lista, defaultar till dagens två bilar ---
-        # (samma "in state"-koll som i speglingen längre ner - en tom lista i state ska
-        # respekteras, inte tolkas som falsy och falla igenom till default)
-        car_ids = state['car_ids'] if 'car_ids' in state else ['nissan', 'tesla']
-
-        # --- Läs in och sanera EV-status ---
-        nissan_soc = state.get('nissan_soc')
-        tesla_soc = state.get('tesla_soc')
-        nissan_charge_completed = state.get('nissan_charge_completed', False)
-        tesla_charge_completed = state.get('tesla_charge_completed', False)
-        nissan_prio = state.get('nissan_prio', 2)
-        tesla_prio = state.get('tesla_prio', 1)
-        nissan_connected = state.get('nissan_connected', False)
-        tesla_connected = state.get('tesla_connected', False)
+        # --- Läs in och sanera EV-status (per bil) ---
+        soc = {c: state.get(f'{c}_soc') for c in car_ids}
+        completed = {c: state.get(f'{c}_charge_completed', False) for c in car_ids}
+        prios = {c: state.get(f'{c}_prio', 2) for c in car_ids}
+        connected = {c: state.get(f'{c}_connected', False) for c in car_ids}
         # Failsafe: Om SOC är tydligt under 95% men flaggan är satt, nollställ den.
         # Detta skyddar mot om `main.py` missar en uppdatering pga en tillfälligt otillgänglig sensor.
-        if nissan_soc is not None and nissan_soc < 95 and nissan_charge_completed:
-            nissan_charge_completed = False
-            actions["log"].append("🔋 GPM Failsafe: Nissan SOC < 95%, återställer 'charge_completed' flaggan.")
-        
-        if tesla_soc is not None and tesla_soc < 95 and tesla_charge_completed:
-            tesla_charge_completed = False
-            actions["log"].append("🔋 GPM Failsafe: Tesla SOC < 95%, återställer 'charge_completed' flaggan.")
+        for c in car_ids:
+            if soc[c] is not None and soc[c] < 95 and completed[c]:
+                completed[c] = False
+                actions["log"].append(f"🔋 GPM Failsafe: {specs[c]['name']} SOC < 95%, återställer 'charge_completed' flaggan.")
 
-        nissan_needs_charge = nissan_connected and not nissan_charge_completed and (nissan_soc is None or nissan_soc < 98)
-        tesla_needs_charge = tesla_connected and not tesla_charge_completed and (tesla_soc is None or tesla_soc < 98)
-        any_ev_needs_charge = nissan_needs_charge or tesla_needs_charge
-        
-        if nissan_connected and nissan_soc is None:
-            actions["log"].append("⚠️ GPM Failsafe: Nissan API offline (SOC saknas). Antar att laddning behövs.")
-        if tesla_connected and tesla_soc is None:
-            actions["log"].append("⚠️ GPM Failsafe: Tesla API offline (SOC saknas). Antar att laddning behövs.")
+        needs = {c: connected[c] and not completed[c] and (soc[c] is None or soc[c] < 98) for c in car_ids}
+        any_ev_needs_charge = any(needs.values())
+
+        for c in car_ids:
+            if connected[c] and soc[c] is None:
+                actions["log"].append(f"⚠️ GPM Failsafe: {specs[c]['name']} API offline (SOC saknas). Antar att laddning behövs.")
 
         EV_MIN_CHARGE_AMPS = 6
         EV_MAX_CHARGE_AMPS = 16
@@ -291,7 +336,7 @@ class GlobalPriorityManager:
         THREE_PHASE_MIN_SURPLUS_W = -4200 # ~6A 3-fas
         ONE_PHASE_MIN_SURPLUS_W   = -1400 # ~6A 1-fas
 
-        max_possible_phases = 3 if tesla_needs_charge else 1
+        max_possible_phases = 3 if any(needs[c] and specs[c]["phases"] != "1" for c in car_ids) else 1
 
         if not hasattr(self, 'ev_solar_last_eval_time'):
             self.ev_solar_last_eval_time = None
@@ -390,21 +435,20 @@ class GlobalPriorityManager:
                 target_phases = self.ev_solar_target_phases
                 
                 phase_change_in_progress = False
-                for car_id, needs_charge, phases_str in [
-                    ('nissan', nissan_needs_charge, state.get('nissan_phases')),
-                    ('tesla', tesla_needs_charge, state.get('tesla_phases'))
-                ]:
-                    if needs_charge and phases_str:
-                        target_phases_for_car = 1 if car_id == 'nissan' else target_phases
+                for car_id in car_ids:
+                    phases_str = state.get(f'{car_id}_phases')
+                    if needs[car_id] and phases_str:
+                        fixed = specs[car_id]["phases"]
+                        target_phases_for_car = 1 if fixed == "1" else 3 if fixed == "3" else target_phases
                         current_phases = 3 if any(x in str(phases_str) for x in ['Three', '3', 'auto', 'Auto']) else 1
                         if current_phases != target_phases_for_car:
                             actions[f"{car_id}_set_phases"] = target_phases_for_car
-                            actions["log"].append(f"⚡ Prio 3.5 (Fasväxling): Växlar {car_id.capitalize()} till {target_phases_for_car}-fas.")
+                            actions["log"].append(f"⚡ Prio 3.5 (Fasväxling): Växlar {specs[car_id]['name']} till {target_phases_for_car}-fas.")
                             phase_change_in_progress = True
 
                 if phase_change_in_progress:
-                    actions["nissan_limit_a"] = 0
-                    actions["tesla_limit_a"] = 0
+                    for car_id in car_ids:
+                        actions[f"{car_id}_limit_a"] = 0
                     # Pausa utvärderingstiden så vi inte tappar tid under bytet
                     self.ev_solar_last_eval_time = now
                 else:
@@ -420,32 +464,13 @@ class GlobalPriorityManager:
                     final_ev_amps = min(self.ev_solar_target_amps, available_amps_realtime)
 
                     if final_ev_amps >= EV_MIN_CHARGE_AMPS:
-                        # --- Prioritetslogik fördelar strömmen ---
-                        if nissan_needs_charge and tesla_needs_charge:
-                            if nissan_prio == 1:
-                                actions['nissan_limit_a'] = min(int(final_ev_amps * 0.6), 20)
-                                actions['tesla_limit_a'] = min(int(final_ev_amps * 0.4), 16)
-                            else:
-                                actions['nissan_limit_a'] = min(int(final_ev_amps * 0.4), 20)
-                                actions['tesla_limit_a'] = min(int(final_ev_amps * 0.6), 16)
-                            
-                            # Om en bil inte når min-ström, ge allt till den andra
-                            if actions['nissan_limit_a'] < EV_MIN_CHARGE_AMPS:
-                                actions['nissan_limit_a'] = 0
-                                actions['tesla_limit_a'] = min(final_ev_amps, 16)
-                            if actions['tesla_limit_a'] < EV_MIN_CHARGE_AMPS:
-                                actions['tesla_limit_a'] = 0
-                                actions['nissan_limit_a'] = min(final_ev_amps, 20)
-                                
-                            actions['nissan_limit_a'] = min(actions['nissan_limit_a'], 20)
-                            actions['tesla_limit_a'] = min(actions['tesla_limit_a'], 16)
-                        elif nissan_needs_charge:
-                            actions['nissan_limit_a'] = min(final_ev_amps, 20)
-                        elif tesla_needs_charge:
-                            actions['tesla_limit_a'] = min(final_ev_amps, 16)
+                        # --- Prioritetslogik fördelar strömmen (den prioriterade 60 %, den andra 40 %) ---
+                        _cars = [c for c in car_ids if needs[c]]
+                        for c, a in _split_amps(final_ev_amps, _cars, prios, specs, EV_MIN_CHARGE_AMPS, other_share=0.4).items():
+                            actions[f"{c}_limit_a"] = a
                     else:
-                        actions["nissan_limit_a"] = 0
-                        actions["tesla_limit_a"] = 0
+                        for c in car_ids:
+                            actions[f"{c}_limit_a"] = 0
                         # FIX #16: Avsluta INTE sol-sessionen om vi bara pausar 0A under kontaktor-cooldown.
                         if getattr(self, 'ev_solar_phase_pause', False):
                             actions["log"].append("☀️ Prio 3.5 (SOLAR EV): 0A under kontaktor-cooldown. Behåller sol-sessionen aktiv.")
@@ -457,12 +482,14 @@ class GlobalPriorityManager:
             self.ev_solar_charge_active = False
             self.ev_solar_phase_pause = False  # FIX #16: ingen sol-laddning -> rensa pausflaggan
 
-            # Nissan ska alltid vara på 1-fas
-            if state.get('nissan_phases') and 'Three' in state.get('nissan_phases'):
-                actions["nissan_set_phases"] = 1
-            if state.get('tesla_phases') and 'Single' in state.get('tesla_phases'):
-                actions["tesla_set_phases"] = 3
-                actions["log"].append("☀️ Prio 3.5 (SOLAR EV): Ingen sol-laddning aktiv. Återställer Tesla till 3-fas.")
+            # 1-fasbilar ska alltid vara på 1-fas; bilar som kan växla återställs till 3-fas
+            for c in car_ids:
+                _ph = state.get(f'{c}_phases')
+                if specs[c]["phases"] == "1" and _ph and 'Three' in _ph:
+                    actions[f"{c}_set_phases"] = 1
+                elif specs[c]["phases"] != "1" and _ph and 'Single' in _ph:
+                    actions[f"{c}_set_phases"] = 3
+                    actions["log"].append(f"☀️ Prio 3.5 (SOLAR EV): Ingen sol-laddning aktiv. Återställer {specs[c]['name']} till 3-fas.")
 
         # --- Prio 2: SOLCELLSOPTIMERING (PI-Regulator) ---
         current_solar_limit_pct = state.get('current_solar_limit_pct')
@@ -506,19 +533,20 @@ class GlobalPriorityManager:
                 actions["log"].append("☀️ Prio 2 (SOL-PI): Pris > 0 -> Återställer gräns till 100%.")
 
         # --- Prio 3: ELBILSLADDNING (Spread-Scoring) ---
-        nissan_full = nissan_soc is not None and nissan_soc >= 98
-        tesla_full = tesla_soc is not None and tesla_soc >= 98
+        full = {c: soc[c] is not None and soc[c] >= 98 for c in car_ids}
+
+        def _zero_all():
+            for c in car_ids:
+                actions[f"{c}_limit_a"] = 0
 
         # Hoppa över 15-minutersschemat helt om vi redan laddar för fullt på solenergi i realtid!
         if not self.ev_solar_charge_active:
-            if not nissan_needs_charge and not tesla_needs_charge:
-                actions["nissan_limit_a"] = 0
-                actions["tesla_limit_a"] = 0
-                if nissan_charge_completed or nissan_full:
-                    actions["log"].append(f"🚗 Prio 3 (EV): Nissan är fulladdad ({nissan_soc}%). Stoppar laddning (0A).")
-                if tesla_charge_completed or tesla_full:
-                    actions["log"].append(f"🚗 Prio 3 (EV): Tesla är fulladdad ({tesla_soc}%). Stoppar laddning (0A).")
-                if nissan_soc is None and tesla_soc is None:
+            if not any_ev_needs_charge:
+                _zero_all()
+                for c in car_ids:
+                    if completed[c] or full[c]:
+                        actions["log"].append(f"🚗 Prio 3 (EV): {specs[c]['name']} är fulladdad ({soc[c]}%). Stoppar laddning (0A).")
+                if all(soc[c] is None for c in car_ids):
                     actions["log"].append("🚗 Prio 3 (EV): Ingen bil ansluten som kräver laddning (0A).")
             else:
                 ev_plan = state.get('ev_plan')
@@ -526,33 +554,30 @@ class GlobalPriorityManager:
                     # Hitta aktuell 15-minuters-slot i planen
                     current_slot_minute = (now.minute // 15) * 15
                     current_slot_time_naive = now.replace(minute=current_slot_minute, second=0, microsecond=0, tzinfo=None)
-                    
+
                     # Hitta raden i planen som matchar nuvarande tidsslot
                     current_plan_row = ev_plan[ev_plan['t_slot'] == current_slot_time_naive]
-    
+
                     if not current_plan_row.empty:
                         row = current_plan_row.iloc[0]
-                        nissan_kw = row.get('nissan_kw', 0.0) if nissan_needs_charge else 0.0
-                        tesla_kw = row.get('tesla_kw', 0.0) if tesla_needs_charge else 0.0
-                        total_planned_kw = nissan_kw + tesla_kw
-    
-                        if total_planned_kw > 0:
-                            # Nissan Leaf 2018 är 1-fas ombordladdare
-                            nissan_phases = 1
-                            
-                            tesla_phases_str = state.get('tesla_phases')
-                            tesla_phases = 3 if any(x in str(tesla_phases_str) for x in ['Three', '3', 'auto', 'Auto']) else 1
+                        kw = {c: (row.get(f'{c}_kw', 0.0) if needs[c] else 0.0) for c in car_ids}
+                        total_planned_kw = sum(kw.values())
 
-                            nissan_planned_amps = int(round((nissan_kw * 1000) / (230 * nissan_phases))) if nissan_kw > 0 else 0
-                            tesla_planned_amps = int(round((tesla_kw * 1000) / (230 * tesla_phases))) if tesla_kw > 0 else 0
-                            
-                            planned_amps = nissan_planned_amps + tesla_planned_amps
-                            
-                            nissan_panic = bool(row.get('nissan_panic', False)) if 'nissan_panic' in row else False
-                            tesla_panic = bool(row.get('tesla_panic', False)) if 'tesla_panic' in row else False
-                            actions['nissan_panic'] = nissan_panic
-                            actions['tesla_panic'] = tesla_panic
-                    
+                        if total_planned_kw > 0:
+                            # Faser per bil: 1-fasbilar alltid 1, annars laddboxens nuvarande läge
+                            def _ph(c):
+                                if specs[c]["phases"] == "1":
+                                    return 1
+                                if specs[c]["phases"] == "3":
+                                    return 3
+                                return 3 if any(x in str(state.get(f'{c}_phases')) for x in ['Three', '3', 'auto', 'Auto']) else 1
+                            planned = {c: (int(round((kw[c] * 1000) / (230 * _ph(c)))) if kw[c] > 0 else 0) for c in car_ids}
+                            planned_amps = sum(planned.values())
+
+                            panic = {c: (bool(row.get(f'{c}_panic', False)) if f'{c}_panic' in row else False) for c in car_ids}
+                            for c in car_ids:
+                                actions[f'{c}_panic'] = panic[c]
+
                             house_load_a = state.get('house_load_a', 0)
                             ev_actual_a = state.get('ev_actual_a', 0)
                             house_excluding_ev = max(0, int(house_load_a) - int(ev_actual_a))
@@ -563,48 +588,27 @@ class GlobalPriorityManager:
                             available_amps_realtime = _ev_fuse_room(state, house_excluding_ev)
                             final_amps = min(planned_amps, available_amps_realtime)
                             if final_amps < 6:
-                                final_amps = 0 
-                            
-                            # --- NYTT: Prioritetslogik fördelar strömmen ---
-                            if nissan_planned_amps > 0 and tesla_planned_amps > 0:
-                                if nissan_prio == 1:
-                                    actions['nissan_limit_a'] = min(int(final_amps * 0.6), 20)
-                                    actions['tesla_limit_a'] = min(final_amps - actions['nissan_limit_a'], 16)
-                                else:
-                                    actions['tesla_limit_a'] = min(int(final_amps * 0.6), 16)
-                                    actions['nissan_limit_a'] = min(final_amps - actions['tesla_limit_a'], 20)
-                                
-                                # Om en bil inte når min-ström, ge allt till den andra
-                                if actions['nissan_limit_a'] < EV_MIN_CHARGE_AMPS:
-                                    actions['nissan_limit_a'] = 0
-                                    actions['tesla_limit_a'] = min(final_amps, 16)
-                                if actions['tesla_limit_a'] < EV_MIN_CHARGE_AMPS:
-                                    actions['tesla_limit_a'] = 0
-                                    actions['nissan_limit_a'] = min(final_amps, 20)
-                                    
-                                actions['nissan_limit_a'] = min(actions['nissan_limit_a'], 20)
-                                actions['tesla_limit_a'] = min(actions['tesla_limit_a'], 16)
-                            elif nissan_planned_amps > 0:
-                                actions['nissan_limit_a'] = min(final_amps, 20)
-                            elif tesla_planned_amps > 0:
-                                actions['tesla_limit_a'] = min(final_amps, 16)
+                                final_amps = 0
+
+                            # --- Prioritetslogik fördelar strömmen (den prioriterade 60 %, den andra resten) ---
+                            _cars = [c for c in car_ids if planned[c] > 0]
+                            for c, a_ in _split_amps(final_amps, _cars, prios, specs, EV_MIN_CHARGE_AMPS).items():
+                                actions[f'{c}_limit_a'] = a_
 
                             if final_amps == 0 and planned_amps > 0:
                                 actions["log"].append(f"🚗 Prio 3 (EV Plan): Schemat vill ladda ({planned_amps}A), men huset och säkringen har 0A ledig kapacitet just nu. Pausar.")
                             else:
-                                panic_str = " (PANIC MODE aktivt!)" if nissan_panic or tesla_panic else ""
-                                actions["log"].append(f"🚗 Prio 3 (EV Plan): Laddar enligt schema{panic_str}. Husets säkring tillåter {available_amps_realtime}A. Sätter Nissan: {actions['nissan_limit_a']}A, Tesla: {actions['tesla_limit_a']}A.")
+                                panic_str = " (PANIC MODE aktivt!)" if any(panic.values()) else ""
+                                _set = ", ".join(f"{specs[c]['name']}: {actions[f'{c}_limit_a']}A" for c in car_ids)
+                                actions["log"].append(f"🚗 Prio 3 (EV Plan): Laddar enligt schema{panic_str}. Husets säkring tillåter {available_amps_realtime}A. Sätter {_set}.")
                         else:
-                            actions["nissan_limit_a"] = 0
-                            actions["tesla_limit_a"] = 0
+                            _zero_all()
                             actions["log"].append("🚗 Prio 3 (EV Plan): Pausar laddning enligt plan.")
                     else:
-                        actions["nissan_limit_a"] = 0
-                        actions["tesla_limit_a"] = 0
+                        _zero_all()
                         actions["log"].append("🚗 Prio 3 (EV Plan): Utanför planerad laddningstid.")
                 else:
-                    actions["nissan_limit_a"] = 0
-                    actions["tesla_limit_a"] = 0
+                    _zero_all()
                     actions["log"].append("🚗 Prio 3 (EV): Väntar på att laddningsplan ska genereras.")
         else:
             actions["log"].append("🚗 Prio 3 (EV Plan): Schemalagd laddning ignoreras till förmån för Prio 3.5 (Sol-laddning aktiv).")
@@ -675,10 +679,8 @@ class GlobalPriorityManager:
         
         # Extremt säker kontroll: Laddar bilarna enligt GPM, Manuell överstyrning, eller drar de faktiskt ström från nätet?
         ev_is_charging = (
-            actions.get('nissan_limit_a', 0) >= EV_MIN_CHARGE_AMPS or
-            actions.get('tesla_limit_a', 0) >= EV_MIN_CHARGE_AMPS or
-            state.get('nissan_force_amps', 0) > 0 or
-            state.get('tesla_force_amps', 0) > 0 or
+            any(actions.get(f'{c}_limit_a', 0) >= EV_MIN_CHARGE_AMPS for c in car_ids) or
+            any(state.get(f'{c}_force_amps', 0) > 0 for c in car_ids) or
             state.get('ev_actual_a', 0) >= 6
         )
         # FIX #34: Använd en liten marginal (>300W) i stället för >0 så att mätbrus/svag baslast
@@ -1032,8 +1034,7 @@ class GlobalPriorityManager:
             allowed_kwh_now = current_target_limit - reserve_kwh_needed
             
             if consumed_kwh >= allowed_kwh_now and (consumed_kwh > 0.05 or minutes_left < 58):
-                n_panic = actions.get('nissan_panic', False) or state.get('nissan_force_amps', 0) > 0
-                t_panic = actions.get('tesla_panic', False)  or state.get('tesla_force_amps', 0) > 0
+                car_panic = {c: actions.get(f'{c}_panic', False) or state.get(f'{c}_force_amps', 0) > 0 for c in car_ids}
                 
                 # SÄKERHET: Om vi laddar på solöverskott drar vi inte ström från nätet.
                 # Vi får därför inte strypa bilarna (eller badet) bara för att timbudgeten är full.
@@ -1041,10 +1042,9 @@ class GlobalPriorityManager:
                 ev_is_solar = self.ev_solar_charge_active and not is_importing
                 spa_is_solar = actions.get("spa_solar_boost_active", False) and not is_importing
                 
-                if not n_panic and not ev_is_solar:
-                    actions["nissan_limit_a"] = 0
-                if not t_panic and not ev_is_solar:
-                    actions["tesla_limit_a"] = 0
+                for c in car_ids:
+                    if not car_panic[c] and not ev_is_solar:
+                        actions[f"{c}_limit_a"] = 0
                     
                 # SKÖLD: Stryp spabadet (om den inte drivs av solen just nu).
                 # Undantag: manuell tvångsvärme (Prio 11) vinner över peak shaving enligt
@@ -1057,11 +1057,11 @@ class GlobalPriorityManager:
                 indoor_temp = state.get('indoor_temp')
                 indoor_min = state.get('indoor_min', 19.0)
                 
-                ev_throttled = (not n_panic and not ev_is_solar) and (not t_panic and not ev_is_solar)
+                ev_throttled = not ev_is_solar and not any(car_panic.values())
                 ev_str = "EV & " if ev_throttled else ""
                 
                 panic_msg = ""
-                if n_panic or t_panic:
+                if any(car_panic.values()):
                     panic_msg = " Låter elbil ladda pga Panic/Tvångsladdning!"
                 elif ev_is_solar:
                     panic_msg = " Låter elbil ladda på solöverskott!"
@@ -1096,16 +1096,15 @@ class GlobalPriorityManager:
             actions["solar_limit_pct"] = 0
             _house_a = max(0, int(state.get('house_load_a', 0)) - int(state.get('ev_actual_a', 0)))
             _avail   = _ev_fuse_room(state, _house_a)
-            _n_ok = state.get('nissan_connected', False) and not (nissan_soc is not None and nissan_soc >= 98)
-            _t_ok = state.get('tesla_connected', False)  and not (tesla_soc  is not None and tesla_soc  >= 98)
-            if _avail >= EV_MIN_CHARGE_AMPS and (_n_ok or _t_ok):
-                if _n_ok and _t_ok:
-                    actions["nissan_limit_a"] = max(EV_MIN_CHARGE_AMPS, min(20, _avail // 2))
-                    actions["tesla_limit_a"]  = max(EV_MIN_CHARGE_AMPS, min(16, _avail - _avail // 2))
-                elif _n_ok:
-                    actions["nissan_limit_a"] = min(20, _avail)
-                else:
-                    actions["tesla_limit_a"]  = min(16, _avail)
+            _ok = [c for c in car_ids if state.get(f'{c}_connected', False) and not (soc[c] is not None and soc[c] >= 98)]
+            if _avail >= EV_MIN_CHARGE_AMPS and _ok:
+                if len(_ok) == 1:
+                    actions[f"{_ok[0]}_limit_a"] = min(specs[_ok[0]]["max_a"], _avail)
+                else:                                   # lika delar, resten till den sista (två bilar: som förut)
+                    _each = _avail // len(_ok)
+                    for i_, c in enumerate(_ok):
+                        _share = _avail - _each * (len(_ok) - 1) if i_ == len(_ok) - 1 else _each
+                        actions[f"{c}_limit_a"] = max(EV_MIN_CHARGE_AMPS, min(specs[c]["max_a"], _share))
             actions["log"].append(f"💰 EKONOMISKT OPTIMUM: Betalt för att förbruka (spot {price:+.2f} kr/kWh) → maxar nätuttag (bilar från nätet) + stryper solen till 0%.")
 
         # --- LUFTFUKTIGHET: fuktig luft känns kallare -> höj pumpens mål lite (upp till +1°C) ----------
@@ -1122,9 +1121,9 @@ class GlobalPriorityManager:
                 actions["log"].append(f"💧 Fukt: Luftfuktigheten är {indoor_hum:.0f}% (fuktig luft känns kallare). Höjer måltemperaturen +{hum_boost}°C.")
 
         # --- GENERISK SPEGLING (EnergyWizard Open, Fas 2) ---
-        # actions['nissan_limit_a']/['tesla_limit_a'] (Prio 3/3.5, satta ovan) är fortfarande
+        # actions['<bil>_limit_a'] (Prio 3/3.5, satta ovan) är fortfarande
         # sanningskällan för SJÄLVA allokeringsmatematiken - den är inte generaliserad till N
-        # bilar än (kräver att decisions.py:s nissan_kw/tesla_kw-kolumner också görs generiska,
+        # bilar än (kräver att decisions.py:s <bil>_kw-kolumner också görs generiska,
         # ett eget steg). Det som ÄR generaliserat här är alla delar som redan var oberoende
         # per bil (Prio 3.8, 11.5, 11.6, batteriskyddet ovan) - de loopar nu över car_ids
         # istället för en hårdkodad lista. Detta speglar bara slutresultatet till en generisk

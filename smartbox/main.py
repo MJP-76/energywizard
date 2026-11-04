@@ -159,7 +159,8 @@ config_watch.start(_ew_settings.PATH, signature=lambda _p: (_ew_settings.get("ha
 _battery_to_auto("uppstart")
 print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(battery_driver.supported_intents()) or '-'}")
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
-car_ids = [c.id for c in car_drivers] or ['nissan', 'tesla']  # tomt hus (inga bilar i configen än) faller tillbaka på dagens två, matchar gpm.py:s egen default
+car_ids = [c.id for c in car_drivers]
+CAR_SPECS = house_config.car_specs(house_cfg)   # {bil: {name, max_a, phases}} - laddboxens faser ("1"/"3"/"auto") och maxström
 ev_allocations = {physical_id: None for physical_id in physical_charger_drivers}
 print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepump={type(heat_pump_driver).__name__}, "
       f"sol={type(solar_driver).__name__}, spa={type(spa_driver).__name__}, laddare={list(physical_charger_drivers.keys())}")
@@ -1679,6 +1680,8 @@ while True:
                 'tesla_force_amps': _override_amps(all_overrides.get("tesla_force_amps", "0")),
                 'tesla_force_phases': _override_amps(all_overrides.get("tesla_force_phases", "0")),
                 'nissan_hold': all_overrides.get("nissan_hold") == "on", 'tesla_hold': all_overrides.get("tesla_hold") == "on",     # EnergyWizard Mobil: manuell paus (håller 0A tills Auto väljs)
+                # Bilarna ur installationen: vilka som finns och deras laddboxars faser/maxström (gpm har inga bilnamn)
+                'car_ids': list(car_ids), 'car_specs': CAR_SPECS,
             }
             
             gpm_actions = gpm_engine.evaluate(gpm_state)
