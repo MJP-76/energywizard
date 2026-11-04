@@ -225,6 +225,24 @@ def _battery_control_preset(ents, all_ents=None):
             "auto": {u: "Self Use Mode"}, "hold": {u: "Back Up Mode"},
             "idle": {u: "Manual Mode", m: "Stop Charge and Discharge"},
             "charge": {u: "Manual Mode", m: "Force Charge"}, "discharge": {u: "Manual Mode", m: "Force Discharge"}}}
+    # Solax Gen2 (t.ex. SK-SU5000E): samma "Charger Use Mode" men utan "Manual Mode Select" och med andra val:
+    # Self Use Mode / Force Time Use / Back Up Mode. Gen2 känns igen på sina urladdningsfönster (discharge_start_1,
+    # finns bara på Gen2). Uppgifterna kommer från MJP-76 (issue #86), verifierade mot två riktiga SK-SU5000E och
+    # solax-modbus-källan. Bara lägesbyte: tidsfönstren skrivs aldrig om - de ska stå vidöppna (t.ex. laddfönster 2
+    # 00:01-23:59), och Force Time Use laddar då från nätet. Ingen urladdning: Gen2 har inget sådant läge utan att
+    # programmera om fönstren, och Self Use täcker huset ändå. Flera Gen2-växelriktare (vanligt, en per batteribank)
+    # byter läge tillsammans.
+    if use and not manual and _find(ents, "time", re.compile(r"discharge start 1$", re.I)):
+        gen2 = [use["e"]] + sorted({x["e"] for x in (all_ents or []) if x["e"] != use["e"] and x["e"].startswith("select.")
+                                    and _has(x.get("n") or x["e"], re.compile(r"charger use mode$", re.I))
+                                    and any(y.get("d") == x.get("d") and y["e"].startswith("time.")
+                                            and _has(y.get("n") or y["e"], re.compile(r"discharge start 1$", re.I))
+                                            for y in all_ents)})
+        both = lambda opt: {e: opt for e in gen2}
+        return {"name": "solax_modbus_gen2", "entities": {},
+                "modes": {"auto": both("Self Use Mode"), "hold": both("Back Up Mode"), "charge": both("Force Time Use")},
+                "note": "Solax Gen2: laddfönstren ska stå vidöppna i växelriktaren (t.ex. 00:01-23:59) - EnergyWizard "
+                        "byter bara Charger Use Mode och skriver aldrig om tiderna."}
     # FoxESS via nathanmarlor/foxess_modbus (lokalt, Modbus): "Work Mode" har Force Charge/Force
     # Discharge när integrationens fjärrstyrning är påslagen, och effekten sätts i kW.
     work = _find(ents, "select", re.compile(r"work mode$", re.I))

@@ -98,3 +98,30 @@ def test_effekt_fran_separata_sensorer():
     with patch("drivers.battery_generic.homeassistant") as ha:
         ha._get_numeric_state.side_effect = lambda e: {"s.c": 0.0, "s.d": 2200.0}[e]
         assert drv.read_state()["power_w"] == -2200.0
+
+
+def _gen2(dev, n):
+    m = {"d": dev, "dn": f"SolaX Gen2 {n}", "m": "SolaX", "mo": "SK-SU5000E"}
+    return [
+        {**_e(f"sensor.solax{n}_battery_capacity", f"Solax{n} Battery Capacity", "battery", "%", "55"), **m},
+        {**_e(f"sensor.solax{n}_battery_power_charge", f"Solax{n} Battery Power Charge", "power", "W", "300"), **m},
+        {**_e(f"select.solax{n}_charger_use_mode", f"Solax{n} Charger Use Mode", st="Self Use Mode"), **m},
+        {**_e(f"time.solax{n}_charge_start_1", f"Solax{n} Charge Start 1", st="00:01:00"), **m},
+        {**_e(f"time.solax{n}_discharge_start_1", f"Solax{n} Discharge Start 1", st="00:00:00"), **m},
+    ]
+
+
+def test_solax_gen2_bara_lagesbyte_och_bada_vaxelriktarna():
+    """Issue #86 (MJP-76): Gen2 har inget Manual Mode. Self Use / Force Time Use / Back Up Mode, båda
+    växelriktarna byter tillsammans, och inga tidsfönster skrivs."""
+    b = discover_house(_gen2("dev_a", 1) + _gen2("dev_b", 2))["battery"]
+    gs = b["generic_suggestion"]
+    both = ["select.solax1_charger_use_mode", "select.solax2_charger_use_mode"]
+    assert b["control_preset"] == "solax_modbus_gen2"
+    assert gs["modes"]["auto"] == {e: "Self Use Mode" for e in both}
+    assert gs["modes"]["charge"] == {e: "Force Time Use" for e in both}
+    assert gs["modes"]["hold"] == {e: "Back Up Mode" for e in both}
+    assert "discharge" not in gs["modes"] and "idle" not in gs["modes"]
+    assert not any(e.startswith("time.") for m in gs["modes"].values() for e in m)
+    # Gen4-6 påverkas inte
+    assert discover_house(SOLAX)["battery"]["control_preset"] == "solax_modbus_solax"
