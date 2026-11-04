@@ -1173,6 +1173,7 @@ while True:
                     "tesla_phases": tesla_charger_data.get('phases') if tesla_charger_data else None,
                     "nissan_plugged_in": ev_connection_state['nissan']['connected'] or ev_gps_state['nissan']['approaching'],
                     "tesla_plugged_in": ev_connection_state['tesla']['connected'] or ev_gps_state['tesla']['approaching'],
+                    "car_ids": list(car_ids), "car_specs": CAR_SPECS,     # bilarna ur installationen (laddplanen har inga bilnamn)
                 }
                 ev_charge_plan = decisions.calculate_ev_charge_plan(now, ev_schedule, car_data_for_plan, cfg)
                 try:

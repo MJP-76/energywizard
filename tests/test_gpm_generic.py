@@ -68,19 +68,15 @@ def test_batteriskydd_funkar_for_en_tredje_bil():
     assert actions["tredje_bilen_limit_a"] == 6
 
 
-def test_default_car_ids_speglar_nissan_tesla_som_idag():
-    """Ingen car_ids i state alls (main.py skickar inte det här än, Fas 3) -> defaultar
-    till dagens två bilar, så befintlig drift/tester inte påverkas."""
+def test_utan_car_ids_finns_inga_bilar():
+    """2026-11-04: gpm antar inga bilar - main.py skickar car_ids och car_specs ur installationen."""
     engine = GlobalPriorityManager()
     actions = engine.evaluate({
         "now": datetime(2026, 10, 30, 12, 0, 0),
         "nissan_soc": 50, "nissan_connected": True,
         "tesla_soc": 50, "tesla_connected": True,
     })
-    assert set(actions["ev"].keys()) == {"nissan", "tesla"}
-    assert actions["ev"]["nissan"]["limit_a"] == actions["nissan_limit_a"]
-    assert actions["ev"]["tesla"]["limit_a"] == actions["tesla_limit_a"]
-
+    assert actions["ev"] == {} and "nissan_limit_a" not in actions
 
 
 def _engine():

@@ -112,8 +112,19 @@ def car_specs(cfg: dict) -> dict:
             max_a = int(ch.get("max_a") or 16)
         except (TypeError, ValueError):
             max_a = 16
-        out[cid] = {"name": ev.get("name") or cid.capitalize(), "max_a": max_a, "phases": ph if ph in ("1", "3", "auto") else "auto"}
+        out[cid] = {"name": ev.get("name") or cid.capitalize(), "max_a": max_a, "phases": ph if ph in ("1", "3", "auto") else "auto",
+                    "battery_kwh": ev.get("battery_kwh")}
     return out
+
+
+def _easee_driver(charger_cfg: dict):
+    """Easee ur installationen: id + entities + enable_switch. Äldre installationer med bara physical: lite/carport
+    får den gamla kopplingen (EASEE_CHARGER_ID/EASEE_CARPORT_ID i .env)."""
+    if charger_cfg.get("entities"):
+        return EaseeChargerDriver(id=str(charger_cfg.get("id", "")), entities=charger_cfg["entities"],
+                                  enable_switch=charger_cfg.get("enable_switch"))
+    get_id, reader = _EASEE_PHYSICAL.get(charger_cfg.get("physical"), (lambda: charger_cfg.get("id", ""), lambda: {}))
+    return EaseeChargerDriver(id=get_id(), reader=reader)
 
 
 def build_charger_drivers(cfg: dict) -> dict:
@@ -128,8 +139,7 @@ def build_charger_drivers(cfg: dict) -> dict:
         driver_name = charger_cfg.get("driver")
         driver_cls = CHARGER_DRIVER_REGISTRY.get(driver_name, NullChargerDriver)
         if driver_cls is EaseeChargerDriver:
-            get_id, reader = _EASEE_PHYSICAL.get(charger_cfg.get("physical"), (lambda: charger_cfg.get("id", ""), lambda: {}))
-            out[car_id] = EaseeChargerDriver(id=get_id(), reader=reader)
+            out[car_id] = _easee_driver(charger_cfg)
         elif driver_cls is GenericChargerDriver:
             out[car_id] = GenericChargerDriver(id=charger_cfg.get("id", ""), entities=charger_cfg.get("entities", {}))
         else:
@@ -150,9 +160,9 @@ def build_physical_charger_drivers(cfg: dict) -> dict:
         driver_name = charger_cfg.get("driver")
         driver_cls = CHARGER_DRIVER_REGISTRY.get(driver_name, NullChargerDriver)
         if driver_cls is EaseeChargerDriver:
-            get_id, reader = _EASEE_PHYSICAL.get(charger_cfg.get("physical"), (lambda: charger_cfg.get("id", ""), lambda: {}))
-            physical_id = get_id()
-            out[physical_id] = EaseeChargerDriver(id=physical_id, reader=reader)
+            drv = _easee_driver(charger_cfg)
+            physical_id = drv.id
+            out[physical_id] = drv
         elif driver_cls is GenericChargerDriver:
             physical_id = charger_cfg.get("id", "")
             out[physical_id] = GenericChargerDriver(id=physical_id, entities=charger_cfg.get("entities", {}))

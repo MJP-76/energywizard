@@ -170,8 +170,9 @@ def check_spa_schedule_plan(now, target_dt, curr_temp, target_temp, model_interc
         return False, False
 
 # --- EV Charging Plan ---
-NISSAN_BATTERY_KWH = 40
-TESLA_BATTERY_KWH = 75
+# Bilarnas batteristorlek, faser och maxström kommer från installationen (car_data["car_specs"], byggd av
+# house_config.car_specs + evs[].battery_kwh) - inga bilnamn här (2026-11-04).
+DEFAULT_BATTERY_KWH = 60
 
 # ANVÄNDARREGEL (Emil, 2026-10-25): oavsett laddschema ska bilen alltid vara minst 50 % kl 06:00 varje morgon.
 MORNING_MIN_SOC = 50
@@ -244,23 +245,32 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
     """Skapar en "Spread & Smooth" laddningsplan för de kommande 48 timmarna."""
     # Användarens INSTÄLLDA huvudsäkring (Inställningar-fliken), fallback till modulkonstanten.
     fuse_a = cfg.get('fuse_size_a', MAX_FUSE_A) if cfg else MAX_FUSE_A
-    nissan_soc = car_data.get('nissan_soc')
-    tesla_soc = car_data.get('tesla_soc')
-    nissan_plugged_in = car_data.get('nissan_plugged_in', False)
-    tesla_plugged_in = car_data.get('tesla_plugged_in', False)
+    car_ids = list(car_data.get('car_ids') or [])
+    specs = car_data.get('car_specs') or {}
 
-    # Nissan Leaf 2018 stöder enbart 1-fasladdning (Max ca 6.6 kW / 29A)
-    nissan_phases = 1
-    
-    tesla_phases_str = car_data.get('tesla_phases')
-    tesla_phases = 3 if tesla_phases_str is None or any(x in str(tesla_phases_str) for x in ['Three', '3', 'auto', 'Auto']) else 1
+    def _phases(cid):
+        ph = str((specs.get(cid) or {}).get('phases', 'auto'))
+        if ph == '1':
+            return 1
+        if ph == '3':
+            return 3
+        p_str = car_data.get(f'{cid}_phases')
+        return 3 if p_str is None or any(x in str(p_str) for x in ['Three', '3', 'auto', 'Auto']) else 1
 
-    nissan_target_dt, nissan_target_soc, nissan_kwh, nissan_panic = get_car_plan_details(now, 'nissan', ev_schedule, nissan_soc, NISSAN_BATTERY_KWH)
-    tesla_target_dt, tesla_target_soc, tesla_kwh, tesla_panic = get_car_plan_details(now, 'tesla', ev_schedule, tesla_soc, TESLA_BATTERY_KWH)
+    cars = {}
+    for cid in car_ids:
+        sp = specs.get(cid) or {}
+        soc = car_data.get(f'{cid}_soc')
+        bkwh = float(sp.get('battery_kwh') or DEFAULT_BATTERY_KWH)
+        t_dt, t_soc, kwh, panic = get_car_plan_details(now, cid, ev_schedule, soc, bkwh)
+        cars[cid] = {"soc": soc, "plugged": car_data.get(f'{cid}_plugged_in', False), "phases": _phases(cid),
+                     "max_a": int(sp.get('max_a') or 16), "battery_kwh": bkwh,
+                     "target_dt": t_dt, "target_soc": t_soc, "kwh": kwh, "panic": panic}
 
     max_dt = now
-    if nissan_target_dt and nissan_target_dt > max_dt: max_dt = nissan_target_dt
-    if tesla_target_dt and tesla_target_dt > max_dt: max_dt = tesla_target_dt
+    for c in cars.values():
+        if c["target_dt"] and c["target_dt"] > max_dt:
+            max_dt = c["target_dt"]
 
     if max_dt == now: return pd.DataFrame()
 
@@ -320,10 +330,10 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
     df_plan['hour_val'] = df_plan['t_slot'].dt.hour
     df_plan.loc[(df_plan['hour_val'] >= 7) & (df_plan['hour_val'] < 20), 'score'] += 1.5
 
-    df_plan['nissan_kw'] = 0.0
-    df_plan['tesla_kw'] = 0.0
-    df_plan['nissan_panic'] = False
-    df_plan['tesla_panic'] = False
+    for cid in car_ids:
+        df_plan[f'{cid}_kw'] = 0.0
+    for cid in car_ids:
+        df_plan[f'{cid}_panic'] = False
     df_plan['allocated_kw'] = 0.0
     
     power_limit_bas = cfg.get("power_limit_kw_bas", 0.0)
@@ -376,10 +386,11 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
     df_plan['score'] = df_plan.apply(adjust_score_for_efficiency, axis=1)
 
     cars_to_plan = []
-    if nissan_target_dt and nissan_kwh > 0 and nissan_plugged_in:
-        cars_to_plan.append({'id': 'nissan', 'deadline': full_charge_deadline(now, nissan_target_dt, nissan_target_soc), 'kwh_needed': nissan_kwh, 'min_kw': 6 * 230 * 1 / 1000.0, 'max_kw': min(20, fuse_a) * 230 * 1 / 1000.0, 'panic_mode': nissan_panic, 'floor': get_morning_floor(now, nissan_soc, NISSAN_BATTERY_KWH, nissan_target_dt)})
-    if tesla_target_dt and tesla_kwh > 0 and tesla_plugged_in:
-        cars_to_plan.append({'id': 'tesla', 'deadline': full_charge_deadline(now, tesla_target_dt, tesla_target_soc), 'kwh_needed': tesla_kwh, 'min_kw': 6 * 230 * tesla_phases / 1000.0, 'max_kw': min(16, fuse_a) * 230 * tesla_phases / 1000.0, 'panic_mode': tesla_panic, 'floor': get_morning_floor(now, tesla_soc, TESLA_BATTERY_KWH, tesla_target_dt)})
+    for cid, c in cars.items():
+        if c["target_dt"] and c["kwh"] > 0 and c["plugged"]:
+            cars_to_plan.append({'id': cid, 'deadline': full_charge_deadline(now, c["target_dt"], c["target_soc"]), 'kwh_needed': c["kwh"],
+                                 'min_kw': 6 * 230 * c["phases"] / 1000.0, 'max_kw': min(c["max_a"], fuse_a) * 230 * c["phases"] / 1000.0,
+                                 'panic_mode': c["panic"], 'floor': get_morning_floor(now, c["soc"], c["battery_kwh"], c["target_dt"])})
     cars_to_plan.sort(key=lambda x: x['deadline'])
 
     hourly_energy_allocated = {}

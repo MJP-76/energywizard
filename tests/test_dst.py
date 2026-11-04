@@ -28,7 +28,9 @@ def _schema():
 
 
 def _bilar():
-    return {"nissan_soc": 20, "tesla_soc": 40, "nissan_plugged_in": True, "tesla_plugged_in": True, "tesla_phases": "Three phases"}
+    return {"nissan_soc": 20, "tesla_soc": 40, "nissan_plugged_in": True, "tesla_plugged_in": True, "tesla_phases": "Three phases",
+            "car_ids": ["nissan", "tesla"],          # bilarna ur installationen - laddplanen har inga bilnamn inbyggda
+            "car_specs": {"nissan": {"max_a": 20, "phases": "1", "battery_kwh": 40}, "tesla": {"max_a": 16, "phases": "auto", "battery_kwh": 75}}}
 
 
 @pytest.mark.parametrize(

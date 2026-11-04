@@ -32,6 +32,9 @@ def _state(nu, **over):
         "ev_min_charge_a": 6, "ev_max_charge_a": 16, "nissan_charge_completed": True, "tesla_charge_completed": False,
         "nissan_phases": "SinglePhase", "tesla_phases": "ThreePhase", "ev_plan": None, "nissan_prio": 2, "tesla_prio": 1,
         "outdoor_temp": 5.0, "outdoor_avg_5d": 5.0,
+        # bilarna ur installationen (gpm har inga bilnamn inbyggda sedan 2026-11-04)
+        "car_ids": ["nissan", "tesla"],
+        "car_specs": {"nissan": {"name": "Nissan", "max_a": 20, "phases": "1"}, "tesla": {"name": "Tesla", "max_a": 16, "phases": "auto"}},
     }
     st.update(over)
     return st

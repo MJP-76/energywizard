@@ -49,7 +49,8 @@ def test_planen_laddar_golvet_fore_06_aven_nar_06_07_ar_billigast(smartbox, db):
     nu = start.astimezone(SWE).replace(tzinfo=None)
     dag = {"enabled": True, "target_time": "07:00", "target_soc": 50}
     schema = {"tesla": {d: dict(dag) for d in range(7)}}
-    plan = decisions.calculate_ev_charge_plan(nu, schema, {"tesla_soc": 45.0, "tesla_plugged_in": True, "tesla_phases": "Three phases"}, {})
+    plan = decisions.calculate_ev_charge_plan(nu, schema, {"tesla_soc": 45.0, "tesla_plugged_in": True, "tesla_phases": "Three phases",
+                                                          "car_ids": ["tesla"], "car_specs": {"tesla": {"max_a": 16, "phases": "auto", "battery_kwh": 75}}}, {})
     fore_06 = plan[plan["t_slot"] < datetime(2026, 11, 11, 6, 0)]["tesla_kw"].sum() / 4.0
     behov = 0.05 * 75 * 1.12
     assert fore_06 >= behov - 0.3, f"bara {fore_06:.1f} kWh före kl 06 (behov {behov:.1f})"

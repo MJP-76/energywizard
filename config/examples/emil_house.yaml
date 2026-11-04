@@ -7,31 +7,75 @@
 house_id: "malmgatan-34"
 
 evs:
+  # Allt bilen och laddboxen använder står här (2026-11-04) - motorn och mobilappen har inga bilnamn eller
+  # entiteter inbyggda. Startguiden fyller i samma fält åt nya användare.
   - id: nissan
+    name: Nissan Leaf
     driver: nissan
     battery_kwh: 40
     entities:
       soc: sensor.leaf_battery_level
       plugged_in: binary_sensor.leaf_plugged_in
       climate: climate.leaf_climate
+      inside_temp: sensor.leaf_internal_temperature
+      tracker: device_tracker.leaf_location
+      update_button: button.leaf_update_data     # Leaf-integrationen hämtar nytt batterivärde bara när vi ber om det
     charger:
       driver: easee
-      physical: lite                   # vilken av de två fysiska Easee-boxarna - ID:t kommer från EASEE_CHARGER_ID i .env
+      physical: lite                   # (äldre fält, används tills motorn läser entiteterna nedan)
+      id: EHLS9NVL
       phases: 1                        # Nissan Leaf 2018: endast 1-fas
-      max_a: 20                        # högsta laddström (A) - gpm.py hade 20 hårdkodat för Nissan
+      max_a: 20                        # högsta laddström (A)
+      enable_switch: switch.easee_lite_laddboxen_aktiverad
+      entities:
+        power_kw: sensor.easee_lite_effekt
+        current_a: sensor.easee_lite_strom
+        circuit_current: sensor.easee_lite_maximum_allowed_charge_current
+        dynamic_limit: sensor.easee_lite_maximum_allowed_charge_current
+        output_limit: sensor.easee_lite_maximum_allowed_charge_current
+        max_limit: sensor.easee_lite_maximum_allowed_charge_current
+        session_kwh: sensor.easee_lite_energi_laddningssession
+        lifetime_kwh: sensor.easee_lite_livstidsforbrukning
+        status: sensor.easee_lite_status
+        online: binary_sensor.easee_lite_online
+        phases: select.easee_lite_allowed_charging_phases
+        reason_no_current: sensor.easee_lite_status
+        current_l1: sensor.easee_lite_strom_l1
+        current_l2: sensor.easee_lite_strom_l2
+        current_l3: sensor.easee_lite_strom_l3
 
   - id: tesla
+    name: Tesla Model Y
     driver: tesla
     battery_kwh: 75
     entities:
       soc: sensor.tesla_model_y_battery
       plugged_in: binary_sensor.tesla_model_y_charger
       charging: binary_sensor.tesla_model_y_charging
+      charging_state: sensor.tesla_model_y_charging_state
+      climate: climate.tesla_model_y_hvac_climate_system
+      inside_temp: sensor.tesla_model_y_temperature_inside
+      tracker: device_tracker.tesla_model_y_location_tracker
+      wake_button: button.tesla_model_y_wake_up  # väcks när den är inkopplad men batterivärdet är gammalt
+      arrival_time: sensor.tesla_model_y_arrival_time
+      distance_to_arrival: sensor.tesla_model_y_distance_to_arrival
     charger:
       driver: easee
-      physical: carport                # ID:t kommer från EASEE_CARPORT_ID i .env
+      physical: carport                # (äldre fält, används tills motorn läser entiteterna nedan)
+      id: EHLU7JCT
       phases: auto                     # kan fasväxla 1<->3
-      max_a: 16                        # högsta laddström (A) - gpm.py hade 16 hårdkodat för Tesla
+      max_a: 16                        # högsta laddström (A)
+      enable_switch: switch.carport_laddare_aktiverad
+      entities:
+        power_kw: sensor.carport_effekt
+        current_a: sensor.carport_strom
+        session_kwh: sensor.carport_energi_laddningssession
+        status: sensor.carport_status
+        online: binary_sensor.carport_online
+        phases: select.carport_allowed_charging_phases
+        current_l1: sensor.carport_strom_l1
+        current_l2: sensor.carport_strom_l2
+        current_l3: sensor.carport_strom_l3
 
 heat_pump:
   enabled: true

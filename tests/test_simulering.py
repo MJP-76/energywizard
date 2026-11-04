@@ -14,6 +14,11 @@ UTC = zoneinfo.ZoneInfo("UTC")
 NISSAN_KWH, TESLA_KWH = 40.0, 75.0
 
 
+
+# Bilarna som installationen beskriver dem (gpm och laddplanen har inga bilnamn inbyggda sedan 2026-11-04)
+BILAR = {"nissan": {"name": "Nissan", "max_a": 20, "phases": "1", "battery_kwh": 40},
+         "tesla": {"name": "Tesla", "max_a": 16, "phases": "auto", "battery_kwh": 75}}
+
 def pris(t_utc: datetime) -> float:
     """Ett vanligt dygn: billigt på natten, dyrt på morgon och kväll."""
     h = t_utc.astimezone(SWE).hour
@@ -69,7 +74,8 @@ def test_natten_igenom(smartbox, db, start, capsys):
             morgon_utc = t
         if plan is None or nu.minute % 15 == 0:
             plan = decisions.calculate_ev_charge_plan(
-                nu, schema, {"nissan_soc": soc["nissan"], "tesla_soc": soc["tesla"], "nissan_plugged_in": True, "tesla_plugged_in": True, "tesla_phases": "Three phases"}, {}
+                nu, schema, {"nissan_soc": soc["nissan"], "tesla_soc": soc["tesla"], "nissan_plugged_in": True, "tesla_plugged_in": True, "tesla_phases": "Three phases",
+                 "car_ids": ["nissan", "tesla"], "car_specs": BILAR}, {}
             )
             assert plan is not None and (len(plan) == 0 or plan["t_slot"].is_unique), f"planen blev trasig {nu}"
         framat = [pris(t + timedelta(minutes=15 * i)) for i in range(96)]
@@ -83,6 +89,7 @@ def test_natten_igenom(smartbox, db, start, capsys):
             "hysteresis": 0.10, "dynamic_limit": 0.6, "max_fuse_a": 20, "house_load_a": 3.0, "ev_actual_a": 0,
             "current_solar_limit_pct": 100, "current_target_limit": 100,
             "nissan_soc": soc["nissan"], "tesla_soc": soc["tesla"], "nissan_connected": True, "tesla_connected": True,
+            "car_ids": ["nissan", "tesla"], "car_specs": BILAR,
             "ev_min_charge_a": 6, "ev_max_charge_a": 20, "nissan_charge_completed": soc["nissan"] >= 80, "tesla_charge_completed": soc["tesla"] >= 80,
             "nissan_phases": "SinglePhase", "tesla_phases": "ThreePhase", "ev_plan": plan, "nissan_prio": 2, "tesla_prio": 1,
             "outdoor_temp": 5.0, "outdoor_avg_5d": 5.0,
