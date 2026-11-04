@@ -1,6 +1,9 @@
 import os
 import time
-from pymodbus.client import ModbusTcpClient
+try:                                # finns i motorns bild men inte i mobilappens (som bara läser installationen)
+    from pymodbus.client import ModbusTcpClient
+except ImportError:                 # pragma: no cover
+    ModbusTcpClient = None
  
 # --- INSTÄLLNINGAR FÖR Thermia Diplomat Optimum G3 via Husdata H66 ---
 # FIX: Gör fallback-IP konfigurerbar via env (PUMP_IP_FALLBACK) men behåll

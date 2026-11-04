@@ -9,8 +9,14 @@ import math
 import struct
 import time
 
-from pymodbus.client import ModbusTcpClient
-from pymodbus.exceptions import ModbusException
+try:                                # pymodbus finns i motorns bild men inte i mobilappens; mobilappen läser bara
+    from pymodbus.client import ModbusTcpClient          # installationen (house_config) och ansluter aldrig.
+    from pymodbus.exceptions import ModbusException
+except ImportError:                 # pragma: no cover
+    ModbusTcpClient = None
+
+    class ModbusException(Exception):
+        pass
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +65,7 @@ class EnergyHubConnection:
 
     @contextmanager
     def connect(self):
-        client = ModbusTcpClient(self.host, port=self.port, timeout=self.timeout_s, retries=0) if self.host else None
+        client = ModbusTcpClient(self.host, port=self.port, timeout=self.timeout_s, retries=0) if self.host and ModbusTcpClient else None
         try:
             try:
                 connected = client if client and client.connect() else None
