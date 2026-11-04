@@ -13,6 +13,18 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 Från genomgången av [FTW](https://github.com/srcfl/ftw) 2026-11-03 (AGPL-3.0-only, får återanvändas med källhänvisning;
 optimeraren Energyplan är stängd och används inte):
 
+- **Emaldo (husbatteri).** Önskat 2026-11-04. Det finns en HA-integration,
+  [wertigpar/ha-emaldo](https://github.com/wertigpar/ha-emaldo) (MIT, HACS). Den ger laddnivå, effekt, nät, last, sol och
+  elbil, plus override-tjänster för att styra batteriet. Batteriets egen schemaläggare
+  [wertigpar/ha-battery-optimizer](https://github.com/wertigpar/ha-battery-optimizer) (MIT) gör en 15-minutersplan efter
+  spotpris och solprognos och skickar den till Emaldo. Plan: en förinställning som läser Emaldo-integrationens entiteter.
+  Styrningen sker antingen via Emaldos override-tjänster eller genom samarbete med Battery Optimizer
+  (läget `samarbete`: läs, styr inte), på samma sätt som med Predbat. Behöver en testare med Emaldo.
+- **Sonnen (sonnenBatterie).** Önskat 2026-11-04. Lokalt API på batteriet; det finns HA-integrationer för läsning och
+  driftläge (egenförbrukning, manuell laddning/urladdning). Plan: förinställning för läsning + lägena
+  auto/ladda/ladda ur. Behöver en testare med Sonnen.
+- **Solproduktion från flera växelriktare.** Batterierna slås sedan 2026-11-04 ihop (#86); solproduktionen läses fortfarande
+  från en växelriktare. Summera utan att räkna strängar och totalsensorer två gånger.
 - **Flera batterier och växelriktare samtidigt.** Idag ett batteri och en solcellsdrivrutin. Fördela effekten efter
   laddnivå och kapacitet, med gemensam säkringsgräns (FTW: multi-battery allocation). Efterfrågat av #78 (tre GoodWe +
   Ferroamp) och #86 (två Solax).
