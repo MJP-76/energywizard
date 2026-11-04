@@ -27,6 +27,13 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   batterier och växelriktare som Victron, Sigenergy, Pixii, Huawei och GoodWe. Två vägar:
   (1) en liten tolk för evcc:s Modbus/HTTP-mallar i Python, som ger många mätare och batterier på en gång;
   (2) en körande evcc som laddbackend via dess API eller MQTT. Börja med (1) för batterierna som betatestarna har.
+- **Pixii (PowerShaper / Home).** Läsning: SunSpec modell 802 över Modbus TCP, men batterieffekten har omvänt tecken
+  (negativ = laddar ur), vilket `power_invert: true` i batteridrivrutinen hanterar. Styrning: Pixiis egna register plus en
+  heartbeat som måste skrivas oftare än gatewayens meddelandetid, annars släpper batteriet (samma princip som `keepalive_s`
+  för Solis). Källor: evcc-issue [#22240](https://github.com/evcc-io/evcc/issues/22240) (stängd, ingen Pixii-kod mergad
+  i evcc) och FTW:s drivrutin `pixii` (Modbus, 2.1.9, overifierad på hårdvara). Licensen för srcfl/device-drivers är oklar
+  (NOASSERTION), så ingen kod kopieras därifrån utan klartecken. Bygg läsningen från SunSpec-specen och be Pixii eller en
+  testare om registerkartan för styrningen.
 - **Ensidigt exportskydd för batteriet.** När export inte är tillåten får batteriets urladdning aldrig ge export, inte
   heller inom toleransbandet: tillåt lite import och aldrig export, eller sikta på några tiotal watt import. Lärdom från en
   FTW-rapport 2026-11-04, där batteriet sålde 1–1,5 kWh om dagen till spotpris, som annars hade täckt dyra timmar senare.
