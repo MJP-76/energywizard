@@ -1541,6 +1541,14 @@ async function runDiscovery() {
     html += `<div class="note" style="margin-top:6px">• ${g.kind === "pulse" ? "Tibber Pulse" : "Smartmätare"}: ${g.power_entity} (${g.maker || "okänt märke"})</div>`;
   });
   if (!(d.grid_meters || []).length) html += `<div class="note" style="margin-top:6px">Ingen hittades.</div>`;
+  // Fritt val bland alla effektsensorer i HA (issue #86), plus en valfri mätare för en annan byggnad
+  const ps = d.power_sensors || [];
+  const opt = (sel0) => ps.map((p) => `<option value="${esc(p.entity)}"${p.entity === sel0 ? " selected" : ""}>${esc(p.name)} (${esc(p.entity)}${p.state != null ? ", " + esc(p.state) + " " + esc(p.unit || "") : ""})</option>`).join("");
+  if (ps.length) html += `
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:12px"><span class="note">Elmätare för hela huset (valfri effektsensor, + = köper)</span>
+      <select id="pm_main"><option value="">${d.power_meter ? "Förslaget ovan" : "– ingen –"}</option>${opt("")}</select></label>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:8px"><span class="note">Mätare för en annan byggnad (valfri, t.ex. ett annex - visas, styr inte säkringsskyddet)</span>
+      <select id="pm_second"><option value="">– ingen –</option>${opt("")}</select></label>`;
   html += `</div>`;
 
   html += `<div class="card" style="margin-bottom:16px"><h2>💶 Elpris</h2>
@@ -1606,6 +1614,9 @@ async function generateConfig(save) {
     if (cat === "Husbatteri") sel.battery = _discovered.battery;
     if (cat === "Elmätare") sel.power_meter = _discovered.power_meter;
   });
+  const pmMain = (document.getElementById("pm_main") || {}).value, pmSecond = (document.getElementById("pm_second") || {}).value;
+  if (pmMain) sel.power_meter = { driver: "power_w", entities: { power_w: pmMain } };
+  if (pmSecond) sel.power_meter = { ...(sel.power_meter || { driver: "power_w", entities: {} }), secondary_power_w: pmSecond };
 
   if (save) {
     const msg = document.getElementById("savemsg");

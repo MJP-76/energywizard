@@ -1322,7 +1322,12 @@ def _build_house_config_yaml(sel: dict) -> str:
         if battery.get("power_entity") and "power_charge" not in battery_entities:
             battery_entities.setdefault("power", battery["power_entity"])
         for key, val in battery_entities.items():
-            lines.append(f"    {key}: {val}")
+            if isinstance(val, list):                     # flera batteribankar (#86)
+                lines.append(f"    {key}: [{', '.join(str(v) for v in val)}]")
+            else:
+                lines.append(f"    {key}: {val}")
+        if isinstance(battery_entities.get("soc"), list):
+            lines.append(f"    bank_kwh: [{', '.join('10' for _ in battery_entities['soc'])}]   # FYLL I - varje banks storlek i kWh, samma ordning")
     else:
         lines += ["battery:", "  enabled: false"]
     pm = sel.get("power_meter")
@@ -1333,6 +1338,8 @@ def _build_house_config_yaml(sel: dict) -> str:
             lines.append(f"    {key}: {val}")
         if pm.get("driver") == "power_w":
             lines.append("    # power_w_invert: true   # om mätaren visar EXPORT som positivt")
+        if pm.get("secondary_power_w") and re.fullmatch(r"sensor\.[a-z0-9_]+", str(pm["secondary_power_w"])):
+            lines.append(f"  secondary_power_w: {pm['secondary_power_w']}   # annan byggnad - visas, styr inte säkringsskyddet")
     lines += ["", "fuse:", "  main_fuse_a: 25  # FYLL I - din huvudsäkring i Ampere"]
 
     return "\n".join(lines) + "\n"

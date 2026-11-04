@@ -125,3 +125,24 @@ def test_solax_gen2_bara_lagesbyte_och_bada_vaxelriktarna():
     assert not any(e.startswith("time.") for m in gs["modes"].values() for e in m)
     # Gen4-6 påverkas inte
     assert discover_house(SOLAX)["battery"]["control_preset"] == "solax_modbus_solax"
+
+
+def test_tva_vaxelriktare_blir_ett_batteri_med_bada_bankarna():
+    """Issue #86: skanningen tog bara en av två Gen2. Nu blir båda ett batteri (laddnivå + effekt från båda)."""
+    b = discover_house(_gen2("dev_a", 1) + _gen2("dev_b", 2))["battery"]
+    ents = b["generic_suggestion"]["entities"]
+    assert ents["soc"] == ["sensor.solax1_battery_capacity", "sensor.solax2_battery_capacity"]
+    assert ents["power"] == ["sensor.solax1_battery_power_charge", "sensor.solax2_battery_power_charge"]
+    assert len(b["banks"]) == 2 and "bank_kwh" in b["note"]
+
+
+def test_vagd_laddniva_och_summerad_effekt(monkeypatch):
+    import homeassistant
+    vals = {"sensor.s1": 80.0, "sensor.s2": 40.0, "sensor.p1": 1000.0, "sensor.p2": -300.0}
+    monkeypatch.setattr(homeassistant, "_get_numeric_state", lambda e: vals.get(e))
+    d = GenericBatteryDriver(entities={"soc": ["sensor.s1", "sensor.s2"], "power": ["sensor.p1", "sensor.p2"],
+                                       "bank_kwh": [15, 10.65]})
+    st = d.read_state()
+    assert st["soc_pct"] == round((80 * 15 + 40 * 10.65) / 25.65, 1) and st["power_w"] == 700.0
+    vals["sensor.s2"] = None                                    # en bank svarar inte: den andra räknas ensam
+    assert d.read_state()["soc_pct"] == 80.0

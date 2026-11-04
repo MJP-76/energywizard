@@ -545,5 +545,30 @@ def discover_house(entities: list[dict] | None = None) -> dict:
     # styra - batteriet laddas alltid via växelriktaren. Annars den första, som förut.
     battery = next((b for b in battery_candidates if (b.get("generic_suggestion") or {}).get("modes")),
                    battery_candidates[0] if battery_candidates else None)
+    # Flera växelriktare/batteribankar av samma märke (issue #86: två Solax Gen2 med var sitt Pylontech-batteri) blir ETT
+    # batteri: laddnivån vägs ihop, effekten summeras (drivers/battery_generic.py). Förinställningen styr redan alla
+    # växelriktarnas lägen (t.ex. Gen2 byter Charger Use Mode på båda); bankarnas storlek fylls i av användaren.
+    if battery and battery.get("maker") and battery.get("soc_entity"):
+        same = [b for b in battery_candidates if b is not battery and b.get("maker") == battery["maker"] and b.get("soc_entity")
+                and b.get("control_preset") == battery.get("control_preset")]
+        if same:
+            banks = [battery] + same
+            gs = battery.setdefault("generic_suggestion", {"driver": "generic", "entities": {}})
+            ents = gs.setdefault("entities", {})
+            ents["soc"] = [b["soc_entity"] for b in banks]
+            pw = [b.get("power_entity") for b in banks]
+            if all(pw) and "power_charge" not in ents:
+                ents["power"] = pw
+            battery["banks"] = [b.get("device_name") for b in banks]
+            battery["soc_entity"] = ", ".join(ents["soc"])
+            if isinstance(ents.get("power"), list):
+                battery["power_entity"] = ", ".join(ents["power"])
+            battery["note"] = ((battery.get("note") or "") + f" {len(banks)} växelriktare/batteribankar räknas som ett batteri "
+                               f"({', '.join(battery['banks'])}). Fyll i varje banks storlek (bank_kwh) så vägs laddnivån rätt.").strip()
 
-    return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters, "power_meter": power_meter, "battery": battery}
+    # Alla effektsensorer, för fritt val av elmätare (issue #86: en IAMMETER för hela huset hittas inte som "nätmätare")
+    power_sensors = sorted(({"entity": e["e"], "name": e.get("n") or e["e"], "unit": e.get("u"), "state": e.get("st")}
+                            for e in entities if e["e"].startswith("sensor.") and (e.get("dc") == "power" or e.get("u") in ("W", "kW"))),
+                           key=lambda x: x["name"].lower())
+    return {"cars": cars, "heat_pump": heat_pump, "solar": solar, "spa": spa, "chargers": chargers, "grid_meters": grid_meters,
+            "power_meter": power_meter, "battery": battery, "power_sensors": power_sensors}

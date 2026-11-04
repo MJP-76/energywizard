@@ -70,17 +70,42 @@ class GenericBatteryDriver(BatteryDriver):
         self._e = entities or {}
         self._modes = {k: v for k, v in (modes or {}).items() if k in INTENTS and v}
 
+    @staticmethod
+    def _as_list(v):
+        return [x for x in v if x] if isinstance(v, (list, tuple)) else ([v] if v else [])
+
+    def _soc(self):
+        """Laddnivå. Flera batteribankar (t.ex. två växelriktare med var sitt batteri, issue #86): soc är en lista,
+        och nivån vägs efter bankarnas storlek (bank_kwh, samma ordning) - utan storlekar lika vikt."""
+        ents = self._as_list(self._e.get("soc"))
+        if len(ents) <= 1:
+            return homeassistant._get_numeric_state(ents[0]) if ents else None
+        kwh = self._e.get("bank_kwh") or []
+        vals = []
+        for i, e in enumerate(ents):
+            v = homeassistant._get_numeric_state(e)
+            if v is not None:
+                w = float(kwh[i]) if i < len(kwh) and kwh[i] else 1.0
+                vals.append((v, w))
+        if not vals:
+            return None
+        return round(sum(v * w for v, w in vals) / sum(w for _, w in vals), 1)
+
+    def _sum(self, key):
+        ents = self._as_list(self._e.get(key))
+        vals = [homeassistant._get_numeric_state(e) for e in ents]
+        vals = [v for v in vals if v is not None]
+        return sum(vals) if vals else None
+
     def read_state(self) -> dict:
-        soc_e = self._e.get("soc")
-        power_e = self._e.get("power")
         mode_e = self._e.get("mode_select")
-        soc = homeassistant._get_numeric_state(soc_e) if soc_e else None
-        power = homeassistant._get_numeric_state(power_e) if power_e else None
+        soc = self._soc()
+        power = self._sum("power")
         if power is not None and self._invert:
             power = -power
         if power is None and (self._e.get("power_charge") or self._e.get("power_discharge")):
-            pc = homeassistant._get_numeric_state(self._e["power_charge"]) if self._e.get("power_charge") else 0.0
-            pd = homeassistant._get_numeric_state(self._e["power_discharge"]) if self._e.get("power_discharge") else 0.0
+            pc = self._sum("power_charge") if self._e.get("power_charge") else 0.0
+            pd = self._sum("power_discharge") if self._e.get("power_discharge") else 0.0
             power = None if pc is None and pd is None else (pc or 0.0) - (pd or 0.0)
         return {
             "soc_pct": soc,
