@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.2 (2026-11-04)
+- **NIBE S1155/S1255 via pumpens lokala REST-API** (tack lazgeo, #115): läser temperaturer och kompressorstatus,
+  certifikatet kontrolleras innan lösenordet skickas. Styrning är avstängd tills man slår på den. Se docs/nibe-local-rest.md.
+- En felaktig inställning för en enhet stoppar inte längre hela motorn: felet loggas och motorn kör vidare utan just den enheten.
+
 ## 1.2.1 (2026-11-04)
 - **Nätet visades fel med Tibber Pulse när man säljer solel** (#114): pulsens fasström saknar tecken, så export syntes
   som köp. Har pulsen köp- och säljeffekt används de nu; installationen hittar dem själv.

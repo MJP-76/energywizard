@@ -108,10 +108,21 @@ car_drivers = house_config.build_car_drivers(house_cfg)
 charger_drivers = house_config.build_charger_drivers(house_cfg)
 physical_charger_drivers = house_config.build_physical_charger_drivers(house_cfg)
 default_car_per_charger = house_config.build_default_car_per_charger(house_cfg)
-heat_pump_driver = house_config.build_heat_pump_driver(house_cfg)
-solar_driver = house_config.build_solar_driver(house_cfg)
-spa_driver = house_config.build_spa_driver(house_cfg)
-battery_driver = house_config.build_battery_driver(house_cfg)
+def _build_or_null(name, build, null):
+    """En felaktig inställning för en enhet (t.ex. fel port till NIBE:s lokala API) ska inte stoppa hela motorn i en
+    omstartsloop: logga tydligt och kör vidare utan just den enheten."""
+    try:
+        return build(house_cfg)
+    except Exception as _be:
+        print(f"❌ {name}: inställningen i house_config.yaml går inte att använda ({type(_be).__name__}: {_be}). "
+              f"Kör vidare utan {name.lower()} tills den är rättad.")
+        return null()
+
+
+heat_pump_driver = _build_or_null("Värmepumpen", house_config.build_heat_pump_driver, house_config.NullHeatPumpDriver)
+solar_driver = _build_or_null("Solcellerna", house_config.build_solar_driver, house_config.NullSolarDriver)
+spa_driver = _build_or_null("Spabadet", house_config.build_spa_driver, house_config.NullSpaDriver)
+battery_driver = _build_or_null("Batteriet", house_config.build_battery_driver, house_config.NullBatteryDriver)
 
 
 # Laddboxar: skriv via laddarens drivrutin (Easee: samma tjänster som förut; generisk/OCPP: switch +
