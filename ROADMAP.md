@@ -238,6 +238,10 @@ optimeraren Energyplan är stängd och används inte):
   HA:s entiteter/tjänster) - skulle alltså komplettera, inte ersätta, det
   EnergyWizard redan gör. Inget konkret utkast än - en idé värd att utforska,
   inte ett beslutat nästa steg.
+  
+- **Frivillig telemetri och felrapportering (Opt-in crash/telemetry-tjänst)**. Liknande FTW:s molnlösning (`ftw-cloud` / drivrutinstelemetri). En lättviktig, självhostad central serverendpoint som tar emot anonyma felrapporter, stack traces och drivrutinsstatus från installationer som godkänner det. Syftet är att snabbt upptäcka krascher i skarpa hem utan att användare behöver manuellt posta loggar i issues. Lokalt läge förblir 100 % självständigt och fullt fungerande utan uppkoppling mot telemetriservern.
+
+- **Box-signerad telemetri och felrapportering (FTW-modell)**. Frivillig molnuppkoppling mot egen server (`cloud.energywizard...`). Varje installation genererar ett unikt box-nyckelpar som signerar telemetri och felrapporter anonymt. Möjliggör att automatiskt upptäcka krascher, se vilka drivrutiner som fungerar i verkliga hem ("verifierad i N hem") och särskilja enstaka edge-cases från breda buggar utan att lagra personuppgifter.
 
 ## Redan klart
 
