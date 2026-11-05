@@ -15,7 +15,7 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   samma host-API som i FTW (Modbus TCP, HTTP, MQTT, emit av telemetri) och översätter till våra drivrutinsgränssnitt.
   Då fungerar t.ex. Pixii, Sungrow, Deye, GoodWe, Sigenergy, Victron utan Home Assistant-integration. Börja läsande,
   styrning per drivrutin efter test mot srcfl/device-simulator.
-- **Planklockan i FTW-klass**: dagens version (smartbox/static/planclock.js) är inte påkopplad - görs om mörk,
+- **Egen planvy i stället för urtavlan** (2026-11-05: urtavlan låg för nära FTW:s "Plan ahead" - bortkopplad; tre egna förslag tas fram). Tidigare: **Planklockan i FTW-klass**: dagens version (smartbox/static/planclock.js) är inte påkopplad - görs om mörk,
   luftig och lugn innan den visas (Emils skärminspelning 2026-11-05).
 - **Tillägget använder färdigbyggda images** (`image:` i ha-addon/smartbox/config.yaml, som Sourcefuls tillägg) i
   stället för att klona och bygga hos användaren: inga gamla cachade byggen, snabbare installation. CI bygger redan
