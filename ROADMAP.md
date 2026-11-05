@@ -10,27 +10,15 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 ## Att göra (önskemål från Discord och Emil, 2026-11-04)
 
-- **Kör Sourcefuls FTW-drivrutiner direkt** (srcfl/device-drivers, 93 Lua-drivrutiner för växelriktare, batterier,
-  laddboxar och mätare - AGPL-3.0 som vi, och vi har deras OK): en liten Lua-värd (lupa) som ger drivrutinerna
-  samma host-API som i FTW (Modbus TCP, HTTP, MQTT, emit av telemetri) och översätter till våra drivrutinsgränssnitt.
-  Då fungerar t.ex. Pixii, Sungrow, Deye, GoodWe, Sigenergy, Victron utan Home Assistant-integration. Börja läsande,
-  styrning per drivrutin efter test mot srcfl/device-simulator.
-- **Egen planvy i stället för urtavlan** (2026-11-05: urtavlan låg för nära FTW:s "Plan ahead" - bortkopplad; tre egna förslag tas fram). Tidigare: **Planklockan i FTW-klass**: dagens version (smartbox/static/planclock.js) är inte påkopplad - görs om mörk,
-  luftig och lugn innan den visas (Emils skärminspelning 2026-11-05).
-- **Tillägget använder färdigbyggda images** (`image:` i ha-addon/smartbox/config.yaml, som Sourcefuls tillägg) i
-  stället för att klona och bygga hos användaren: inga gamla cachade byggen, snabbare installation. CI bygger redan
-  images - behöver en arm64-variant (aarch64, Raspberry Pi) och versionstagg per release.
+- **FTW-drivrutiner: verifierad styrning.** Läsning fungerar sedan 2026-11-05 (`driver: ftw`, alla 93 medföljer). Kvar:
+  prova styrning (driver_command) på riktig hårdvara drivrutin för drivrutin och lägga in dem i `FTW_CONTROL_VERIFIED`
+  – Sungrow, Sonnen, Victron och SMA först. Installationsguiden ska kunna föreslå `driver: ftw` (idag skrivs den för hand).
+- **Tillägget använder färdigbyggda images** (`image: ghcr.io/murre87/energywizard` i ha-addon/smartbox/config.yaml).
+  Imagen finns redan (publik, amd64+arm64, byggs av CI). Kvar (analys 2026-11-05): HA ser en ny version i samma
+  ögonblick som config.yaml pushas, men imagen tar ~25 min att bygga – då misslyckas alla uppdateringar under tiden.
+  Lösning: CI taggar imagen med tilläggets version och bumpar `version` i config.yaml först när imagen är pushad
+  (eget steg/commit), eller ett separat tilläggsrepo som bara uppdateras efter bygget.
 - **Testa Modbus-drivrutinerna mot srcfl/device-simulator i CI** (Solax, Ferroamp, Thermia, Pixii) - utan hårdvara.
-- **Gästbil och Easees fasväljare** (#131).
-- **Planklockan går att dra i, och finns även i mobilappen.** Man drar visaren till ett klockslag och ser vad som händer
-  då: pris, vad batteriet och bilen gör (laddar/laddar ur/vilar, kW) och batteriets nivå. Idag finns klockan bara på
-  webben och visar bara nuläget. Inspiration: FTW-appens "Plan ahead" (skärminspelning från Emil). Bygg i vår egen stil,
-  utan att kopiera deras.
-- **Egen färg när batteriet laddar ur och säljer till nätet** (Anders på Discord): orange = laddar ur för eget bruk,
-  en annan färg = laddar ur och säljer överskottet. Gäller planklockan, remsan och batteriraden.
-- **Batteriraden: kort och tydlig** (HannesB): "Laddar ur till 09:45 · 80 → 35 % · 8,6 kWh · toppris 431 öre" finns
-  sedan 2026-11-04 på webben. Ta samma rad till mobilappen och lägg till "billigast 00–02" och "planerad 18:14, planerar
-  om var 15:e minut".
 - **Max laddström och faser känns av själv** per bil och laddbox (laddboxens och bilens egna gränser, och mätning:
   enfasbil om bara en fas drar ström), visas i startguiden och går att ändra. Idag `max_a`/`phases` i installationen.
 - **Drivrutiner från evcc** ([evcc-io/evcc](https://github.com/evcc-io/evcc), MIT, får användas i AGPL med upphovsrättsraden
@@ -39,22 +27,25 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
   batterier och växelriktare som Victron, Sigenergy, Pixii, Huawei och GoodWe. Två vägar:
   (1) en liten tolk för evcc:s Modbus/HTTP-mallar i Python, som ger många mätare och batterier på en gång;
   (2) en körande evcc som laddbackend via dess API eller MQTT. Börja med (1) för batterierna som betatestarna har.
-- **Pixii (PowerShaper / Home).** Läsning: SunSpec modell 802 över Modbus TCP, men batterieffekten har omvänt tecken
-  (negativ = laddar ur), vilket `power_invert: true` i batteridrivrutinen hanterar. Styrning: Pixiis egna register plus en
-  heartbeat som måste skrivas oftare än gatewayens meddelandetid, annars släpper batteriet (samma princip som `keepalive_s`
-  för Solis). Källor: evcc-issue [#22240](https://github.com/evcc-io/evcc/issues/22240) (stängd, ingen Pixii-kod mergad
-  i evcc) och FTW:s drivrutin `pixii` (Modbus, 2.1.9, overifierad på hårdvara). Licensen för srcfl/device-drivers är oklar
-  (NOASSERTION), men **Sourceful har gett Emil ok att använda dem (2026-11-04)**. Utgå från FTW:s `pixii`-drivrutin med
-  källhänvisning, och verifiera mot en testare med Pixii innan styrningen slås på.
-- **Ensidigt exportskydd för batteriet.** När export inte är tillåten får batteriets urladdning aldrig ge export, inte
-  heller inom toleransbandet: tillåt lite import och aldrig export, eller sikta på några tiotal watt import. Lärdom från en
-  FTW-rapport 2026-11-04, där batteriet sålde 1–1,5 kWh om dagen till spotpris, som annars hade täckt dyra timmar senare.
-  Kontrollera battery_control.py och battery_plan.
-- **Tomt fält får aldrig sparas som 0.** Samma rapport visar att ett tomt fält sparades som 0 och blev ett laddtak som
-  stoppade all laddning. Gå igenom alla inställningsformulär (vi sparar tomt som "använd standard" i elpriset, men
-  kontrollera batteri, laddning och säkring).
-- **Rum, lampor och familjens namn i mobilappen** ur installationen: rumslistan, fönsterlamporna, användarnamnen och de
-  personliga hälsningarna är fortfarande Emils egna.
+- **Pixii (PowerShaper / Home).** Läsning fungerar nu via `driver: ftw` + FTW:s `pixii`-drivrutin (SunSpec 802, tecknet
+  hanteras av drivrutinen). Styrning: Pixiis egna register + heartbeat (FTW `pixii`, overifierad på hårdvara) – slås på
+  när en testare med Pixii provat (`control_unverified: true` + skuggläge först).
+## Klart 2026-11-05 (natten, Emils mandat)
+
+- **Planvyn Skyline** på förstasidan i appen och på webben, med planklockan som val (urtavlan låg för nära FTW:s
+  design och är bara ett val nu). Egen färg när batteriet laddar ur och säljer; batteriraden "Laddar ur till 09:45".
+- **Ensidigt exportskydd**: med export avstängd laddar batteriet aldrig ur mer än huset köper (−50 W marginal).
+- **Tomt fält sparas aldrig som 0**: genomgånget – tomt ger standardvärde eller avvisas, gränser stoppar farliga nollor.
+- **Rum, lampor, namn och peppfraser** ur installationen/inställningarna, inget av Emils i koden.
+- **Gästbil** (#131): kWh + ev. klar-tid på valfri bils laddbox, billigaste kvartarna, under säkringen. Easees fasväljare
+  fanns redan (faser `auto`).
+- **Effektavgift efter högsta timmar** (#141): Norges effektledd och svenska "snitt av N högsta timmar" med trappsteg.
+- **FTW-drivrutiner i motorn**: `driver: ftw` för batteri och solceller, alla 93 medföljer, läsande; styrning per
+  verifierad drivrutin. Lua-bryggan verifierad mot en riktig Shelly 3EM.
+- **Sex nya batteriförinställningar**: GoodWe, SolarEdge, Sungrow, Huawei LUNA, Tesla Powerwall, Enphase (ej verifierade
+  på hårdvara). Kartläggning av de 20 vanligaste i docs/batterier-och-vaxelriktare.md.
+- **Besparingen** räknas mot ett vanligt hushåll inklusive moms. **Installationens logg** (Logg-sidan). **Varning när
+  batteriet inte följer** och **alla notiser går att stänga av**.
 
 ## Övervägs, väntar på fler verkliga hus att verifiera mot
 
