@@ -223,3 +223,9 @@ def test_modell_innegivare_och_avrundade_temperaturer(monkeypatch):
     assert not any("21.6" in x or "sensor." in x for x in out)
     t.note_state(indoor=20.0, indoor_source="heatpump")
     assert t._state_summary(None)[0] == "indoor:heatpump"
+
+
+def test_ftw_drivrutinens_namn_rapporteras():
+    import telemetry
+    out = telemetry._driver_summary({"battery": {"enabled": True, "driver": "ftw", "ftw": {"driver": "pixii", "host": "10.0.0.5"}}})
+    assert "battery:ftw-pixii" in out and not any("10.0.0.5" in x for x in out)

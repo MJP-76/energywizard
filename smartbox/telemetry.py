@@ -130,7 +130,11 @@ def _driver_summary(cfg: dict, maker_fn=None) -> list[str]:
     for key, cat in (("heat_pump", "heatpump"), ("solar", "solar"), ("spa", "spa"), ("battery", "battery")):
         sec = cfg.get(key, {}) or {}
         if sec.get("enabled"):
-            out.append(f"{cat}:{sec.get('driver', '?')}{_brand(sec, maker_fn)}")
+            drv = sec.get("driver", "?")
+            if drv == "ftw":                                 # vilken FTW-drivrutin (bara dess namn, t.ex. ftw-pixii)
+                name = str((sec.get("ftw") or {}).get("driver") or "?")
+                drv = "ftw-" + "".join(ch for ch in name if ch.isalnum() or ch in "_-")[:30]
+            out.append(f"{cat}:{drv}{_brand(sec, maker_fn)}")
     for ev in cfg.get("evs", []) or []:
         out.append(f"car:{ev.get('driver', '?')}{_brand(ev, maker_fn)}")
         if isinstance(ev.get("charger"), dict) and ev["charger"].get("driver"):      # laddboxen ligger under bilen
