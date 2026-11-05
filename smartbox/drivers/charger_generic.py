@@ -57,11 +57,22 @@ class GenericChargerDriver(ChargerDriver):
         current_e = self._e.get("current_limit")
         import_e = self._e.get("current_import")
         raw = homeassistant._get_raw_state(status_e) if status_e else None
+        # Laddeffekt (#140): entities.power_kw eller power - i kW eller W (enheten ur HA, annars > 100 = W)
+        power_e = self._e.get("power_kw") or self._e.get("power")
+        power_kw = None
+        if power_e:
+            w = homeassistant.get_power_w(power_e)
+            unit = str(((homeassistant._states_cache.get(power_e) or {}).get("attributes") or {}).get("unit_of_measurement") or "")
+            if w is not None:
+                power_kw = w / 1000.0 if unit in ("W", "kW", "MW") or w > 100 else w
         return {
             "status": normalize_status(raw),
             "status_raw": raw,
+            # current_a = uppmätt laddström (current_import); saknas den används den inställda gränsen (current_limit)
             "current_a": homeassistant._get_numeric_state(import_e) if import_e else
                          (homeassistant._get_numeric_state(current_e) if current_e else None),
+            "current_is_limit": not import_e and bool(current_e),
+            "power_kw": round(power_kw, 3) if power_kw is not None else None,
             "phases": None,
         }
 

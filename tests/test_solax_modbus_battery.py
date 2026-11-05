@@ -96,7 +96,7 @@ def test_drivrutin_flera_val_och_knapp():
 def test_effekt_fran_separata_sensorer():
     drv = GenericBatteryDriver(entities={"power_charge": "s.c", "power_discharge": "s.d"})
     with patch("drivers.battery_generic.homeassistant") as ha:
-        ha._get_numeric_state.side_effect = lambda e: {"s.c": 0.0, "s.d": 2200.0}[e]
+        ha.get_power_w.side_effect = lambda e: {"s.c": 0.0, "s.d": 2200.0}[e]
         assert drv.read_state()["power_w"] == -2200.0
 
 

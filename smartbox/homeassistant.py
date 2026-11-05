@@ -282,6 +282,16 @@ def _get_numeric_state(entity_id):
         # Kan vara en status-text (t.ex. 'charging'), skippa varning.
         return None
 
+def get_power_w(entity_id):
+    """Effekt i watt oavsett vilken enhet sensorn har (W, kW, MW enligt unit_of_measurement). En batteri- eller
+    mätarsensor i kW lästes förut som watt (#139)."""
+    v = _get_numeric_state(entity_id)
+    if v is None:
+        return None
+    unit = str(((_states_cache.get(entity_id) or {}).get("attributes") or {}).get("unit_of_measurement") or "").strip()
+    return v * {"kW": 1000.0, "MW": 1_000_000.0, "mW": 0.001}.get(unit, 1.0)
+
+
 def _get_numeric_attribute(entity_id, attribute):
     """Hämtar ett specifikt attribut från en entitet och konverterar till float."""
     if not _states_cache:
@@ -454,7 +464,7 @@ def read_power_meter():
         if e.get("import_w") and e.get("export_w"):
             # Verklig köp- och säljeffekt går före U x I: fasströmmen (t.ex. Tibber Pulse) saknar ofta tecken, så
             # export syns inte, och U x I är skenbar effekt (issue #114).
-            imp, exp = _get_numeric_state(e["import_w"]), _get_numeric_state(e["export_w"])
+            imp, exp = get_power_w(e["import_w"]), get_power_w(e["export_w"])
             if imp is None and exp is None:
                 return None
             net = (imp or 0.0) - (exp or 0.0)
@@ -464,14 +474,14 @@ def read_power_meter():
                 return None
             net = sum(v * i for v, i in zip(volt, cur))          # P = U × I, negativ ström = export
         elif e.get("power_w"):
-            net = _get_numeric_state(e["power_w"])
+            net = get_power_w(e["power_w"])
             if net is None:
                 return None
             if str(e.get("power_w_invert", "")).lower() in ("1", "true", "yes", "ja"):
                 net = -net
         elif e.get("import_w"):
-            imp = _get_numeric_state(e["import_w"])
-            exp = _get_numeric_state(e["export_w"]) if e.get("export_w") else 0.0
+            imp = get_power_w(e["import_w"])
+            exp = get_power_w(e["export_w"]) if e.get("export_w") else 0.0
             if imp is None:
                 return None
             net = imp - (exp or 0.0)

@@ -1,5 +1,5 @@
 name: "EnergyWizard"
-version: "1.2.4"
+version: "1.2.5"
 slug: "smartbox"
 description: "Minut-för-minut styrning av elbil, värmepump, solcellsexport, spabad och huvudsäkring efter spotpriset - helt via Home Assistants egna entiteter."
 url: "https://github.com/murre87/energywizard"
@@ -33,3 +33,6 @@ schema:
   dashboard_password: "password?"
   telemetry_opt_in: bool
   telemetry_endpoint: "str?"
+  nibe_local_username: "str?"
+  nibe_local_password: "password?"
+  nibe_local_tls_pin_sha256: "str?"

@@ -21,7 +21,9 @@ from datetime import datetime, timedelta
 import zoneinfo
 
 SWE = zoneinfo.ZoneInfo("Europe/Stockholm")
-CHARGER_CAR = {"ev_power_kw": "nissan", "ev_carport_power_kw": "tesla"}
+# Laddboxarna loggas i installationens ordning: första -> ev_power_kw, andra -> ev_carport_power_kw (main.py).
+# Vilken bil som hör till vilken kolumn kommer ur installationen (load(cars=...)); utan den bara "Laddbox 1/2".
+DEFAULT_CHARGER_CAR = {"ev_power_kw": "laddbox_1", "ev_carport_power_kw": "laddbox_2"}
 CAR_COLORS = ["#22d3a0", "#38bdf8", "#a78bfa", "#f472b6"]
 
 
@@ -30,7 +32,8 @@ def _hour(ts):
     return ts.replace(minute=0, second=0, microsecond=0)
 
 
-def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_ids=None, battery_plan=None):
+def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_ids=None, battery_plan=None,
+          car_names=None, has_spa=True, has_heat=True):
     """now: tz-medveten. past: {timme: {'price','solar_kw','compressor','spa','ev': {car: kW}}}.
     future_prices/future_solar_kw: {timme: värde}. heat_modes: {timme: 'CHEAP'|'EXPENSIVE'|'COMFORT'}.
     ev_plan: {timme: {car: kWh}}. Returnerar en dict för grafen."""
@@ -98,10 +101,11 @@ def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_id
                 bat_t.append({"charge": "Planerat: laddar", "discharge": "Planerat: laddar ur", "hold": "Planerat: sparas",
                               "idle": "Planerat: vilar", "auto": "Planerat: självförbrukning"}.get(a, "Ingen plan"))
     ev_max = max([v for c in cars for v in ev[c][0] if v] + [1.0])
-    lanes = [
-        {"key": "varmepump", "label": "Värmepump", "color": "#fb923c", "values": hp, "text": hp_text},
-        {"key": "spabad", "label": "Spabad", "color": "#a78bfa", "values": spa, "text": spa_text},
-    ] + [{"key": f"ev_{c}", "label": c.capitalize(), "color": CAR_COLORS[i % len(CAR_COLORS)],
+    names = car_names or {}
+    # Bara det huset har (#136: Spabad och "Nissan" syntes i alla hus)
+    lanes = ([{"key": "varmepump", "label": "Värmepump", "color": "#fb923c", "values": hp, "text": hp_text}] if has_heat else []) + \
+            ([{"key": "spabad", "label": "Spabad", "color": "#a78bfa", "values": spa, "text": spa_text}] if has_spa else []) + \
+        [{"key": f"ev_{c}", "label": names.get(c) or c.replace("_", " ").capitalize(), "color": CAR_COLORS[i % len(CAR_COLORS)],
           "values": [None if v is None else min(1.0, v / ev_max) for v in ev[c][0]], "text": ev[c][1]}
          for i, c in enumerate(cars)]
     if has_bat:
@@ -110,8 +114,14 @@ def build(now, past, future_prices, future_solar_kw, heat_modes, ev_plan, car_id
             "future": is_future, "price": price, "solar_kw": solar, "lanes": lanes}
 
 
-def load(conn, now=None):
-    """Läser databasen och bygger tidslinjen."""
+def load(conn, now=None, cars=None, has_spa=None, has_heat=None):
+    """Läser databasen och bygger tidslinjen. cars: [(bil_id, namn, loggkolumn|None)] ur installationen;
+    has_spa/has_heat: om installationen har spabad/värmepump (None = visa)."""
+    charger_car = dict(DEFAULT_CHARGER_CAR)
+    car_names = {}
+    if cars is not None:
+        charger_car = {col: cid for cid, _n, col in cars if col}
+        car_names = {cid: n for cid, n, _c in cars}
     from sqlalchemy import text
     import nordpool
     import plan_brief
@@ -131,7 +141,8 @@ def load(conn, now=None):
         for col, val in (("ev_power_kw", ev1), ("ev_carport_power_kw", ev2)):
             if val is not None:
                 kw = float(val)
-                evs[CHARGER_CAR[col]] = kw / 1000.0 if kw > 100 else kw        # vissa rader loggade W
+                if col in charger_car:
+                    evs[charger_car[col]] = kw / 1000.0 if kw > 100 else kw    # vissa rader loggade W
         past[h.replace(tzinfo=SWE)] = {"price": f(pr), "solar_kw": f(pv) / 1000.0 if pv is not None else None,
                                        "compressor": f(comp), "spa": f(spa), "ev": evs,
                                        "battery_kw": f(bat) / 1000.0 if bat is not None else None}
@@ -203,5 +214,8 @@ def load(conn, now=None):
     except Exception:
         conn.rollback()
 
-    return build(now, past, fut_prices, fut_solar, heat_modes, ev_plan, car_ids=list(CHARGER_CAR.values()),
-                 battery_plan=bat_plan)
+    car_ids = [c for c, _n, _col in cars] if cars is not None else list(charger_car.values())
+    if cars is not None:      # bara installationens bilar i planen (gamla bil-id i ev_plan_slots döljs)
+        ev_plan = {h: {c: v for c, v in d.items() if c in car_ids} for h, d in ev_plan.items()}
+    return build(now, past, fut_prices, fut_solar, heat_modes, ev_plan, car_ids=car_ids,
+                 battery_plan=bat_plan, car_names=car_names, has_spa=has_spa is not False, has_heat=has_heat is not False)

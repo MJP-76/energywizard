@@ -83,7 +83,9 @@ def update_forecast():
         _add_precip_column()
         response = requests.get(OPEN_METEO_URL, timeout=15)
         if response.status_code != 200:
-            print(f"❌ Fel vid Open-Meteo väder-API: HTTP {response.status_code}")
+            # Ett enstaka svar utan prognos är tillfälligt (nästa försök brukar gå) - motorn larmar själv efter två
+            # missar i rad, så det här är en varning, inte ett fel som telemetrin ska rapportera (#133)
+            print(f"⚠️ Open-Meteo svarade HTTP {response.status_code} - försöker igen senare")
             return False
 
         h = response.json().get("hourly", {})

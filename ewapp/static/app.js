@@ -202,8 +202,8 @@ function nowSheet() {
     <div class="crow"><button class="mini" data-a="tab" data-v="plan">Hela planen</button><button class="mini" data-a="closesheet">Stäng</button></div>`);
 }
 function ljusRow() {
-  if (!can("lights")) return "";
-  return `<div class="ljquick"><button class="mini" data-a="lights" data-v="windows_on">Tänd fönster</button><button class="mini" data-a="lights" data-v="windows_off">Släck fönster</button><button class="mini" data-a="lights" data-v="up_on">Tänd uppe</button><button class="mini night" data-a="lights" data-v="goodnight">Godnatt</button></div>`;
+  if (!can("lights") || !LJ || !LJ.configured) return "";       // inga valda lampor -> inga lampknappar (#134)
+  return `<div class="ljquick">${LJ.has_windows ? `<button class="mini" data-a="lights" data-v="windows_on">Tänd fönster</button><button class="mini" data-a="lights" data-v="windows_off">Släck fönster</button>` : ""}${LJ.has_up ? `<button class="mini" data-a="lights" data-v="up_on">Tänd uppe</button><button class="mini night" data-a="lights" data-v="goodnight">Godnatt</button>` : ""}</div>`;
 }
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
@@ -339,7 +339,7 @@ async function load() {
     if (page === "bil") S = await api("state"); else if (!S) S = await api("state");
     ROLE = (S && S.role) || ROLE; ME = (S && S.user) || ME; document.body.classList.toggle("guest", ROLE === "guest");
     if (page === "hus") H = await api("home");
-    if (page === "hem") { [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); }
+    if (page === "hem") { [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); }
     if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); }
     if (page === "historik") { if (histView === "energi") HX = await api("energyhistory?range=" + hxRange); else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();

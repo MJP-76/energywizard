@@ -436,6 +436,7 @@ last_spa_schedule_eval_time = None
 last_away_recovery_notified = None
 ha_temp_alert_sent = False
 last_solar_modbus_error_notified = False
+last_house_neg_warn = None
 solar_modbus_offline_since = None
 # FIX: väder-watchdog – räknar misslyckade SMHI-hämtningar och dedupar notisen
 weather_update_fail_count = 0
@@ -776,12 +777,16 @@ while True:
 
             # Solcellsgräns Watchdog
             raw_solar_limit = solar_driver.get_export_limit_pct()
-            if raw_solar_limit is None:
+            # Bara växelriktare som går att begränsa har en gräns att tappa (#134: förut larmade "SolarEdge Limit Offline"
+            # i hus utan SolarEdge - och utan solceller alls)
+            if raw_solar_limit is None and not solar_driver.supports_curtailment():
+                current_solar_limit_pct = 100.0
+            elif raw_solar_limit is None:
                 current_solar_limit_pct = 100.0
                 if solar_modbus_offline_since is None:
                     solar_modbus_offline_since = now
                 elif (now - solar_modbus_offline_since) > timedelta(minutes=10) and not last_solar_modbus_error_notified:
-                    notifier.send_emil("⚠️ SolarEdge Limit Offline", "Kunde inte nå SolarEdge via Modbus. Antar 100% produktion.")
+                    notifier.send_emil("⚠️ Solcellernas exportgräns offline", "Kunde inte läsa växelriktarens exportgräns. Antar 100 % produktion.")
                     last_solar_modbus_error_notified = True
             else:
                 current_solar_limit_pct = raw_solar_limit
@@ -1281,6 +1286,15 @@ while True:
             except Exception:
                 _battery_early = {}
             house_consumption_w = solar_prod_w + avg_net - (_battery_early.get("power_w") or 0.0)
+            # Ett hus kan inte producera el: kraftigt negativt betyder att någon givare har fel tecken eller enhet (#139).
+            # Logga delarna (högst en gång i timmen) och visa 0 i stället för t.ex. -17 kW.
+            if house_consumption_w < -300:
+                if last_house_neg_warn is None or (now - last_house_neg_warn) > timedelta(hours=1):
+                    print(f"⚠️ Husets förbrukning blev {house_consumption_w:.0f} W (sol {solar_prod_w:.0f} + nät {avg_net:.0f} "
+                          f"- batteri {(_battery_early.get('power_w') or 0.0):.0f}). Kontrollera batteriets effektsensor: + ska "
+                          f"betyda laddar (annars battery.power_invert: true) och enheten W eller kW.", flush=True)
+                    last_house_neg_warn = now
+                house_consumption_w = 0.0
             grid_import_w = max(0, avg_net) 
             
             pi_p_term, pi_i_term = 0.0, 0.0

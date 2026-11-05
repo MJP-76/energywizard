@@ -93,7 +93,8 @@ class GenericBatteryDriver(BatteryDriver):
 
     def _sum(self, key):
         ents = self._as_list(self._e.get(key))
-        vals = [homeassistant._get_numeric_state(e) for e in ents]
+        read = homeassistant.get_power_w if key.startswith("power") else homeassistant._get_numeric_state
+        vals = [read(e) for e in ents]
         vals = [v for v in vals if v is not None]
         return sum(vals) if vals else None
 

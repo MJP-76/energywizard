@@ -57,7 +57,11 @@ Colons/spaces in the fingerprint are accepted. Compare it with the trusted value
 shown by the heater. Optional `NIBE_LOCAL_HOST`/`NIBE_LOCAL_PORT` retain their previous
 meaning; YAML connection values take precedence. The full `docker-compose.yml`
 passes these optional environment variables to smartbox. Other launch methods need
-equivalent environment injection; no add-on credential UI is introduced here.
+equivalent environment injection.
+
+As a Home Assistant add-on: fill in `nibe_local_username`, `nibe_local_password` and
+`nibe_local_tls_pin_sha256` under the add-on's Configuration tab and restart it. Missing values
+are reported once in the add-on log (without the values themselves).
 
 Start with a read-only configuration:
 

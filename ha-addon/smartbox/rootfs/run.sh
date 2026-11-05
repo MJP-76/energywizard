@@ -23,6 +23,11 @@ if [ -f "$OPTIONS" ]; then
     export TELEMETRY_OPT_IN="$(opt telemetry_opt_in)"
     export TELEMETRY_ENDPOINT="$(opt telemetry_endpoint)"
     export DASHBOARD_PASSWORD="$(opt dashboard_password)"
+    # NIBE lokalt REST-API (heat_pump.driver: nibe_local) - bara de som är ifyllda (#138)
+    for k in username password tls_pin_sha256; do
+        v="$(opt nibe_local_$k)"
+        if [ -n "$v" ]; then export "NIBE_LOCAL_$(echo "$k" | tr a-z A-Z)=$v"; fi
+    done
 fi
 
 # Som HA-tillägg ligger databas och house_config.yaml i /config (tilläggets egen mapp).

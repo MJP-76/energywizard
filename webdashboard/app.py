@@ -951,12 +951,19 @@ async def api_flow():
         row = _latest_row(c)
     if row is None:
         return {"ok": False, "error": "Ingen data i sensor_log än"}
-    # Bilarna och spabadet ur installationen (bara det huset har). Laddboxarna loggas i installationens ordning:
-    # första -> ev_power_kw, andra -> ev_carport_power_kw (smartbox/main.py).
-    cars, has_spa = None, None
+    cars, has_spa, _has_heat = _house_parts()
+    d = live_flow.nodes(row, _json_list(row.get("decision_summary")), cars=cars, has_spa=has_spa)
+    return {"ok": True, "ts": str(row.get("sthlm_time"))[:16], **d}
+
+
+def _house_parts():
+    """(bilar, har_spa, har_värmepump) ur installationen - bara det huset har. bilar: [(id, namn, loggkolumn)].
+    Laddboxarna loggas i installationens ordning: första -> ev_power_kw, andra -> ev_carport_power_kw (main.py).
+    Vid fel: (None, None, None) = visa allt som förut."""
     try:
         hc = house_config.load_house_config(HOUSE_CONFIG_FILE)
         has_spa = bool((hc.get("spa") or {}).get("enabled"))
+        has_heat = bool((hc.get("heat_pump") or {}).get("enabled"))
         order = list(house_config.build_physical_charger_drivers(hc))
         home = {c: p for p, c in house_config.build_default_car_per_charger(hc).items()}
         cols = ["ev_power_kw", "ev_carport_power_kw"]
@@ -967,18 +974,19 @@ async def api_flow():
                 continue
             idx = order.index(home[cid]) if home.get(cid) in order else -1
             cars.append((cid, ev.get("name") or cid.capitalize(), cols[idx] if 0 <= idx < len(cols) else None))
+        return cars, has_spa, has_heat
     except Exception as e:
-        print(f"⚠️ Översiktens bilar/spa ur installationen: {e}", flush=True)
-    d = live_flow.nodes(row, _json_list(row.get("decision_summary")), cars=cars, has_spa=has_spa)
-    return {"ok": True, "ts": str(row.get("sthlm_time"))[:16], **d}
+        print(f"⚠️ Bilar/spa ur installationen: {e}", flush=True)
+        return None, None, None
 
 
 @app.get("/api/timeline")
 async def api_timeline():
     """Dygnet timme för timme: uppmätt 24 h bakåt + planerat framåt (timeline.py)."""
     import timeline
+    cars, has_spa, has_heat = _house_parts()
     with ENGINE.connect() as c:
-        return timeline.load(c)
+        return timeline.load(c, cars=cars, has_spa=has_spa, has_heat=has_heat)
 
 
 @app.get("/api/energyhistory")

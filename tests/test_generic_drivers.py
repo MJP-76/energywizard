@@ -60,7 +60,9 @@ def test_charger_read_state():
         mock_ha._get_raw_state.return_value = "charging"
         mock_ha._get_numeric_state.return_value = 10.0
         state = GenericChargerDriver(id="x", entities={"status": "sensor.s", "current_limit": "number.n"}).read_state()
-    assert state == {"status": "charging", "status_raw": "charging", "current_a": 10.0, "phases": None}
+    # current_limit utan current_import -> strömmen är gränsen (märkt); ingen effektentitet -> power_kw None
+    assert state == {"status": "charging", "status_raw": "charging", "current_a": 10.0, "current_is_limit": True,
+                     "power_kw": None, "phases": None}
 
 
 def test_charger_ocpp_status_normaliseras():
@@ -162,7 +164,8 @@ def test_build_solar_driver_skickar_med_entities_fran_configen():
 
 def test_battery_read_state_lasar_generiska_sensorer():
     with patch("drivers.battery_generic.homeassistant") as mock_ha:
-        mock_ha._get_numeric_state.side_effect = [72.0, -850.0]
+        mock_ha._get_numeric_state.side_effect = [72.0]
+        mock_ha.get_power_w.side_effect = [-850.0]          # effekten läses enhetsmedvetet (W/kW, #139)
         state = GenericBatteryDriver(capacity_kwh=10.0, entities={"soc": "sensor.soc", "power": "sensor.power"}).read_state()
     assert state == {"soc_pct": 72.0, "power_w": -850.0, "capacity_kwh": 10.0, "mode": None}
 

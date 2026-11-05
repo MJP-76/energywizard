@@ -1300,12 +1300,26 @@ def get_log():
     return {"rows": [{"t": r[0].astimezone(TZ).strftime("%d/%m %H:%M"), "who": r[1], "txt": r[2]} for r in rows]}
 
 
-# -- Ljus: fönsterlampor och godnatt (samma lampor som sovrumsknappen: trapp, balkong, Esther) ------------------------------------
-WINDOWS_GROUP = "light.fonsterlampor"
-UP_LIGHTS = ["light.trapp", "light.fonsterlampa_balkong", "light.fonsterlampa_esther"]
+# -- Ljus: fönsterlampor och godnatt - bara de lampor man själv valt ---------------------------------------------------------------
+# "lights" i /data/energywizard.json: {"windows_group": "light.x" (grupp eller lampa), "up": ["light.a", ...],
+# "night_skip": {"entity": "light.y", "from": 18, "to": 8}}. Utan val: inga lampknappar och ingen lampbevakning
+# (#134: förut bevakades ägarens egna lampor i alla hus och larmade "lampa offline" hos andra).
+def _lights_cfg() -> dict:
+    c = (ew_settings.get("lights") if ew_settings else None) or {}
+    return c if isinstance(c, dict) else {}
 
 
-def _members(st: dict, group: str) -> list:
+def _windows_group():
+    return _lights_cfg().get("windows_group") or None
+
+
+def _up_lights() -> list:
+    return [e for e in (_lights_cfg().get("up") or []) if isinstance(e, str) and e.startswith(("light.", "switch."))]
+
+
+def _members(st: dict, group) -> list:
+    if not group:
+        return []
     return (st.get(group) or {}).get("attributes", {}).get("entity_id") or [group]
 
 
@@ -1319,18 +1333,25 @@ def _light_summary(st: dict, ents: list) -> dict:
 @app.get("/api/lights")
 def lights():
     st = states()
-    return {"windows": _light_summary(st, _members(st, WINDOWS_GROUP)), "up": _light_summary(st, UP_LIGHTS)}
+    return {"configured": bool(_windows_group() or _up_lights()), "has_windows": bool(_windows_group()), "has_up": bool(_up_lights()),
+            "windows": _light_summary(st, _members(st, _windows_group())), "up": _light_summary(st, _up_lights())}
 
 
 def _lights_work(a, who_req_log):
     OFFLINE = (None, "unavailable", "unknown")
-    plan = {"windows_on": (_members(states(), WINDOWS_GROUP), "turn_on", "Fönsterlampor tända"), "windows_off": (_members(states(), WINDOWS_GROUP), "turn_off", "Fönsterlampor släckta"),
-            "up_on": (UP_LIGHTS, "turn_on", "Tänt uppe"), "goodnight": (UP_LIGHTS, "turn_off", "Godnatt – släckt uppe")}.get(a)
+    wg, up = _windows_group(), _up_lights()
+    plan = {"windows_on": (_members(states(), wg), "turn_on", "Fönsterlampor tända"), "windows_off": (_members(states(), wg), "turn_off", "Fönsterlampor släckta"),
+            "up_on": (up, "turn_on", "Tänt uppe"), "goodnight": (up, "turn_off", "Godnatt – släckt uppe")}.get(a)
     if not plan:
         raise HTTPException(400, "Okänd åtgärd")
     ents, svc, msg = plan
-    if a == "windows_on" and (dt.datetime.now(TZ).hour < 8 or dt.datetime.now(TZ).hour >= 18):   # Charlie sover kl 18-08: hennes fönsterlampa tänds inte då
-        ents = [e for e in ents if e != "light.fonsterlampa_charlie"]
+    if not ents:
+        raise HTTPException(409, "Inga lampor valda för det här")
+    ns = _lights_cfg().get("night_skip") or {}
+    if a == "windows_on" and ns.get("entity"):          # en lampa som inte ska tändas nattetid (t.ex. ett barnrum)
+        h, f, t = dt.datetime.now(TZ).hour, int(ns.get("from", 18)), int(ns.get("to", 8))
+        if (h >= f or h < t) if f > t else (f <= h < t):
+            ents = [e for e in ents if e != ns["entity"]]
     want = "on" if svc == "turn_on" else "off"
     cur = lambda e: (states().get(e) or {}).get("state")
     for attempt in range(3):                                   # Zigbee tappar ibland kommandon: kontrollera och försök igen på de som inte följt med (sista försöket en och en)
@@ -1499,8 +1520,9 @@ def watch_once():
         elif prev == "charging" and cur == "disconnected":
             push(to, f"{c['name']}: kabeln lossnade", "Laddningen avbröts – laddkabeln verkar ha kopplats ur.")
     now = time.time()
-    for e in list(_members(st, WINDOWS_GROUP)) + UP_LIGHTS:
-        if e == WINDOWS_GROUP:
+    _wg = _windows_group()
+    for e in list(_members(st, _wg)) + _up_lights():
+        if e == _wg:
             continue
         key = "light:" + e
         if (st.get(e) or {}).get("state") in (None, "unavailable", "unknown"):

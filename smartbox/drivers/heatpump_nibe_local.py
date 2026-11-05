@@ -133,6 +133,14 @@ class NibeLocalHeatPumpDriver(HeatPumpDriver):
     def _call(self, method, path, payload=None):
         pin = _TLS_PIN_SHA256.replace(":", "").replace(" ", "").strip().lower()
         if not (self._host and _USERNAME and _PASSWORD and re.fullmatch(r"[0-9a-f]{64}", pin)):
+            if not getattr(self, "_warned_missing", False):      # en gång - aldrig själva värdena (#138: felet tegs ihjäl)
+                self._warned_missing = True
+                missing = [n for n, ok in (("host (heat_pump.connection.host)", self._host), ("användarnamn", _USERNAME),
+                                           ("lösenord", _PASSWORD), ("certifikatets SHA-256-pin", re.fullmatch(r"[0-9a-f]{64}", pin)))
+                           if not ok]
+                print(f"⚠️ NIBE lokalt REST: saknar {', '.join(missing)}. Som Home Assistant-tillägg: fyll i nibe_local_username, "
+                      f"nibe_local_password och nibe_local_tls_pin_sha256 under tilläggets Konfiguration. Annars miljövariablerna "
+                      f"NIBE_LOCAL_USERNAME/_PASSWORD/_TLS_PIN_SHA256.", flush=True)
             raise LocalRestError("missing connection, credentials or valid SHA-256 pin")
         try:
             return _request(self._host, self._port, pin, method, path, self._timeout, payload)
