@@ -193,11 +193,13 @@ def heat_items(prices, now, strategy_fn, cheap_hours_count=8, current_mode=None)
 
 
 _BAT = {"charge": "🔋 Batteriet laddar", "discharge": "🔋 Batteriet laddar ur", "hold": "🔋 Batteriet sparas",
-        "idle": "🔋 Batteriet vilar"}
+        "idle": "🔋 Batteriet vilar", "export": "🔋 Batteriet laddar ur och säljer"}
+EXPORT_KW = 0.1        # planerat nätflöde under -0,1 kW medan batteriet laddar ur = säljer överskottet (Anders på Discord)
 
 
 def battery_items(rows, now):
-    """rows = [(t_slot, action, soc_pct, spot[, battery_kw])] ur battery_plan_slots (soc_pct = nivån efter
+    """rows = [(t_slot, action, soc_pct, spot[, battery_kw[, grid_kw]])] ur battery_plan_slots. Urladdning när planen
+    säljer till nätet (grid_kw < -EXPORT_KW) blir egna pass med action "export" - egen färg i gränssnittet. (soc_pct = nivån efter
     kvarten). Sammanhängande pass utom auto. Varje pass får också nivån före/efter, energin och det högsta
     (urladdning) eller lägsta (laddning) spotpriset - för planklockans kompakta rad (önskemål från HannesB)."""
     now = _local(now)
@@ -205,6 +207,9 @@ def battery_items(rows, now):
     for r in sorted(rows or [], key=lambda r: r[0]):
         t, action, soc, spot = r[:4]
         kw = r[4] if len(r) > 4 else None
+        grid = r[5] if len(r) > 5 else None
+        if action == "discharge" and grid is not None and float(grid) < -EXPORT_KW:
+            action = "export"
         t = _local(t)
         if blocks and blocks[-1]["action"] == action and blocks[-1]["end"] == t:
             b = blocks[-1]
@@ -224,7 +229,7 @@ def battery_items(rows, now):
         avg = sum(sp) / len(sp) if sp else None
         kws = [abs(float(x)) for x in b["kws"] if x is not None]
         kwh = round(sum(kws) * SLOT.total_seconds() / 3600, 1) if kws else None
-        peak = (max(sp) if b["action"] == "discharge" else min(sp) if b["action"] == "charge" else None) if sp else None
+        peak = (max(sp) if b["action"] in ("discharge", "export") else min(sp) if b["action"] == "charge" else None) if sp else None
         parts = [f"till {float(b['soc']):.0f} %" if b["soc"] is not None else ""]
         if avg is not None:
             parts.append(f"spotpris {_kr(avg)}/kWh")
@@ -235,6 +240,19 @@ def battery_items(rows, now):
                     "soc_to": None if b["soc"] is None else round(float(b["soc"])),
                     "kwh": kwh if kwh else None, "price_peak": peak})
     return out
+
+
+def load_battery_rows(conn):
+    """Batteriplanens kvartar till battery_items (webben och appen). grid_kw finns först när motorn sparat en plan
+    med den kolumnen - innan dess utan, så att planen inte försvinner under uppdateringen."""
+    from sqlalchemy import text
+    for cols in ("t_slot, action, soc_pct, spot, battery_kw, grid_kw", "t_slot, action, soc_pct, spot, battery_kw"):
+        try:
+            return [tuple(r) for r in conn.execute(text(f"SELECT {cols} FROM battery_plan_slots "
+                                                         "WHERE t_slot >= now() - interval '15 minutes' ORDER BY t_slot")).fetchall()]
+        except Exception:          # kolumnen eller tabellen finns inte än
+            conn.rollback()
+    return []
 
 
 def build_brief(now, prices, ev_rows, strategy_fn, cheap_hours_count=8, current_mode=None, battery_rows=None):

@@ -883,12 +883,7 @@ async def api_plan():
         except Exception:
             c.rollback()
             ev_rows = []
-        try:
-            bat_rows = c.execute(text("SELECT t_slot, action, soc_pct, spot, battery_kw FROM battery_plan_slots "
-                                      "WHERE t_slot >= now() - interval '15 minutes' ORDER BY t_slot")).fetchall()
-        except Exception:      # tabellen skapas först när en batteriplan sparats
-            c.rollback()
-            bat_rows = []
+        bat_rows = plan_brief.load_battery_rows(c)
         cheap_hours = _settings_row(c, ["cheap_hours_count"]).get("cheap_hours_count") or 8
         try:                       # bilarnas mål till planklockan: närmaste påslagna schema idag eller imorgon
             sched = c.execute(text("SELECT car_id, day_of_week, target_time, target_soc FROM ev_charging_schedule "
@@ -978,6 +973,22 @@ def _house_parts():
     except Exception as e:
         print(f"⚠️ Bilar/spa ur installationen: {e}", flush=True)
         return None, None, None
+
+
+@app.get("/api/planclock")
+async def api_planclock():
+    """Den dragbara planklockan: en rad per kvart 24 h framåt (smartbox/plan_clock.py, samma som mobilappen)."""
+    import plan_clock
+    cars, _spa, _heat = _house_parts()
+    with ENGINE.connect() as c:
+        return plan_clock.load(c, cars=[{"id": cid, "name": n} for cid, n, _col in (cars or [])])
+
+
+@app.get("/planclock.js")
+async def planclock_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "planclock.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/timeline")

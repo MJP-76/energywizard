@@ -907,12 +907,7 @@ def plan_api():
         except Exception:
             c.rollback()
             ev_rows = []
-        try:
-            bat_rows = c.execute(text("SELECT t_slot, action, soc_pct, spot FROM battery_plan_slots "
-                                      "WHERE t_slot >= now() - interval '15 minutes' ORDER BY t_slot")).fetchall()
-        except Exception:
-            c.rollback()
-            bat_rows = []
+        bat_rows = plan_brief.load_battery_rows(c)
         ch = c.execute(text("SELECT cheap_hours_count FROM system_settings WHERE id = 1")).fetchone()
         mode_row = c.execute(text("SELECT active_mode FROM sensor_log WHERE active_mode IS NOT NULL ORDER BY timestamp DESC LIMIT 1")).fetchone()
         try:
@@ -924,6 +919,21 @@ def plan_api():
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
                                    int(ch[0]) if ch and ch[0] else 8, mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
     return {"ok": True, **brief, "solar_days": sun}
+
+
+@app.get("/api/planclock")
+def planclock_api():
+    """Den dragbara planklockan: en rad per kvart 24 h framåt (smartbox/plan_clock.py, samma som webben)."""
+    import plan_clock
+    with ENGINE.connect() as c:
+        return plan_clock.load(c, cars=[{"id": k, "name": v["name"]} for k, v in CARS.items()])
+
+
+@app.get("/planclock.js")
+def planclock_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "planclock.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/history")

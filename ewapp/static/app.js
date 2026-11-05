@@ -2,6 +2,7 @@
 // Hem, Plan och Historik får scrolla. Poll medan sidan syns.
 const $ = (s) => document.querySelector(s), app = $("#app");
 const LS = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let PC = null, PCAt = 0, PCNEW = false, PCEL = null, PCH = null;   // planklockan (planclock.js) - samma DOM-nod mellan omritningar så att visaren inte hoppar
 let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null;
 let svPeriod = LS.get("ew_sv_period", "week"), hxPeriod = LS.get("ew_hx_period", "today"), hxRange = LS.get("ew_hx_range", "24h");
 // gamla flikar (före fem-flik-layouten) pekas om så ingen hamnar på en tom sida
@@ -208,7 +209,8 @@ function ljusRow() {
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
-  return `<div class="page">${planNow()}<div class="grid2">
+  const clock = window.EWPlanClock && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
+  return `<div class="page">${planNow()}${clock}<div class="grid2">
   <section class="card tile" data-a="solarsheet"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">idag ${f1(s.today_kwh, 0)} kWh · ${s.limit_pct == null ? "gräns offline" : s.limit_pct >= 99.5 ? "ingen exportgräns" : `export ${Math.round(s.limit_pct)} %`}</div></section>
   <section class="card tile" data-a="insights"><h4>Nät</h4>${gridViz(net)}<div class="v" style="font-size:1.45rem">${net == null ? "–" : net < -50 ? `Säljer ${f1(-net / 1000)} kW` : `Köper ${f1(Math.max(0, net) / 1000)} kW`}</div><div class="note">${g.price != null ? f1(g.price, 2) : "–"} kr/kWh${g.level ? " · " + esc(g.level) : ""}</div></section>
   </div>${svLine()}${ljusRow()}</div>`;
@@ -234,7 +236,8 @@ function planList() {
   const items = PL.items || [];
   const sd = PL.solar_days, f = (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(".", ",");
   const sun = sd && sd.today_kwh != null ? `<div class="note">☀️ Sol idag ${f(sd.today_kwh)} kWh${sd.today_left_kwh != null ? ` (${f(sd.today_left_kwh)} kvar)` : ""}${sd.tomorrow_kwh != null ? ` · imorgon ${f(sd.tomorrow_kwh)} kWh` : ""}</div>` : "";
-  return `<section class="card planlist"><div class="planhead">${esc(PL.headline)}</div>${sun}${items.slice(0, 5).map((i) => `<div class="plrow ${i.active ? "on" : ""}"><div class="plw">${i.active ? '<span class="chip ok">Nu</span> ' : ""}${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}${items.length > 5 ? `<button class="link" data-a="planall" style="padding:0;font-size:.82rem;text-align:left">+${items.length - 5} till</button>` : ""}<div class="note plnote">${esc(PL.note)}</div></section>`;
+  const clock = window.EWPlanClock && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
+  return `${clock}<section class="card planlist"><div class="planhead">${esc(PL.headline)}</div>${sun}${items.slice(0, 5).map((i) => `<div class="plrow ${i.active ? "on" : ""}"><div class="plw">${i.active ? '<span class="chip ok">Nu</span> ' : ""}${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}${items.length > 5 ? `<button class="link" data-a="planall" style="padding:0;font-size:.82rem;text-align:left">+${items.length - 5} till</button>` : ""}<div class="note plnote">${esc(PL.note)}</div></section>`;
 }
 function pagePlan() {
   const seg = `<div class="seg"><button data-a="planview" data-v="plan" class="${planView === "plan" ? "on" : ""}">Planen</button><button data-a="planview" data-v="schema" class="${planView === "schema" ? "on" : ""}">Laddschema</button></div>`;
@@ -307,6 +310,12 @@ function render() {
   let tb = $("#tabs"); if (!tb) { tb = document.createElement("nav"); tb.id = "tabs"; tb.className = "tabs"; document.body.insertBefore(tb, $("#toast")); }
   tb.style.setProperty("--ntabs", tabs.length);
   tb.innerHTML = tabs.map(([k, l]) => `<button class="tab ${page === k ? "on" : ""}" data-a="tab" data-v="${k}">${ICON[k]}<span>${l}</span></button>`).join("");
+  const pcs = $("#pcslot");
+  if (pcs && PC && window.EWPlanClock) {
+    if (!PCEL) PCEL = document.createElement("div");
+    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanClock.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: "kr" }); PCNEW = false; }
+    pcs.replaceWith(PCEL);
+  }
   fit();
 }
 function overflows(pg) {
@@ -334,13 +343,18 @@ function runShortcut() {                              // genvägar från ikonens
   const m = /^(.+)_start$/.exec(q), _sc = m && S && S.cars.find((c) => c.key === m[1]); if (m && _sc && can("start")) { const nm = _sc.name; sheet(`<h3>Ladda ${nm} nu?</h3><div class="note">Startar laddning direkt, oavsett schema.</div><button class="big" data-x="ok">Ja, ladda</button><button class="mini" data-x="no">Avbryt</button>`); $("#sheet").onclick = (e) => { const b = e.target.closest("[data-x]"); if (!b) { if (e.target.id === "sheet") closeSheet(); return; } closeSheet(); if (b.dataset.x === "ok") act(m[1], "start"); }; }
 }
 async function loadGreeting() { if (Date.now() - grAt < 120000) return; grAt = Date.now(); try { GR = await api("greeting?lang=" + I18N.lang + (ROLE === "owner" && VIEWAS ? "&as=" + VIEWAS : "")); render(); } catch {} }
+async function loadClock() {           // planklockan på Hem och Plan - högst en gång i minuten
+  if (Date.now() - PCAt < 60000) return;
+  const pc = await api("planclock").catch(() => null);
+  if (pc) { PC = pc; PCAt = Date.now(); PCNEW = true; }
+}
 async function load() {
   try {
     if (page === "bil") S = await api("state"); else if (!S) S = await api("state");
     ROLE = (S && S.role) || ROLE; ME = (S && S.user) || ME; document.body.classList.toggle("guest", ROLE === "guest");
     if (page === "hus") H = await api("home");
-    if (page === "hem") { [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); }
-    if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); }
+    if (page === "hem") { [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
+    if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); await loadClock(); }
     if (page === "historik") { if (histView === "energi") HX = await api("energyhistory?range=" + hxRange); else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();
     checkVersion(); loadGreeting(); openStream();

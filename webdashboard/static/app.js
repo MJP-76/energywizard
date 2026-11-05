@@ -144,7 +144,7 @@ function sunDaysHtml(sd) {
 // moms, nätavgift och skatt, samma som motorn räknar med). Bara visning - inga nya beslut fattas här.
 let clockPriceMode = localStorage.getItem("ew_clock_price") || "total";
 const CLOCK_COL = { cheap: "#22d3a0", mid: "#38bdf8", dear: "#f87171", heat: "#fb923c", charge: "#22d3a0", discharge: "#fbbf24",
-  hold: "#38bdf8", idle: "#94a3b8" };
+  hold: "#38bdf8", idle: "#94a3b8", export: "#d946ef" };   // export = laddar ur och säljer överskottet (egen färg, Anders på Discord)
 const CAR_COL = ["#38bdf8", "#a78bfa", "#f472b6", "#22d3a0"];
 const kr = (v) => v == null ? "–" : v.toFixed(2).replace(".", ",");
 const hhmm = (t) => new Date(t).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
@@ -207,9 +207,11 @@ function planClockHtml(d) {
     `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:10px;height:10px;border-radius:3px;background:${c}"></span>${t}</span>`).join("")
     + rings.slice(0, 4).map((rg) => {
       const [t, c] = rg.kind === "heat" ? ["Värmepumpen laddar huset", CLOCK_COL.heat] : rg.kind === "ev" ? [`${rg.car.charAt(0).toUpperCase() + rg.car.slice(1)} laddar`, rg.col]
-        : ["Batteriet", CLOCK_COL.charge];
+        : ["Batteriet laddar", CLOCK_COL.charge];
       return `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:14px;height:4px;border-radius:2px;background:${c}"></span>${t}</span>`;
-    }).join("");
+    }).join("")
+    + [["discharge", "Laddar ur (eget bruk)"], ["export", "Laddar ur och säljer"]].filter(([a]) => d.items.some((i) => i.kind === "battery" && i.action === a))
+      .map(([a, t]) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px"><span style="width:14px;height:4px;border-radius:2px;background:${CLOCK_COL[a]}"></span>${t}</span>`).join("");
   const svg = `<svg viewBox="0 0 340 340" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto" role="img" aria-label="Planklocka: de kommande 24 timmarna">${labels}${ticks}${ringSvg}${hand}${center}</svg>`;
   return `<div class="planclock" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;align-items:center;margin:4px 0 14px">
       <div>${svg}<div class="note" style="text-align:center;margin-top:6px">${legend}</div>
@@ -222,7 +224,7 @@ function planClockHtml(d) {
 
 // Remsan: de närmaste 12 timmarna, en rad per sak som planeras, med rutor "Ladda 01:00–03:45".
 // Batteriraden i planklockan: "Laddar ur till 09:45 · 80→35 % · 8,6 kWh · toppris 4,31 kr" (önskemål från HannesB).
-const BAT_VERB = { charge: "Laddar", discharge: "Laddar ur", hold: "Sparas", idle: "Vilar" };
+const BAT_VERB = { charge: "Laddar", discharge: "Laddar ur", export: "Laddar ur och säljer", hold: "Sparas", idle: "Vilar" };
 function batteryLaneText(i, now) {
   const on = new Date(i.start) <= now;
   const verb = BAT_VERB[i.action] || "Batteri";
@@ -230,7 +232,7 @@ function batteryLaneText(i, now) {
   if (i.soc_from != null && i.soc_to != null && i.soc_from !== i.soc_to) parts.push(`${i.soc_from}→${i.soc_to} %`);
   else if (i.soc_to != null) parts.push(`${i.soc_to} %`);
   if (i.kwh) parts.push(`${String(i.kwh).replace(".", ",")} kWh`);
-  if (i.price_peak != null) parts.push(`${i.action === "discharge" ? "toppris" : "lägsta pris"} ${i.price_peak.toFixed(2).replace(".", ",")} kr`);
+  if (i.price_peak != null) parts.push(`${i.action === "discharge" || i.action === "export" ? "toppris" : "lägsta pris"} ${i.price_peak.toFixed(2).replace(".", ",")} kr`);
   return parts.map((p) => `<span>${esc(p)}</span>`).join(" · ");   // en textnod per del, så att översättningen hittar dem
 }
 
@@ -283,7 +285,7 @@ function planCardHtml(d) {
     <div class="card">
       <h2>🗓️ Planen framåt</h2>
       <div style="font-size:1.02rem;margin:4px 0 10px">${esc(d.headline)}</div>
-      ${planClockHtml(d)}
+      ${window.EWPlanClock ? `<div class="ewpcslot" style="margin:6px 0 14px"></div>` : planClockHtml(d)}
       ${sunDaysHtml(d.solar_days)}
       ${rows || ""}
       ${d.items.length ? `<div class="note" style="margin-top:8px">${esc(d.note)}</div>` : ""}
@@ -296,6 +298,8 @@ async function mountPlan(slotId) {
   try {
     const d = await api("api/plan");
     slot.innerHTML = d.ok ? planCardHtml(d) : "";
+    const pcs = slot.querySelector(".ewpcslot");
+    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanClock.mount(pcs, pc, { lang: (window.I18N && I18N.lang === "en") ? "en" : "sv", unit: "kr" }); }).catch(() => {});
     slot.querySelectorAll("[data-clockprice]").forEach((b) => b.onclick = () => {
       clockPriceMode = b.dataset.clockprice; localStorage.setItem("ew_clock_price", clockPriceMode); mountPlan(slotId);
     });

@@ -338,6 +338,7 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
         with engine.begin() as c:
             c.execute(text("CREATE TABLE IF NOT EXISTS battery_plan_slots (t_slot TIMESTAMPTZ PRIMARY KEY, action TEXT, "
                            "soc_pct NUMERIC, battery_kw NUMERIC, spot NUMERIC, saving_kr NUMERIC, updated_at TIMESTAMPTZ DEFAULT now())"))
+            c.execute(text("ALTER TABLE battery_plan_slots ADD COLUMN IF NOT EXISTS grid_kw NUMERIC"))   # - = säljer (exportfärg)
             c.execute(text("DELETE FROM battery_plan_slots"))
             # Plan mot utfall: den FÖRSTA prognosen per kvart sparas (ungefär ett dygn i förväg) och jämförs sedan
             # med det uppmätta i battery_learning.learn_from_db.
@@ -347,8 +348,10 @@ def plan_from_db(engine, now, soc_pct, settings, base_profile, supported):
                            "ON CONFLICT (t_slot) DO NOTHING"),
                       [{"t": t_, "l": round(l_, 4), "s": round(s_, 4)} for t_, l_, s_ in forecast])
             c.execute(text("DELETE FROM battery_plan_forecast WHERE t_slot < now() - interval '30 days'"))
-            c.execute(text("INSERT INTO battery_plan_slots (t_slot, action, soc_pct, battery_kw, spot, saving_kr) VALUES (:t, :a, :s, :b, :p, :sv)"),
+            c.execute(text("INSERT INTO battery_plan_slots (t_slot, action, soc_pct, battery_kw, spot, saving_kr, grid_kw) "
+                           "VALUES (:t, :a, :s, :b, :p, :sv, :g)"),
                       [{"t": row["t"], "a": row["action"], "s": round(100.0 * row["soc_kwh"] / cap, 1), "b": row["battery_kw"],
+                        "g": row.get("grid_kw"),
                         "p": sl["spot"], "sv": r["saving_kr"]} for row, sl in zip(r["rows"], slots)])
     except Exception as e:
         print(f"⚠️ Batteriplanen kunde inte sparas: {e}")
