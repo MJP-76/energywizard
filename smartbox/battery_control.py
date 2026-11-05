@@ -58,6 +58,9 @@ _FALLBACK = {"idle": ["idle", "hold", "auto"], "hold": ["hold", "auto"], "charge
              "discharge": ["discharge", "auto"], "auto": ["auto"]}
 
 
+EXPORT_MARGIN_W = 50.0      # sikta på så här mycket import när export inte är tillåten
+
+
 def _percentile(values, pct):
     s = sorted(v for v in values if v is not None)
     if not s:
@@ -83,7 +86,20 @@ def decide(s, cfg, supported=frozenset({"auto"})):
     pmax = cfg.get("max_power_w", 5000.0)
     above_reserve = soc is not None and soc > reserve
 
+    def no_export(intent, power, reason):
+        """Ensidigt exportskydd (FTW-lärdom 2026-11-04): när export inte är tillåten får urladdningen aldrig bli större
+        än det huset köper just nu - sikta på ~50 W import, aldrig export. Batteriets nuvarande urladdning räknas in
+        (nätet visar redan resultatet av den)."""
+        if intent != "discharge" or cfg.get("allow_export", True) or power is None:
+            return power, reason
+        now_dis = max(0.0, -(s.get("battery_w") or 0.0))
+        cap = (s.get("avg_net_w") or 0.0) + now_dis - EXPORT_MARGIN_W
+        if cap < power:
+            return max(0.0, cap), reason + f" Urladdningen begränsas till husets behov ({max(0.0, cap):.0f} W) - ingen export."
+        return power, reason
+
     def out(intent, rule, reason, power=None):
+        power, reason = no_export(intent, power, reason)
         for cand in _FALLBACK[intent]:
             if cand == "auto" or cand in supported:
                 if cand != intent:

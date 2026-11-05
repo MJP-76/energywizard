@@ -171,3 +171,16 @@ def test_configurable_command_dwell_keeps_safety_override():
     assert not should_apply(discharge, charge, t - timedelta(minutes=15), t, 30)
     assert should_apply(discharge, charge, t - timedelta(minutes=30), t, 30)
     assert should_apply({**discharge, "rule": "fuse"}, charge, t, t, 30)
+
+
+def test_ensidigt_exportskydd_urladdning_aldrig_over_husets_behov():
+    """FTW-lärdom: med export avstängd får urladdningen aldrig ge export - sikta på lite import."""
+    from battery_control import decide
+    cfg = {"control": "styr", "reserve_soc": 20, "priority_soc": 50, "max_power_w": 5000, "allow_export": False}
+    s = {"soc": 80, "meter_fresh": True, "peak_reached": True, "avg_net_w": 1200, "battery_w": 0, "price": 2.0}
+    d = decide(s, cfg, {"auto", "discharge", "charge", "hold"})
+    assert d["intent"] == "discharge" and d["power_w"] == 1150         # 1200 W import - 50 W marginal
+    s["battery_w"] = -1000                                             # laddar redan ur 1 kW, nätet visar resten
+    assert decide(s, cfg, {"auto", "discharge", "charge", "hold"})["power_w"] == 2150
+    cfg["allow_export"] = True
+    assert decide(s, cfg, {"auto", "discharge", "charge", "hold"})["power_w"] == 5000

@@ -31,6 +31,7 @@ import config_watch      # Startar om motorn när house_config.yaml ändras
 import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
 import ew_journal
 import battery_follow
+import guest_charge
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
@@ -145,6 +146,7 @@ def charger_set_phases(cid, phases):
 battery_cfg = house_config.battery_settings(house_cfg)
 _battery = {"last": None, "at": None, "plan": None, "plan_at": None, "model": None, "model_at": None}
 _battery_follow = battery_follow.FollowWatch()
+_guest_state, _guest_price = {}, {}          # gästbil per bilens laddbox (guest_charge.py)
 
 
 def _battery_to_auto(reason):
@@ -1656,6 +1658,7 @@ while True:
                     _bplan = _battery["plan"] if battery_cfg["control"] == "styr" else None
                     _bdec = battery_control.decide({
                         "soc": battery_state.get("soc_pct"), "price": current_price, "avg_net_w": avg_net,
+                        "battery_w": battery_state.get("power_w"),
                         "meter_fresh": _meter_ok_at["t"] is not None and time.time() - _meter_ok_at["t"] < 120,
                         "fuse_state": fuse_model.check(_fuse_cfg["fuse_a"], _fuse_cfg["margin_a"])[0] if fuse_model.is_fresh() else "ok",
                         "fuse_excess_a": fuse_model.check(_fuse_cfg["fuse_a"], _fuse_cfg["margin_a"])[1] if fuse_model.is_fresh() else 0,
@@ -1711,6 +1714,41 @@ while True:
                     for log_msg in reversed(gpm_actions["log"]):
                         if any(k in log_msg for k in ["EV", "PEAK", "Säkring"]) and "inaktiverat" not in log_msg:
                             ev_reason_stop[car_id] = log_msg; break
+
+            # Gästbil (#131): en bil som inte finns i installationen laddas på den här bilens laddbox - kWh och ev.
+            # klar-tid från appen (överstyrningen guest_<bil>), billigaste kvartarna, alltid under säkringen.
+            for car_id in car_ids:
+                try:
+                    _g = guest_charge.parse(all_overrides.get(f"guest_{car_id}"))
+                    if not _g:
+                        _guest_state.pop(car_id, None)
+                        continue
+                    _st = _guest_state.get(car_id)
+                    if not _st or _st["set_at"] != _g.get("set_at"):
+                        _st = _guest_state[car_id] = {"kwh": 0.0, "t": time.time(), "set_at": _g.get("set_at"), "seen": False}
+                    _cd = car_charger_data.get(car_id) or {}
+                    _conn = _cd.get("status") not in ("disconnected", "offline", "unknown", None)
+                    _dt = max(0.0, min(300.0, time.time() - _st["t"]))
+                    _st["kwh"] += float(_cd.get("power_kw") or 0.0) * _dt / 3600.0
+                    _st["t"] = time.time()
+                    _st["seen"] = _st["seen"] or _conn
+                    _done = (_st["seen"] and not _conn) or guest_charge.expired(_g, now) or _st["kwh"] >= float(_g["kwh"])
+                    if _done:
+                        logger.set_override(f"guest_{car_id}", "off")
+                        _guest_state.pop(car_id, None)
+                        print(f"🚗 Gästbilen på {CAR_SPECS.get(car_id, {}).get('name', car_id)}s laddbox är klar ({_st['kwh']:.1f} kWh).")
+                        continue
+                    _spec = CAR_SPECS.get(car_id, {})
+                    _avail = float(_fuse_cfg.get("fuse_a") or 25) - float(house_load_excluding_ev_a or 0)
+                    _a, _why = guest_charge.amps(now, _g, _st["kwh"], int(_spec.get("max_a") or 16),
+                                                 1 if str(_spec.get("phases")) == "1" else 3, _avail,
+                                                 lambda t: _guest_price.setdefault(t, nordpool.get_price_at(t)))
+                    ev_amps[car_id], ev_set_phases[car_id], ev_reason_stop[car_id] = _a, None, _why
+                    if len(_guest_price) > 400:
+                        _guest_price.clear()
+                    print(f"🚗 {_why}")
+                except Exception as _ge:
+                    print(f"⚠️ Gästbilen ({car_id}): {_ge}")
 
             current_chosen_temp = int(gpm_actions["pump_target_temp"] * 10)
             current_chosen_water = decisions.WATER_ON if gpm_actions.get("pump_run_water") else decisions.WATER_OFF

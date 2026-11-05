@@ -254,6 +254,9 @@ def build_solar_driver(cfg: dict) -> SolarDriver:
     sol = (cfg.get("solar") or {})
     if not sol.get("enabled"):
         return NullSolarDriver()
+    if sol.get("driver") == "ftw":                     # Sourcefuls FTW-drivrutin direkt mot växelriktaren (ftw_device.py)
+        from drivers.ftw_device import FtwSolarDriver
+        return FtwSolarDriver(sol.get("ftw") or {}, control_unverified=bool(sol.get("control_unverified")))
     driver_cls = SOLAR_DRIVER_REGISTRY.get(sol.get("driver"), NullSolarDriver)
     if driver_cls is GenericNumberSolarDriver:
         return GenericNumberSolarDriver(entities=(sol.get("entities") or {}))
@@ -285,11 +288,16 @@ def build_battery_driver(cfg: dict) -> BatteryDriver:
     bat = (cfg.get("battery") or {})
     if not bat.get("enabled"):
         return NullBatteryDriver()
+    if bat.get("driver") == "ftw":                     # Sourcefuls FTW-drivrutin direkt mot batteriet (ftw_device.py)
+        from drivers.ftw_device import FtwBatteryDriver
+        return FtwBatteryDriver(bat.get("ftw") or {}, capacity_kwh=bat.get("capacity_kwh"),
+                                control=str(bat.get("control", "samarbete")).strip().lower(),
+                                control_unverified=bool(bat.get("control_unverified")), max_power_w=bat.get("max_power_w", 5000))
     driver_cls = BATTERY_DRIVER_REGISTRY.get(bat.get("driver"), NullBatteryDriver)
     if driver_cls is GenericBatteryDriver:
         return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=(bat.get("entities") or {}),
                                     modes=(bat.get("modes") or {}), power_invert=bat.get("power_invert", False),
-                                    keepalive_s=bat.get("keepalive_s"))
+                                    keepalive_s=bat.get("keepalive_s"), max_power_w=bat.get("max_power_w"))
     if driver_cls is FerroampBatteryDriver:
         return FerroampBatteryDriver(modbus=bat.get("modbus"),
                                      control_enabled=str(bat.get("control", "samarbete")).strip().lower() == "styr",

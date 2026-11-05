@@ -48,7 +48,7 @@ OCPP_STATION_MAX = re.compile(r"maximum_current$", re.I)
 # uttryckligen i texten för att skiljas från en Tesla-bil).
 # Stationärt husbatteri, inte en bil: BYD gör både och, och BYD:s batteriintegrationer (bbr111/byd_hvs,
 # redpomodoro/byd_battery_box) har tillverkaren "BYD" - förut hamnade BYD HVS bland bilarna (2026-11-03).
-STATIONARY_BATTERY = re.compile(r"battery[- ]?box|\bhv[sm]\b|\blv[sl]\b|\bbmu?\b|\bbms\b|cell ?(volt|temp)|soc diagnosis", re.I)
+STATIONARY_BATTERY = re.compile(r"powerwall|energy site|battery[- ]?box|\bhv[sm]\b|\blv[sl]\b|\bbmu?\b|\bbms\b|cell ?(volt|temp)|soc diagnosis", re.I)
 BATTERY_MAKERS = re.compile(r"givenergy|powerwall|huawei luna|luna2000|pytes|fox ?ess|alpha ?ess|sonnen|pylontech|lg (chem|ress)|byd battery|byd hv|battery[- ]?box|solax battery|victron battery|felicity", re.I)
 # Nätimport/elmätare: ett hus kan ha Tibber Pulse, en smartmätare (HAN/P1-port) eller
 # båda samtidigt - inte antingen-eller (Emils egen poäng, 2026-10-30). Förslaget blir en
@@ -194,7 +194,7 @@ def _battery_control_preset(ents, all_ents=None):
     # power). Läst i integrationens källa 2026-11-03 (const.py STORAGE_EXT_CONTROL_MODE). Läget ligger kvar tills
     # något annat väljs - EnergyWizard sätter Auto vid start och avstängning, som för alla batterier.
     scm = _find(ents, "select", re.compile(r"storage control mode$", re.I))
-    if scm:
+    if scm and not _find(ents, "select", re.compile(r"storage command mode$", re.I)):     # SolarEdge har båda (nedan)
         s = scm["e"]
         out = {"name": "fronius_modbus", "entities": {"mode_select": s},
                "modes": {"auto": "Auto", "hold": "Block Discharging", "charge": "Charge from Grid",
@@ -275,7 +275,98 @@ def _battery_control_preset(ents, all_ents=None):
         if chg and dis:
             out["entities"].update(power_charge=chg["e"], power_discharge=dis["e"])
         return out
+    # --- Fler förinställningar (2026-11-05). Lägesnamnen är integrationernas egna, lästa i källkoden samma dag. ---
+    # GoodWe (HA:s inbyggda goodwe-integration, select.py): "Inverter operation mode" med de interna nycklarna
+    # general / eco_charge / eco_discharge (backup laddar också från nätet, så den används inte som "håll").
+    gw = _find(ents, "select", re.compile(r"inverter operation mode$", re.I))
+    if gw:
+        g = gw["e"]
+        return {"name": "goodwe", "entities": {"mode_select": g},
+                "modes": {"auto": "general", "charge": "eco_charge", "discharge": "eco_discharge"},
+                "note": "GoodWe: eco_charge/eco_discharge använder växelriktarens egna effekt- och SOC-gränser (Eco mode "
+                        "power/SOC). Provad mot källkoden, inte på riktig hårdvara än."}
+    # SolarEdge med batteri via WillCodeForCats/solaredge-modbus-multi (const.py STORAGE_CONTROL_MODE / STORAGE_MODE):
+    # "Storage Control Mode" = Remote Control + "Storage Command Mode". Urladdning = "Discharge to Minimize Import"
+    # (säljer aldrig från batteriet). Laddning från nätet kräver att AC Charge Policy tillåter det i växelriktaren.
+    scm2 = _find(ents, "select", re.compile(r"storage control mode$", re.I))
+    cmd = _find(ents, "select", re.compile(r"storage command mode$", re.I))
+    if scm2 and cmd:
+        c, m = scm2["e"], cmd["e"]
+        out = {"name": "solaredge_modbus_multi", "entities": {}, "keepalive_s": 600,
+               "modes": {"auto": {c: "Maximize Self Consumption"},
+                         "hold": {c: "Remote Control", m: "Charge from Solar Power"},
+                         "idle": {c: "Remote Control", m: "Solar Power Only (Off)"},
+                         "charge": {c: "Remote Control", m: "Charge from Solar Power and Grid"},
+                         "discharge": {c: "Remote Control", m: "Discharge to Minimize Import"}},
+               "note": "SolarEdge: laddning från nätet kräver att 'AC Charge Policy' är 'Always Allowed'. Fjärrstyrningen "
+                       "släpper efter 'Storage Command Timeout' - EnergyWizard skriver om kommandot var tionde minut."}
+        cl = _find(ents, "number", re.compile(r"storage charge limit$", re.I))
+        dl = _find(ents, "number", re.compile(r"storage discharge limit$", re.I))
+        if cl:
+            out["entities"]["charge_power"] = cl["e"]
+        if dl:
+            out["entities"]["discharge_power"] = dl["e"]
+        return out
+    # Huawei SUN2000 + LUNA2000 via wlcrs/huawei_solar (services.yaml): forcible_charge / forcible_discharge med
+    # batteriets enhet, effekt (W) och varaktighet (min), stop_forcible_charge släpper till batteriets eget läge.
+    # Ingen "håll": 0 W i Huawei betyder att tvångsläget släpps (samma fallgrop som FTW:s huawei-drivrutin beskriver).
+    # Varaktigheten 30 min + omskrivning var 15:e min: tystnar EnergyWizard återgår batteriet av sig själv.
+    if any(_has(x.get("m"), re.compile(r"huawei", re.I)) for x in ents) and _find(ents, "sensor", re.compile(r"state of capacity$|battery.*soc$", re.I)):
+        dev = ents[0].get("d")
+        if dev:
+            data = {"device_id": dev, "duration": 30}
+            return {"name": "huawei_solar", "entities": {}, "keepalive_s": 900,
+                    "modes": {"auto": {"service": "huawei_solar.stop_forcible_charge", "data": {"device_id": dev}},
+                              "charge": {"service": "huawei_solar.forcible_charge", "data": data, "power_field": "power"},
+                              "discharge": {"service": "huawei_solar.forcible_discharge", "data": data, "power_field": "power"}},
+                    "note": "Huawei LUNA2000: styrs med integrationens tjänster (tvångsladdning 30 min i taget). Provad mot "
+                            "källkoden, inte på riktig hårdvara - börja i skuggläge."}
+    # Tesla Powerwall via HA:s teslemetry / tesla_fleet (select.py): "Operation mode" med self_consumption / backup /
+    # autonomous. backup laddar batteriet fullt (från nätet om nätladdning är tillåten i Tesla-appen). Ingen
+    # tvingad urladdning finns i Teslas API.
+    if any(_has(x.get("m"), re.compile(r"tesla", re.I)) for x in ents) and not any(x["e"].startswith("device_tracker.") for x in ents):
+        op = _find(ents, "select", re.compile(r"operation mode$", re.I))
+        if op:
+            return {"name": "tesla_powerwall", "entities": {"mode_select": op["e"]},
+                    "modes": {"auto": "self_consumption", "charge": "backup"},
+                    "note": "Powerwall: 'charge' = Backup (laddar fullt). Ingen tvingad urladdning i Teslas API. Byt läge "
+                            "sparsamt - Teslas moln har anropsgränser."}
+    # Enphase IQ Battery via HA:s enphase_envoy (select.py storage_mode): self_consumption / backup / savings.
+    if any(_has(x.get("m"), re.compile(r"enphase", re.I)) for x in ents):
+        st = _find(ents, "select", re.compile(r"storage mode$", re.I))
+        if st:
+            return {"name": "enphase", "entities": {"mode_select": st["e"]},
+                    "modes": {"auto": "self_consumption", "charge": "backup"},
+                    "note": "Enphase: 'charge' = Full backup. Ingen tvingad urladdning via integrationen."}
     return None
+
+
+def _sungrow_mkaiser(all_ents):
+    """Sungrow SH* via mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant (modbus_sungrow.yaml): mallentiteterna saknar
+    enhet i HA, så de hittas bland alla entiteter. "EMS mode" + "Battery forced charge discharge", effekten i
+    "Battery forced charge discharge power" (W), nivån i "Battery level" och effekten i "Battery charging power signed"
+    (+ = laddar). Lägesnamnen ur yaml-filens egna kartor (läst 2026-11-05)."""
+    ems = _find(all_ents, "select", re.compile(r"^ems mode$", re.I))
+    fcd = _find(all_ents, "select", re.compile(r"^battery forced charge discharge$", re.I))
+    soc = _find(all_ents, "sensor", re.compile(r"^battery level$", re.I))
+    if not (ems and fcd and soc):
+        return None
+    e, f = ems["e"], fcd["e"]
+    ents = {"soc": soc["e"]}
+    pw = _find(all_ents, "sensor", re.compile(r"^battery charging power signed$", re.I))
+    if pw:
+        ents["power"] = pw["e"]
+    num = _find(all_ents, "number", re.compile(r"^battery forced charge discharge power$", re.I))
+    if num:
+        ents["charge_power"] = ents["discharge_power"] = num["e"]
+    return {"device_name": "Sungrow", "maker": "Sungrow", "soc_entity": soc["e"], "power_entity": ents.get("power"),
+            "driver": None, "driver_known": False, "control_preset": "sungrow_mkaiser",
+            "generic_suggestion": {"driver": "generic", "preset": "sungrow_mkaiser", "entities": ents,
+                                   "modes": {"auto": {e: "Self-consumption mode (default)", f: "Stop (default)"},
+                                             "idle": {e: "Forced mode", f: "Stop (default)"},
+                                             "charge": {e: "Forced mode", f: "Forced charge"},
+                                             "discharge": {e: "Forced mode", f: "Forced discharge"}}},
+            "note": "Sungrow (mkaiser): provad mot yaml-filen, inte på riktig hårdvara - börja i skuggläge."}
 
 
 def discover_house(entities: list[dict] | None = None) -> dict:
@@ -497,7 +588,9 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             continue
         head = ents[0]
         maker = head.get("m") or ""
-        if _has(maker, PHONE_MAKERS):
+        _has_bat_power = any(x["e"].startswith("sensor.") and x.get("dc") == "power" and _has(x.get("n"), re.compile(r"battery|batteri", re.I))
+                             for x in ents)
+        if _has(maker, PHONE_MAKERS) and not _has_bat_power:   # Huawei gör både telefoner och LUNA-batterier
             continue
         is_known_brand = _has(_candidate(head), BATTERY_MAKERS)
         soc_e = next((x for x in ents if x["e"].startswith("sensor.") and x.get("u") == "%"
@@ -553,6 +646,10 @@ def discover_house(entities: list[dict] | None = None) -> dict:
         battery_candidates.append(battery)
     # Kandidater som troligen saknar batteri föreslås inte
     battery_candidates = [b for b in battery_candidates if not b.get("maybe_absent")]
+    if not battery_candidates:
+        sg = _sungrow_mkaiser(entities)
+        if sg:
+            battery_candidates.append(sg)
     # Flera träffar (t.ex. Solis/Fronius-växelriktaren OCH en BYD-integration som bara läser): välj den som går att
     # styra - batteriet laddas alltid via växelriktaren. Annars den första, som förut.
     battery = next((b for b in battery_candidates if (b.get("generic_suggestion") or {}).get("modes")),

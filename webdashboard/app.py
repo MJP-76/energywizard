@@ -1476,7 +1476,9 @@ def _build_house_config_yaml(sel: dict) -> str:
         if modes:
             lines.append(f"  modes:               # förifyllt för {gs.get('preset') or 'din integration'} - kontrollera mot HA")
             for intent, opt in modes.items():
-                if isinstance(opt, dict):
+                if isinstance(opt, dict) and any(not isinstance(v, str) for v in opt.values()):
+                    lines.append(f"    {intent}: {json.dumps(opt, ensure_ascii=False)}")   # tjänsteanrop (t.ex. Huawei) - JSON är giltig YAML
+                elif isinstance(opt, dict):
                     pairs = ", ".join(f'{k}: "{v}"' for k, v in opt.items())
                     lines.append(f"    {intent}: {{{pairs}}}")
                 else:

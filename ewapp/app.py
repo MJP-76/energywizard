@@ -315,6 +315,42 @@ def overrides() -> dict:
         return {}
 
 
+def _guest_of(ov: dict, key: str):
+    """Gästbil på bilens laddbox (smartbox/guest_charge.py): {kwh, until} eller None."""
+    try:
+        d = json.loads(ov.get(f"guest_{key}") or "null")
+        return {"kwh": d.get("kwh"), "until": d.get("until")} if isinstance(d, dict) and d.get("kwh") else None
+    except ValueError:
+        return None
+
+
+@app.post("/api/car/{car}/guest")
+async def car_guest(car: str, request: Request):
+    """Gästbil på den här bilens laddbox: {"kwh": 20, "until": "07:00" | null} eller {"off": true} (#131)."""
+    if car not in CARS:
+        raise HTTPException(400, "Okänd bil")
+    b = await request.json()
+    if b.get("off"):
+        set_override(f"guest_{car}", "off")
+        logact(request, f"Gästbil på {CARS[car]['name']}s laddbox: avslutad")
+        return {"ok": True, "msg": "Gästläget avslutat"}
+    kwh = max(1.0, min(100.0, float(intval(b.get("kwh")) or 0) or 0))
+    if not b.get("kwh"):
+        raise HTTPException(400, "Ange hur många kWh")
+    until = None
+    if b.get("until"):
+        try:
+            hh = dt.datetime.strptime(str(b["until"]), "%H:%M").time()
+        except ValueError:
+            raise HTTPException(400, "Ogiltig tid")
+        now = dt.datetime.now(TZ)
+        u = dt.datetime.combine(now.date(), hh, tzinfo=TZ)
+        until = (u if u > now else u + dt.timedelta(days=1)).isoformat()
+    set_override(f"guest_{car}", json.dumps({"kwh": kwh, "until": until, "set_at": dt.datetime.now(TZ).isoformat()}))
+    logact(request, f"Gästbil på {CARS[car]['name']}s laddbox: {kwh:.0f} kWh" + (f" klar {b['until']}" if until else " direkt"))
+    return {"ok": True, "msg": f"Gästbil: {kwh:.0f} kWh" + (f", klar {b['until']} (billigaste timmarna)" if until else ", laddar direkt")}
+
+
 def set_override(device: str, mode: str) -> None:
     with ENGINE.begin() as c:
         c.execute(text("INSERT INTO overrides (device, mode, updated_at) VALUES (:d, :m, NOW()) ON CONFLICT (device) DO UPDATE SET mode = EXCLUDED.mode, updated_at = NOW()"), {"d": device, "m": mode})
@@ -511,6 +547,7 @@ def car_state(key: str, st: dict, ov: dict) -> dict:
             "driving": driving(st, c),
             "climate_on": (val(st, c["climate"]) or "off") not in ("off", "unavailable") and home and not driving(st, c), "inside": num(st, c["inside"]),
             "age_h": age_h(st, c["soc"]), "facts": car_facts(key, st), "plan": plan_segments(key, soc, c["cap_kwh"]), "plan_all": plan_blocks_ui(key, soc, c["cap_kwh"]), "plan_slots": plan_slots(key), "solar": solar_info(ov),
+            "guest": _guest_of(ov, key),
             "access": ({"locked": val(st, c["lock"]) == "locked", "trunk": bool(c["trunk"]) and val(st, c["trunk"]) == "open",
                         "frunk": bool(c["frunk"]) and val(st, c["frunk"]) == "open", "has_trunk": bool(c["trunk"]), "has_frunk": bool(c["frunk"])}
                        if c["lock"] else None)}

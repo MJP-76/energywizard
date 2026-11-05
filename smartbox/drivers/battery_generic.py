@@ -59,8 +59,9 @@ class GenericBatteryDriver(BatteryDriver):
     """Default för batterier utan egen drivrutin. Alla entiteter valfria - supports_control()
     är bara True om en mode_select-entitet OCH minst en lägesmappning finns."""
     def __init__(self, capacity_kwh: float | None = None, entities: dict | None = None, modes: dict | None = None,
-                 power_invert: bool = False, keepalive_s: float | None = None):
+                 power_invert: bool = False, keepalive_s: float | None = None, max_power_w: float | None = None):
         self.capacity_kwh = capacity_kwh
+        self.max_power_w = max_power_w
         # battery.keepalive_s: växelriktare vars tvångsladdning släpper efter en tidsgräns (Solis RC Timeout,
         # standard 5 min) får kommandot omskrivet så här ofta medan det laddar/laddar ur. Dör EnergyWizard
         # släpper växelriktaren själv - det är det säkra hållet.
@@ -169,7 +170,14 @@ class GenericBatteryDriver(BatteryDriver):
             num = self._e.get("charge_power" if intent == "charge" else "discharge_power" if intent == "discharge" else "")
             if num:
                 ok = homeassistant.set_number(num, self._power_value(num, abs(power_w)))
-        if isinstance(option, dict):                     # flera val i tur och ordning (t.ex. Solax)
+        if isinstance(option, dict) and option.get("service"):
+            # Tjänsteanrop i stället för ett lägesval (t.ex. huawei_solar.forcible_charge): {service, data, power_field}
+            domain, _, svc = str(option["service"]).partition(".")
+            data = dict(option.get("data") or {})
+            if option.get("power_field"):
+                data[option["power_field"]] = int(round(abs(power_w))) if power_w is not None else int(self.max_power_w or 2500)
+            ok = ok and bool(domain and svc) and bool(homeassistant.call_service(domain, svc, data))
+        elif isinstance(option, dict):                   # flera val i tur och ordning (t.ex. Solax)
             for entity, opt in option.items():
                 ok = ok and homeassistant.set_select(entity, opt)
         else:

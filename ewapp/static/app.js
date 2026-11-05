@@ -104,7 +104,8 @@ function hero(c) {
   const chips = [`<span class="chip ${c.home ? "ok" : ""}">${c.home ? "Hemma" : "Borta" + (c.away && c.away.car_km_from_home != null ? ` · ${c.away.car_km_from_home} km hemifrån` : "")}</span>`, c.home ? `<span class="chip ${c.plugged ? "ok" : "warn"}">${c.plugged ? "Kabel i" : "Ingen kabel"}</span>` : "", staleChip(c), c.soc_stale ? `<span class="chip warn" title="Bilen svarar inte just nu – visar senast kända värden">Senast kända värde</span>` : "", heatChip(c), c.mode === "manual" ? `<span class="chip warn">Manuellt ${c.amps} A${c.phases ? " · " + c.phases + "-fas" : ""}</span>` : "", ...(c.facts || []).slice(0, 2).map((f) => `<span class="chip">${esc(f)}</span>`)].join("");
   return `<section class="card hero${c.climate_on ? " heating" : ""}"><div class="carname">${esc(c.name)} ${ER() === "family" ? "" : `<button class="link" data-a="cardata" data-c="${c.key}">Alla data</button>`}</div><div class="ring">${ring(c.soc, color)}<div class="pct" data-a="refreshsoc" data-c="${c.key}" title="Tryck för att uppdatera"><b>${c.soc == null ? "–" : c.soc}<small style="font-size:.45em">%</small></b><span>batteri</span></div></div>
   <div class="chips">${chips}</div><div class="stat">${planLink(c, si.t)}${c.away && c.away.km ? ` <span class="note">· ${c.away.km} km kvar</span>` : ""}</div>${c.home && c.plugged ? `<div class="note sunline${c.solar && c.solar.active ? " on" : ""}">${esc(solarText(c))}</div>` : ""}${c.home ? actions(c, true) : ""}
-  <div class="chips crowline">${c.home ? `<button class="mini${c.climate_on ? " on heat" : ""}" data-a="${c.climate_on ? "heat_off" : "heat_on"}" data-c="${c.key}" title="${c.climate_on ? "Stoppa värme" : "Starta värme"}" aria-label="${c.climate_on ? "Stoppa värme" : "Starta värme"}">${c.climate_on ? "🔥 Värme" : "Värme"}</button>` : ""}${c.home && c.plugged ? `<button class="mini" data-a="power" data-c="${c.key}" title="Välj laddeffekt" aria-label="Välj effekt">Effekt</button>` : ""}${c.home && c.plugged ? `<button class="mini" data-a="trip" data-c="${c.key}">Resplan</button>` : ""}${c.mode !== "auto" ? `<button class="mini" data-a="auto" data-c="${c.key}">Auto</button>` : ""}${c.access ? `<button class="mini${c.access.locked ? "" : " warnb"}" data-a="access" title="Lås och luckor" aria-label="Lås och luckor">${c.access.locked ? "Lås" : "Olåst"}</button>` : ""}</div></section>`;
+  ${c.guest ? `<div class="chips"><button class="chip ok" data-a="guest" data-c="${c.key}">Gästbil: ${c.guest.kwh} kWh${c.guest.until ? " · klar " + hhmm(c.guest.until) : " · laddar direkt"}</button></div>` : ""}
+  <div class="chips crowline">${ER() !== "guest" ? `<button class="mini" data-a="guest" data-c="${c.key}" title="Ladda en bil som inte är din på den här laddboxen">Gästbil</button>` : ""}${c.home ? `<button class="mini${c.climate_on ? " on heat" : ""}" data-a="${c.climate_on ? "heat_off" : "heat_on"}" data-c="${c.key}" title="${c.climate_on ? "Stoppa värme" : "Starta värme"}" aria-label="${c.climate_on ? "Stoppa värme" : "Starta värme"}">${c.climate_on ? "🔥 Värme" : "Värme"}</button>` : ""}${c.home && c.plugged ? `<button class="mini" data-a="power" data-c="${c.key}" title="Välj laddeffekt" aria-label="Välj effekt">Effekt</button>` : ""}${c.home && c.plugged ? `<button class="mini" data-a="trip" data-c="${c.key}">Resplan</button>` : ""}${c.mode !== "auto" ? `<button class="mini" data-a="auto" data-c="${c.key}">Auto</button>` : ""}${c.access ? `<button class="mini${c.access.locked ? "" : " warnb"}" data-a="access" title="Lås och luckor" aria-label="Lås och luckor">${c.access.locked ? "Lås" : "Olåst"}</button>` : ""}</div></section>`;
 }
 function compact(c) {
   const si = statusInfo(c);
@@ -203,6 +204,20 @@ async function roomsSheet() {                            // "alla rum": de valda
   const rows = (d.rows || []).map((r) => `<div class="plrow"><div style="flex:1">${esc(r.name)}</div><b>${f1(r.temp)} °</b></div>`).join("");
   sheet(`<h3>Rum</h3>${rows || `<div class="note">Inga innegivare valda. Välj dem under Inställningar på webben (Givare).</div>`}
     ${d.humidity != null ? `<div class="note" style="margin-top:8px">Luftfuktighet ${d.humidity} %</div>` : ""}<div class="crow"><button class="mini" data-a="closesheet">Stäng</button></div>`);
+}
+// Gästbil (#131): en bil som inte finns i installationen laddas på den här laddboxen - hur mycket och ev. när klar
+const hhmm = (t) => new Date(t).toTimeString().slice(0, 5);
+function guestSheet(c) {
+  const g = c.guest;
+  sheet(`<h3>Gästbil på ${esc(c.name)}s laddbox</h3>
+    <div class="note">För en bil som inte är din: ingen laddnivå behövs. Säg hur mycket den ska få, och om den ska vara klar till en viss tid laddas de billigaste timmarna fram till dess. Avslutas av sig själv när kabeln dras ur.</div>
+    <div class="seg" style="margin-top:10px">${[5, 10, 20, 30, 50].map((k) => `<button data-gk="${k}" class="${(g ? g.kwh : 20) == k ? "on" : ""}">${k} kWh</button>`).join("")}</div>
+    <div class="setrow"><span>Klar till (valfritt)</span><input type="time" id="guntil" value="${g && g.until ? hhmm(g.until) : ""}"></div>
+    <div class="crow"><button class="mini" id="gstart">${g ? "Ändra" : "Starta"}</button>${g ? `<button class="mini" id="gstop">Avsluta gästläget</button>` : ""}<button class="mini" data-a="closesheet">Stäng</button></div>`);
+  let kwh = g ? g.kwh : 20;
+  document.querySelectorAll("[data-gk]").forEach((b) => b.onclick = () => { kwh = +b.dataset.gk; document.querySelectorAll("[data-gk]").forEach((x) => x.classList.toggle("on", x === b)); });
+  document.getElementById("gstart").onclick = async () => { try { const r = await api(`car/${c.key}/guest`, { kwh, until: document.getElementById("guntil").value || null }); toast(r.msg); closeSheet(); load(); } catch (e) { toast(e.message); } };
+  const st = document.getElementById("gstop"); if (st) st.onclick = async () => { try { const r = await api(`car/${c.key}/guest`, { off: true }); toast(r.msg); closeSheet(); load(); } catch (e) { toast(e.message); } };
 }
 function nowSheet() {
   const now = (EN && EN.now) || [];
@@ -555,6 +570,7 @@ document.addEventListener("click", async (e) => {
   }
   if (a === "energy") { buzz(); try { const r = await api("energy/" + b.dataset.k, { value: b.dataset.k === "floor" ? parseFloat(v) : (b.dataset.k === "notify" ? v === "1" : v) }); toast(r.msg); EN = await api("energy"); render(); } catch (er) { toast(er.message); } return; }
   if (a === "rooms") return roomsSheet();
+  if (a === "guest") { const gc = ((S && S.cars) || []).find((x) => x.key === c); if (gc) guestSheet(gc); return; }
   if (a === "refreshsoc") { buzz(20); toast("Uppdaterar bilens data…", 6000); try { await api(`car/${c}/press`, { button: "refresh" }); } catch (er) { toast("⚠ " + er.message, 5000); return; } [3000, 8000, 20000].forEach((ms) => setTimeout(async () => { try { S = await api("state"); render(); if (ms === 8000) toast("Uppdaterat", 2000); } catch {} }, ms)); return; }
   if (a === "aidecisions") { sheet(`<h3>AI-beslut just nu</h3><div class="note" style="white-space:pre-wrap;max-height:60vh;overflow:auto">${esc(EN.log || EN.decision || "–")}</div>`); return; }
   if (a === "installapp") { installApp(); return; }
