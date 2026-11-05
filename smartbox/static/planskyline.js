@@ -28,7 +28,7 @@
     css.textContent = `
 .ewsk{position:relative;border-radius:22px;overflow:hidden;isolation:isolate;background:#05070f;color:#eef2fb;box-shadow:0 0 0 1px rgba(255,255,255,.06)}
 .ewsk svg{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none}
-.ewsk .g{position:absolute;left:10px;right:10px;top:10px;padding:10px 12px;border-radius:16px;background:rgba(8,12,26,.42);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.12);pointer-events:none}
+.ewsk .g{position:relative;padding:12px 14px 6px;background:linear-gradient(180deg,rgba(8,12,26,.95),rgba(8,12,26,.6));pointer-events:none}
 .ewsk .k{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;opacity:.65}
 .ewsk .r{display:flex;align-items:baseline;gap:10px}.ewsk .t{font-size:1.9rem;font-weight:250;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05}
 .ewsk .p{font-size:.85rem;opacity:.8;font-variant-numeric:tabular-nums}
@@ -55,7 +55,9 @@
     const sunMax = Math.max(1, ...S.map((s) => s.sun_w || 0));
     const hourOf = (i) => { const d = new Date(S[i].t); return d.getHours() + d.getMinutes() / 60; };
     const elev = (i) => Math.max((S[i].sun_w || 0) / sunMax, Math.max(0, Math.sin((hourOf(i) - 7) / 9 * Math.PI)) * 0.3);
-    const W = 480, H = 400, GROUND = 300, X = (i) => (W * i) / (N - 1), f1 = (n) => n.toFixed(1);
+    const hasBatEarly = S.some((s) => s.soc != null), carRows = Math.max(1, cars.length);
+    const W = 480, GROUND = 250, H = GROUND + 12 + carRows * 9 + (hasBatEarly ? 52 : 6) + 16;
+    const X = (i) => 8 + ((W - 16) * i) / (N - 1), f1 = (n) => n.toFixed(1);
     const mix = (a, b, t) => a.map((v, k) => Math.round(v + (b[k] - v) * t));
     const NIGHT = [6, 9, 26], DUSK = [70, 52, 110], DAY = [52, 96, 170];
     const sky = S.map((s, i) => { const e = elev(i), c = e < 0.15 ? mix(NIGHT, DUSK, e / 0.15) : mix(DUSK, DAY, Math.min(1, (e - 0.15) / 0.5));
@@ -68,7 +70,7 @@
     for (let i = 0; i < N; i += step) {
       const grp = S.slice(i, i + step), p = grp.reduce((a, s) => a + (s.price || 0), 0) / grp.length;
       const u = Math.max(...use.slice(i, i + step)), x = X(i) + 0.8, w = X(Math.min(N - 1, i + step)) - X(i) - 1.6;
-      const h = 34 + 190 * lev(p), y = GROUND - h;
+      const h = 28 + 175 * lev(p), y = GROUND - h;
       bld += `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}" fill="url(#ewskB)"/><rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="1.2" fill="rgba(255,255,255,.18)"/>`;
       for (let r = y + 7; r < GROUND - 6; r += 8) for (let cx = x + 2.2; cx < x + w - 2.6; cx += 4.3) {
         const seed = (Math.floor(r) * 31 + Math.floor(cx) * 17 + i * 7) % 100;
@@ -83,13 +85,19 @@
     const sunY = (i) => GROUND - 40 - 190 * ((S[i].sun_w || 0) / sunMax);
     const lanes = (test, col, y, h) => { let k = 0, o = ""; while (k < N) { if (!test(S[k])) { k++; continue; } let j = k; while (j + 1 < N && test(S[j + 1]) && col(S[j + 1]) === col(S[k])) j++;
       o += `<rect x="${f1(X(k))}" y="${y}" width="${f1(Math.max(3, X(Math.min(N - 1, j + 1)) - X(k)))}" height="${h}" rx="${h / 2}" fill="${col(S[k])}" filter="url(#ewskGlow)"/>`; k = j + 1; } return o; };
-    const road = `<rect y="${GROUND}" width="${W}" height="${H - GROUND}" fill="#04060d"/><line x1="0" x2="${W}" y1="${GROUND + 30}" y2="${GROUND + 30}" stroke="rgba(255,255,255,.1)" stroke-dasharray="6 8"/>`;
-    const carLanes = cars.map((c, k) => lanes((s) => (s.ev || {})[c.id] > 0.05, () => carCol(c.id), GROUND + 14 + k * 9, 3)).join("");
-    const hasBat = S.some((s) => s.soc != null);
-    const bat = hasBat ? lanes((s) => ["charge", "discharge", "export"].includes(s.bat), (s) => BATC[s.bat], GROUND + 46, 3)
-      + `<path d="M${S.map((s, i) => `${f1(X(i))} ${f1(H - 16 - 34 * ((s.soc || 0) / 100))}`).join(" L")}" fill="none" stroke="rgba(125,211,252,.75)" stroke-width="1.1"/>` : "";
-    let ticks = ""; for (let i = 0; i < N; i += Math.max(1, step * 4)) ticks += `<text x="${f1(X(i) + (i ? 0 : 4))}" y="${H - 3}" font-size="9.5" fill="rgba(255,255,255,.5)" text-anchor="${i ? "middle" : "start"}">${i ? new Date(S[i].t).toTimeString().slice(0, 5) : L.now.toUpperCase()}</text>`;
-    el.innerHTML = `<div class="ewsk"><svg viewBox="0 0 ${W} ${H}" role="slider" tabindex="0" aria-label="${esc(L.sky)}"><defs>
+    const road = `<rect y="${GROUND}" width="${W}" height="${H - GROUND}" fill="#04060d"/><line x1="0" x2="${W}" y1="${GROUND + 10 + carRows * 9 + 4}" y2="${GROUND + 10 + carRows * 9 + 4}" stroke="rgba(255,255,255,.08)" stroke-dasharray="6 8"/>`;
+    const carLanes = cars.map((c, k) => lanes((s) => (s.ev || {})[c.id] > 0.05, () => carCol(c.id), GROUND + 9 + k * 9, 3)).join("");
+    const hasBat = hasBatEarly, batY = GROUND + 14 + carRows * 9 + 10;
+    const bat = hasBat ? lanes((s) => ["charge", "discharge", "export"].includes(s.bat), (s) => BATC[s.bat], batY, 3)
+      + `<path d="M${S.map((s, i) => `${f1(X(i))} ${f1(batY + 40 - 32 * ((s.soc || 0) / 100))}`).join(" L")}" fill="none" stroke="rgba(125,211,252,.75)" stroke-width="1.1"/>` : "";
+    let ticks = ""; for (let i = 0; i < N; i += Math.max(1, step * 4)) ticks += `<text x="${f1(X(i) + (i ? 0 : 5))}" y="${H - 4}" font-size="9.5" letter-spacing=".5" fill="rgba(255,255,255,.55)" text-anchor="${i ? "middle" : "start"}">${i ? new Date(S[i].t).toTimeString().slice(0, 5) : L.now.toUpperCase()}</text>`;
+    // Billigaste och dyraste timmen får en liten etikett ovanför sitt hus
+    const hourly = []; for (let i = 0; i < N; i += step) { const grp = S.slice(i, i + step); hourly.push([i, grp.reduce((a, s) => a + (s.price || 0), 0) / grp.length]); }
+    const cheap = hourly.reduce((a, b) => (b[1] < a[1] ? b : a)), dear = hourly.reduce((a, b) => (b[1] > a[1] ? b : a));
+    const tag = ([i, p], col) => { const x = X(i) + (X(Math.min(N - 1, i + step)) - X(i)) / 2, y = GROUND - (28 + 175 * lev(p)) - 6;
+      return `<text x="${f1(x)}" y="${f1(y)}" font-size="9" fill="${col}" text-anchor="middle">${p.toFixed(2).replace(".", opts.lang === "en" ? "." : ",")}</text>`; };
+    const tags = tag(cheap, "#86efac") + tag(dear, "#fca5a5");
+    el.innerHTML = `<div class="ewsk"><div class="g"></div><svg viewBox="0 0 ${W} ${H}" role="slider" tabindex="0" aria-label="${esc(L.sky)}"><defs>
         <linearGradient id="ewskS" x1="0" x2="1">${sky}</linearGradient>
         <linearGradient id="ewskB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2547"/><stop offset="1" stop-color="#0a0f22"/></linearGradient>
         <linearGradient id="ewskHeat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fb923c" stop-opacity="0"/><stop offset="1" stop-color="#fb923c" stop-opacity=".45"/></linearGradient>
@@ -97,11 +105,11 @@
         <filter id="ewskBlur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="18 0"/></filter>
         <filter id="ewskGlow" x="-50%" y="-300%" width="200%" height="700%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
-      <rect x="-40" width="${W + 80}" height="${GROUND + 20}" fill="url(#ewskS)" filter="url(#ewskBlur)"/>${stars}${moon}
+      <rect x="-40" y="-20" width="${W + 80}" height="${GROUND + 40}" fill="url(#ewskS)" filter="url(#ewskBlur)"/>${stars}${moon}
       <g class="sun"><circle r="58" fill="url(#ewskSun)"/><circle r="10" fill="#fff7d6"/></g>
-      ${bld}${win}${glow}${road}${carLanes}${bat}${ticks}
+      ${bld}${win}${glow}${tags}${road}${carLanes}${bat}${ticks}
       <line class="cur" y1="0" y2="${H - 14}" stroke="rgba(255,255,255,.75)" stroke-width="1"/><circle class="nowd" cx="${f1(X(0))}" cy="${GROUND}" r="3" fill="#fff"/>
-    </svg><div class="g"></div></div>
+    </svg></div>
     <div class="ewsk-leg"><span><i style="background:#1c2547;height:8px"></i>${esc(L.legend[0])}</span><span><i style="background:#fde68a"></i>${esc(L.legend[1])}</span>
       ${cars.filter((c) => S.some((s) => (s.ev || {})[c.id] > 0.05)).map((c) => `<span><i style="background:${carCol(c.id)}"></i>${esc(c.name)}</span>`).join("")}
       ${hasBat ? `<span><i style="background:#2dd4bf"></i>${esc(L.legend[2])}</span>` : ""}${S.some((s) => s.sun_w > 50) ? `<span><i style="background:#fcd34d"></i>${esc(L.legend[3])}</span>` : ""}</div>`;
