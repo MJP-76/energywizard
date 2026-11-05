@@ -33,6 +33,7 @@ import ew_journal
 import battery_follow
 import guest_charge
 import capacity_tariff
+import ev_limits
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
@@ -178,6 +179,13 @@ print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
 car_ids = [c.id for c in car_drivers]
 CAR_SPECS = house_config.car_specs(house_cfg)
+# Inlärda faser/maxström per bil (ev_limits.py) - bara där installationen inte själv anger dem
+_EV_EXPLICIT = {ev["id"]: {"phases": "phases" in (ev.get("charger") or {}), "max_a": "max_a" in (ev.get("charger") or {})}
+                for ev in (house_cfg.get("evs") or []) if ev.get("id")}
+_ev_learn = ev_limits.LimitLearner(_ew_settings.get("learned_ev"))
+for _c, _chg in _ev_learn.apply(CAR_SPECS, _EV_EXPLICIT).items():
+    print(f"🚗 {CAR_SPECS[_c]['name']}: inlärt av laddningarna {_chg} (installationen anger inte detta)")
+_ev_learn_saved = {"at": time.time(), "sig": str(_ev_learn.data)}
 settings.set_fuse_size_from_house_config(house_cfg)   # fuse.main_fuse_a i installationen -> inställningen (#129)
 # Namnet i HA-sensorn sensor.smartbox_<namn>_batteri: evs[].ha_name, annars bilens id
 CAR_HA_NAME = {ev["id"]: re.sub(r"[^a-z0-9_]", "_", str(ev.get("ha_name") or ev["id"]).lower())
@@ -1801,6 +1809,16 @@ while True:
                 charger_id = car_charger_id.get(car_id)
                 connected = charger_data and charger_data.get("status") not in ["disconnected", "offline", "unknown", None]
                 _log_charger_status_if_changed(car_id, charger_data)
+                if connected and (charger_data.get("power_kw") or 0) > 0.5:
+                    try:                                # lär bilens faser och egen maxström (ev_limits.py)
+                        if _ev_learn.observe(car_id, [charger_data.get(k) for k in ("current_l1", "current_l2", "current_l3")], ev_amps[car_id]):
+                            _ev_learn.apply(CAR_SPECS, _EV_EXPLICIT)
+                        if time.time() - _ev_learn_saved["at"] > 900 and str(_ev_learn.data) != _ev_learn_saved["sig"]:
+                            _ew_settings.update(learned_ev=_ev_learn.data)
+                            _ev_learn.apply(CAR_SPECS, _EV_EXPLICIT)
+                            _ev_learn_saved.update(at=time.time(), sig=str(_ev_learn.data))
+                    except Exception as _le:
+                        print(f"⚠️ Inlärning av bilens gränser ({car_id}): {_le}")
                 if connected:
                     # FIX: hoppa över ström-sättning under pågående fasbyte (laddaren ska ligga på 0A)
                     if not ev_phase_switch_active[car_id]:
