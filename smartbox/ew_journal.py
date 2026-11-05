@@ -88,9 +88,17 @@ def install(source: str = "motor") -> None:
         try:
             if kwargs.get("file") not in (None, sys.stdout, sys.stderr):
                 return
-            msg = kwargs.get("sep", " ").join(str(a) for a in args)
             f = sys._getframe(1)
-            mod = f"{os.path.splitext(os.path.basename(f.f_code.co_filename))[0]}.{f.f_code.co_name}"
+            # Hoppa över andra print-krokar (telemetrin) så att källan blir koden som skrev raden
+            while f is not None and os.path.basename(f.f_code.co_filename) in ("telemetry.py", "ew_journal.py"):
+                f = f.f_back
+            if f is None:
+                return
+            base = os.path.splitext(os.path.basename(f.f_code.co_filename))[0]
+            if base == "traceback":       # traceback.print_exc(): förloppet läggs redan till på felraden nedan
+                return
+            msg = kwargs.get("sep", " ").join(str(a) for a in args)
+            mod = f"{base}.{f.f_code.co_name}"
             if sys.exc_info()[0] is not None and level_of(msg) == "fel":
                 msg += "\n" + "".join(traceback.format_exc(limit=8))
             add(msg, mod=mod)

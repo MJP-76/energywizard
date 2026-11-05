@@ -219,6 +219,9 @@ def publish_states(entities: dict):
 
 last_update_ok = True   # Senaste update_states() lyckades? (används av health.LinkWatch)
 
+_ha_fail = {"n": 0}
+
+
 def update_states():
     """Hämtar ALLA states från Home Assistant API:et i en enda effektiv request."""
     global _states_cache, last_update_ok
@@ -227,12 +230,20 @@ def update_states():
         r.raise_for_status()
         _states_cache = {s["entity_id"]: s for s in r.json()}
         last_update_ok = True
+        _ha_fail["n"] = 0
         return True
     except Exception as e:
         last_update_ok = False
         _states_cache.clear()
-        print(f"❌ HA: Fel vid update_states: {e}")
-        traceback.print_exc()
+        _ha_fail["n"] += 1
+        # En enstaka timeout (HA upptagen en stund) är en varning; ett fel först när HA inte svarat tre gånger i rad.
+        # Förut blev varje timeout ett ❌ plus hela förloppet, och telemetrin gjorde issues av det.
+        if _ha_fail["n"] < 3 and isinstance(e, (requests.Timeout, requests.ConnectionError)):
+            print(f"⚠️ HA svarade inte ({type(e).__name__}) - försöker igen")
+        else:
+            print(f"❌ HA: Fel vid update_states ({_ha_fail['n']} i rad): {e}")
+            if not isinstance(e, (requests.Timeout, requests.ConnectionError)):
+                traceback.print_exc()
         return False
 
 

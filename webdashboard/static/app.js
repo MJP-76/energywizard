@@ -40,8 +40,8 @@ function heatBatteryHtml(hb, compact) {
 }
 
 // ---------- Besparing (inspirerat av FTW:s savings-kort, egen implementation) ----------
-// Samma siffra som den publika sidan: vad tajmningen sparade mot om samma el köpts till
-// dygnets snittpris (smartbox/savings.py). Negativa dagar visas som de är.
+// Vad samma el hade kostat i ett vanligt hushåll utan styrning (toppar morgon och kväll), minus vad den kostade,
+// inklusive moms (smartbox/savings.py). Negativa dagar visas som de är.
 const SAVINGS_PERIODS = [["today", "Idag"], ["week", "7 dagar"], ["month", "Månad"]];
 let savingsPeriod = "week";
 try { savingsPeriod = localStorage.getItem("ew_savings_period") || "week"; } catch (e) { /* privat läge */ }
@@ -54,7 +54,7 @@ function savingsCardHtml(d) {
   const kr = `${sign}${Math.abs(p.saved_kr).toFixed(0)} kr`;
   const pct = p.pct != null ? ` <span style="font-size:1rem;font-weight:700;opacity:.8">(${p.pct > 0 ? "+" : ""}${p.pct.toFixed(0)} %)</span>` : "";
   const sub = p.days
-    ? `${p.kwh.toFixed(0)} kWh köpt för ${p.paid_kr.toFixed(0)} kr, mot ${(p.paid_kr + p.saved_kr).toFixed(0)} kr till dygnets snittpris${p.days > 1 ? ` · ${p.days} dagar med data` : ""}`
+    ? `${p.kwh.toFixed(0)} kWh köpt för ${p.paid_kr.toFixed(0)} kr, mot ${(p.paid_kr + p.saved_kr).toFixed(0)} kr i ett vanligt hushåll utan styrning (inkl. moms)${p.days > 1 ? ` · ${p.days} dagar med data` : ""}`
     : "Ingen mätdata för perioden än.";
   return `
     <div class="card" id="savingscard">
@@ -285,7 +285,7 @@ function planCardHtml(d) {
     <div class="card">
       <h2>🗓️ Planen framåt</h2>
       <div style="font-size:1.02rem;margin:4px 0 10px">${esc(d.headline)}</div>
-      ${window.EWPlanClock ? `<div class="ewpcslot" style="margin:6px 0 14px"></div>` : planClockHtml(d)}
+      ${window.EWPlanView ? `<div class="ewpcslot" style="margin:6px 0 14px"></div>` : planClockHtml(d)}
       ${sunDaysHtml(d.solar_days)}
       ${rows || ""}
       ${d.items.length ? `<div class="note" style="margin-top:8px">${esc(d.note)}</div>` : ""}
@@ -299,7 +299,7 @@ async function mountPlan(slotId) {
     const d = await api("api/plan");
     slot.innerHTML = d.ok ? planCardHtml(d) : "";
     const pcs = slot.querySelector(".ewpcslot");
-    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanClock.mount(pcs, pc, { lang: (window.I18N && I18N.lang === "en") ? "en" : "sv", unit: "kr" }); }).catch(() => {});
+    if (pcs) api("api/planclock").then((pc) => { if (pc && pc.ok) EWPlanView.mount(pcs, pc, { lang: (window.I18N && I18N.lang === "en") ? "en" : "sv", unit: "kr" }); }).catch(() => {});
     slot.querySelectorAll("[data-clockprice]").forEach((b) => b.onclick = () => {
       clockPriceMode = b.dataset.clockprice; localStorage.setItem("ew_clock_price", clockPriceMode); mountPlan(slotId);
     });
@@ -726,7 +726,7 @@ async function renderEkonomi() {
     <div class="card" style="margin-bottom:16px"><h2>💸 Kostnad per dag</h2>
       <div class="note">Köpt el inklusive moms, nätavgift och skatt, minus såld el. Senaste 31 dagarna.</div>
       <div id="econcostbars" style="height:220px;margin-top:10px"></div></div>
-    <div class="card" style="margin-bottom:16px"><h2>📊 Sparat per dag</h2><div class="note">Grönt = du köpte billigare än dygnets snittpris, rött = dyrare.</div><div id="econsavingsbars" style="height:220px;margin-top:10px"></div></div>
+    <div class="card" style="margin-bottom:16px"><h2>📊 Sparat per dag</h2><div class="note">Jämfört med ett vanligt hushåll utan styrning, inkl. moms. Grönt = billigare, rött = dyrare.</div><div id="econsavingsbars" style="height:220px;margin-top:10px"></div></div>
     <div class="grid" style="margin-bottom:16px">
       ${statTile("💸 Elpris just nu", fmtKrOre(d.price) + "/kWh", "spotpris")}
       ${statTile("📉 Lägst idag", fmtKrOre(d.price_min) + "/kWh")}
@@ -1432,7 +1432,7 @@ async function renderInstalls() {
     const verRow = h.version ? `<div class="note" style="padding-top:6px">Version ${esc(h.version)}</div>` : "";
     return `<div class="card" style="padding:14px${h.mine ? ";border-color:var(--acc)" : ""}${errs.length ? ";box-shadow:0 0 0 2px #e74c3c55" : ""}">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px">
-        <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
+        <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${(h.devices.country || [])[0] ? ` <span class="note" style="font-weight:600">· ${FLAG[(h.devices.country || [])[0].split("@")[0].replace("country:", "")] || ""} ${labelOf((h.devices.country || [])[0])}</span>` : ""}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
         <div class="note">sedan ${esc(h.since)}</div></div>
       ${n ? rows : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
   }).join("");
@@ -1442,6 +1442,7 @@ async function renderInstalls() {
 }
 
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).
+const FLAG = { SE: "🇸🇪", NO: "🇳🇴", DK: "🇩🇰", FI: "🇫🇮", DE: "🇩🇪", GB: "🇬🇧", NL: "🇳🇱" };   // landet syns i husets rubrik
 const INSTALL_CATS = [["heatpump", "🌡️", "Värmepump"], ["spa", "🛁", "Spabad"], ["solar", "☀️", "Solceller / växelriktare"],
   ["battery", "🔋", "Husbatteri"], ["charger", "🔌", "Laddbox"], ["car", "🚗", "Elbil"], ["meter", "📟", "Elmätare"],
   ["price", "💶", "Priskälla"], ["country", "🌍", "Land"], ["size", "📏", "Storlek"], ["indoor", "🏠", "Innegivare"], ["temp", "🌡️", "Temperatur"], ["mode", "⚙️", "Körs som"]];

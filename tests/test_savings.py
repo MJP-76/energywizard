@@ -55,3 +55,17 @@ def test_pengar_per_period():
     assert p["week"]["cost"] == 75 and p["week"]["days"] == 2
     assert p["month"]["income"] == 7 and p["month"]["days"] == 2
     assert money_periods([], "2026-11-03")["today"]["avg_paid"] is None
+
+
+def test_jamfort_med_vanlig_hushallsprofil_och_moms():
+    """2026-11-05: besparingen mäts mot ett vanligt hushåll (toppar morgon/kväll), inkl. moms."""
+    from savings import profile_day, PROFILE
+    # dyrt 17-20 (2 kr), annars 1 kr; huset köpte allt billigt (10 kWh à 1 kr)
+    hours = [(h, 2.0 if 17 <= h <= 20 else 1.0, 10 / 24 if not 17 <= h <= 20 else 0, (10 / 24) * 1.0 if not 17 <= h <= 20 else 0)
+             for h in range(24)]
+    kwh, prof_price, paid = profile_day(hours)
+    assert abs(kwh - 10 * 20 / 24) < 1e-9 and abs(paid - 1.0) < 1e-9
+    assert abs(prof_price - (1 + sum(PROFILE[17:21]))) < 1e-9          # profilen lägger mer på de dyra timmarna
+    r = build_day("2026-11-05", kwh, prof_price, paid, vat=1.25)
+    assert r["saved_kr"] == round((prof_price - paid) * kwh * 1.25, 2) and r["saved_kr"] > 0
+    assert profile_day([(h, 1.0, 0, 0) for h in range(24)]) is None     # inget köpt -> ingen rad

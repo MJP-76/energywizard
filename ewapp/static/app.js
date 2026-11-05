@@ -194,8 +194,15 @@ function planNow() {                                   // vad görs nu och varf�
   const now = (EN && EN.now) || [], nxt = PL ? (PL.items || []).find((i) => !i.active) : null;
   if (!now.length && !nxt) return PL ? `<section class="card plannow" data-a="nowsheet"><div class="note">${esc(PL.headline)}</div></section>` : "";
   const rows = now.slice(0, 3).map((i) => `<div class="pnrow"><span class="pnl">${esc(i.icon)}</span><span><b>${esc(i.label)}</b><span class="note"> ${esc(i.text)}</span></span></div>`).join("");
-  const later = nxt ? `<div class="pnrow"><span class="pnl">Sen</span><span><b>${esc(nxt.title)}</b><span class="note"> ${esc(nxt.when)}</span></span></div>` : "";
+  const later = nxt ? `<div class="pnrow"><span class="pnl pnl-t">Sen</span><span><b>${esc(nxt.title.replace(/^[^\p{L}\p{N}]+/u, ""))}</b><span class="note"> ${esc(nxt.when)}</span></span></div>` : "";
   return `<section class="card plannow" data-a="nowsheet">${rows}${later}</section>`;
+}
+async function roomsSheet() {                            // "alla rum": de valda innegivarna, live (api/rooms)
+  sheet(`<h3>Rum</h3><div class="note">Laddar…</div>`);
+  let d; try { d = await api("rooms"); } catch (e) { sheet(`<h3>Rum</h3><div class="note">${esc(e.message)}</div>`); return; }
+  const rows = (d.rows || []).map((r) => `<div class="plrow"><div style="flex:1">${esc(r.name)}</div><b>${f1(r.temp)} °</b></div>`).join("");
+  sheet(`<h3>Rum</h3>${rows || `<div class="note">Inga innegivare valda. Välj dem under Inställningar på webben (Givare).</div>`}
+    ${d.humidity != null ? `<div class="note" style="margin-top:8px">Luftfuktighet ${d.humidity} %</div>` : ""}<div class="crow"><button class="mini" data-a="closesheet">Stäng</button></div>`);
 }
 function nowSheet() {
   const now = (EN && EN.now) || [];
@@ -209,7 +216,7 @@ function ljusRow() {
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
-  const clock = window.EWPlanClock && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
+  const clock = window.EWPlanView && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
   const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
   return `<div class="page">${alerts}${clock}${planNow()}<div class="grid2">
   <section class="card tile" data-a="solarsheet"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">idag ${f1(s.today_kwh, 0)} kWh · ${s.limit_pct == null ? "gräns offline" : s.limit_pct >= 99.5 ? "ingen exportgräns" : `export ${Math.round(s.limit_pct)} %`}</div></section>
@@ -237,7 +244,7 @@ function planList() {
   const items = PL.items || [];
   const sd = PL.solar_days, f = (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(".", ",");
   const sun = sd && sd.today_kwh != null ? `<div class="note">☀️ Sol idag ${f(sd.today_kwh)} kWh${sd.today_left_kwh != null ? ` (${f(sd.today_left_kwh)} kvar)` : ""}${sd.tomorrow_kwh != null ? ` · imorgon ${f(sd.tomorrow_kwh)} kWh` : ""}</div>` : "";
-  const clock = window.EWPlanClock && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
+  const clock = window.EWPlanView && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
   return `${clock}<section class="card planlist"><div class="planhead">${esc(PL.headline)}</div>${sun}${items.slice(0, 5).map((i) => `<div class="plrow ${i.active ? "on" : ""}"><div class="plw">${i.active ? '<span class="chip ok">Nu</span> ' : ""}${esc(i.when)}</div><div><b>${esc(i.title)}</b><div class="note">${esc(i.detail)}</div></div></div>`).join("")}${items.length > 5 ? `<button class="link" data-a="planall" style="padding:0;font-size:.82rem;text-align:left">+${items.length - 5} till</button>` : ""}<div class="note plnote">${esc(PL.note)}</div></section>`;
 }
 function pagePlan() {
@@ -315,9 +322,9 @@ function render() {
   tb.style.setProperty("--ntabs", tabs.length);
   tb.innerHTML = tabs.map(([k, l]) => `<button class="tab ${page === k ? "on" : ""}" data-a="tab" data-v="${k}">${ICON[k]}<span>${l}</span></button>`).join("");
   const pcs = $("#pcslot");
-  if (pcs && PC && window.EWPlanClock) {
+  if (pcs && PC && window.EWPlanView) {
     if (!PCEL) PCEL = document.createElement("div");
-    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanClock.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: "kr" }); PCNEW = false; }
+    if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanView.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: "kr" }); PCNEW = false; }
     pcs.replaceWith(PCEL);
   }
   fit();

@@ -1075,6 +1075,13 @@ async def planclock_js():
                         media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/planskyline.js")
+async def planskyline_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "planskyline.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/api/timeline")
 async def api_timeline():
     """Dygnet timme för timme: uppmätt 24 h bakåt + planerat framåt (timeline.py)."""

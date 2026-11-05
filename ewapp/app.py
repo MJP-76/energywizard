@@ -989,6 +989,13 @@ def planclock_js():
                         media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/planskyline.js")
+def planskyline_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "planskyline.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/api/history")
 def history(hours: int = 24):
     hours = max(6, min(hours, 72))
@@ -1158,7 +1165,7 @@ def insights(st: dict, ov: dict, pr: dict) -> list:
         out.append({"i": "☀️", "t": t + "."})
     sv = num(st, "sensor.smartbox_besparing_idag")
     if sv is not None and sv > 0.5:
-        out.append({"i": "💰", "t": f"AI:n har sparat {sv:.1f} kr idag mot att köra på timpris utan styrning."})
+        out.append({"i": "💰", "t": f"EnergyWizard har sparat {sv:.1f} kr idag jämfört med ett vanligt hushåll utan styrning (inkl. moms)."})
     return out[:5]
 
 

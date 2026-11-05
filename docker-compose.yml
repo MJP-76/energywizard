@@ -138,6 +138,9 @@ services:
     environment:
       - HOUSE_CONFIG_PATH=/house_config.yaml
       - PYTHONUNBUFFERED=1
+      # Samma priskälla som motorn och webben - annars räknar appen totalpris och besparing med fel moms
+      - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
+      - NORDPOOL_HA_ENTITY=${NORDPOOL_HA_ENTITY:-sensor.nordpool}
       - POSTGRES_HOST=postgres-smartbox
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

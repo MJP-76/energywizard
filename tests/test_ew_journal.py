@@ -35,3 +35,30 @@ def test_las_och_ladda_ner():
         assert txt.count("\n") == 3 and "[motor] fel" in txt
         conn.execute(sa.text("DROP TABLE ew_journal"))
         conn.commit()
+
+
+def test_kallan_ar_koden_som_skrev_och_forloppet_kommer_en_gang(monkeypatch):
+    import builtins
+    import traceback
+    got = []
+    monkeypatch.setattr(ew_journal, "add", lambda msg, lvl=None, mod="": got.append((mod, msg)))
+    orig = builtins.print
+    monkeypatch.setattr(ew_journal.sys, "excepthook", ew_journal.sys.excepthook)
+    monkeypatch.setattr(ew_journal.threading, "excepthook", ew_journal.threading.excepthook)
+    monkeypatch.setattr(ew_journal, "_started", False)
+    monkeypatch.setattr(ew_journal.sys, "modules", dict(ew_journal.sys.modules))
+    ew_journal.sys.modules.pop("pytest", None)
+    monkeypatch.setattr(ew_journal.threading, "Thread", lambda *a, **k: type("T", (), {"start": lambda self: None})())
+    try:
+        ew_journal.install("motor")
+
+        def skriver():
+            try:
+                raise ValueError("x")
+            except ValueError:
+                print("❌ något gick fel")
+                traceback.print_exc()
+        skriver()
+    finally:
+        builtins.print = orig
+    assert len(got) == 1 and got[0][0].endswith(".skriver") and "Traceback" in got[0][1]

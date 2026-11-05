@@ -1,57 +1,93 @@
 """
-savings.py - besparing per dag, för besparingskortet i webdashboard.
+savings.py - besparing per dag (besparingskortet på webben, i appen och HA-sensorn sensor.smartbox_besparing_idag).
 
-Samma formel som den publika sidan (scripts/export_public_stats.py) och HA-sensorn
-sensor.smartbox_besparing_idag (ha_publisher.py), inte en ny definition:
+Jämförelsen (2026-11-05, beslut Emil): vad samma el hade kostat i ett VANLIGT hushåll utan styrning, minus vad den
+faktiskt kostade - med moms.
 
-    besparing = (dygnets snittpris - effektviktat snittpris vi faktiskt betalade) × köpt kWh
+    besparing = (kostnad med en vanlig hushållsprofil - faktisk kostnad) × (1 + moms)
 
-Alltså vad tajmningen sparade jämfört med om samma el köpts jämnt över dygnet. En dag då vi
-köpte dyrare än snittet blir negativ och visas så, inte bortfiltrerad.
+En vanlig hushållsprofil (PROFILE) fördelar dygnets köpta kWh över timmarna som ett hus utan styrning gör: lite på
+natten, toppar på morgonen och kvällen när elen oftast är dyrast (matlagning, disk, tvätt, bilen kopplas in vid
+hemkomst). Det är rättvisare än det tidigare måttet (jämnt fördelat över dygnet), som underskattade vad ett hus utan
+styrning betalar. Momsen läggs på eftersom den betalas på spotpriset: varje sparad krona i spotpris är 1,25 kr på
+fakturan (om priserna inte redan är inklusive moms). En dag då vi köpte dyrare än profilen blir negativ och visas så.
 
-Skillnad mot den publika sidan: dygnen räknas i svensk tid (Europe/Stockholm), inte i
-databasens UTC, så "idag" i kortet är samma dag som på klockan.
-
-daily_rows() läser databasen; summarize_periods() är ren och testas i tests/test_savings.py.
+Dygnen räknas i svensk tid. daily_rows() läser databasen; build_day()/summarize_periods() är rena och testas i
+tests/test_savings.py.
 """
 
 from sqlalchemy import text
 
-_DAILY_SQL = text("""
+# Andel av dygnets förbrukning per timme (00-23) i ett typiskt svenskt småhus utan styrning (vinterhalvår, normerad
+# till 1): lågt på natten, topp 07-09 och 17-21.
+PROFILE = [2.6, 2.3, 2.2, 2.2, 2.3, 2.8, 3.8, 4.8, 4.9, 4.4, 4.1, 4.0, 3.9, 3.8, 3.9, 4.3, 5.1, 6.0, 6.3, 6.0, 5.4, 4.6, 3.8, 3.0]
+_PS = sum(PROFILE)
+PROFILE = [p / _PS for p in PROFILE]
+
+_HOURLY_SQL = text("""
     SELECT (timestamp AT TIME ZONE 'Europe/Stockholm')::date AS d,
-           sum(net_power) / 60000.0 AS kwh,
-           avg(price) AS day_avg,
-           sum(net_power * price) / nullif(sum(net_power), 0) AS paid_avg
+           extract(hour FROM timestamp AT TIME ZONE 'Europe/Stockholm')::int AS h,
+           avg(price) AS p,
+           sum(GREATEST(net_power, 0)) / 60000.0 AS kwh,
+           sum(GREATEST(net_power, 0) * price) / 60000.0 AS cost
     FROM sensor_log
-    WHERE net_power > 0 AND price IS NOT NULL
+    WHERE price IS NOT NULL AND net_power IS NOT NULL
       AND timestamp >= now() - make_interval(days => :days)
-    GROUP BY 1
-    HAVING sum(net_power) > 0
-    ORDER BY 1
+    GROUP BY 1, 2
+    ORDER BY 1, 2
 """)
 
 
+def vat_factor() -> float:
+    """1 + moms om priserna i databasen är exklusive moms, annars 1."""
+    try:
+        import nordpool
+        return 1.0 if nordpool.prices_include_vat() else nordpool._vat_factor()
+    except Exception:
+        return 1.25
+
+
+def profile_day(hours):
+    """hours = [(timme, snittpris, köpt kWh, faktisk kostnad)] för ett dygn -> (kWh, profilpris, betalt snittpris) eller
+    None. Profilpriset = vad en kWh kostar i snitt med en vanlig hushållsprofil; timmar utan pris viktas om bort."""
+    hours = [(int(h), float(p), float(k or 0), float(c or 0)) for h, p, k, c in hours if p is not None]
+    kwh = sum(k for _h, _p, k, _c in hours)
+    if kwh <= 0 or len(hours) < 12:
+        return None
+    w = sum(PROFILE[h] for h, _p, _k, _c in hours)
+    prof_price = sum(PROFILE[h] * p for h, p, _k, _c in hours) / w
+    paid = sum(c for _h, _p, _k, c in hours) / kwh
+    return kwh, prof_price, paid
+
+
 def daily_rows(conn, days=40):
-    """[{day: 'YYYY-MM-DD', kwh, day_avg, paid_avg, saved_kr, would_cost_kr}] för de senaste dagarna."""
+    """[{day, kwh, day_avg (profilpris), paid_avg, saved_kr, would_cost_kr}] för de senaste dagarna."""
+    by_day = {}
+    for d, h, p, k, c in conn.execute(_HOURLY_SQL, {"days": int(days)}).fetchall():
+        by_day.setdefault(d, []).append((h, p, k, c))
+    vf = vat_factor()
     out = []
-    for d, kwh, day_avg, paid_avg in conn.execute(_DAILY_SQL, {"days": int(days)}).fetchall():
-        row = build_day(d.isoformat(), kwh, day_avg, paid_avg)
-        if row:
-            out.append(row)
+    for d in sorted(by_day):
+        r = profile_day(by_day[d])
+        if r:
+            row = build_day(d.isoformat(), r[0], r[1], r[2], vat=vf)
+            if row:
+                out.append(row)
     return out
 
 
-def build_day(day, kwh, day_avg, paid_avg):
+def build_day(day, kwh, day_avg, paid_avg, vat=1.0):
+    """day_avg = jämförelsepriset (vanlig hushållsprofil), paid_avg = faktiskt betalt; vat = 1 + moms."""
     if kwh is None or day_avg is None or paid_avg is None:
         return None
-    kwh, day_avg, paid_avg = float(kwh), float(day_avg), float(paid_avg)
+    kwh, day_avg, paid_avg, vat = float(kwh), float(day_avg), float(paid_avg), float(vat)
     return {
         "day": day,
         "kwh": round(kwh, 2),
         "day_avg": round(day_avg, 4),
         "paid_avg": round(paid_avg, 4),
-        "saved_kr": round((day_avg - paid_avg) * kwh, 2),
-        "would_cost_kr": round(day_avg * kwh, 2),
+        "saved_kr": round((day_avg - paid_avg) * kwh * vat, 2),
+        "would_cost_kr": round(day_avg * kwh * vat, 2),
     }
 
 

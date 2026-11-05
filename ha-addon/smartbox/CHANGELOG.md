@@ -1,5 +1,15 @@
 # Ändringar
 
+## 1.2.10 (2026-11-05)
+- **Planvyn Skyline** överst på förstasidan i appen och på webben (förvald), med planklockan som val. Dygnet som en
+  stad: högt hus = dyr el, tända fönster = huset använder el, solen över staden, bilarna på vägen, batteriet i vattnet.
+- **Besparingen räknas mot ett vanligt hushåll** (toppar morgon och kväll) och inklusive moms, i appen, på webben och
+  i HA-sensorn. Rättvisare än det tidigare jämna dygnssnittet.
+- **Färre falska fel**: en enstaka timeout mot Home Assistant är en varning (fel först efter tre i rad), och loggen
+  visar rätt källa och felförloppet en gång.
+- Appen: "alla rum" fungerar, raderna i "vad görs nu" ligger i linje, rätt moms i appens priser.
+- Webben: landet syns på varje installation, dygnsgrafen är läsbar i mobilen.
+
 ## 1.2.9 (2026-11-05)
 - **Laddschemat för hela veckan på webben** (#142): Elbil-fliken har en rad per veckodag (som appen), en knapp för
   samma schema alla dagar, och visar vilket mål planen räknar med just nu ("fredag 07:00 · 100 %"). Översikten

@@ -127,7 +127,16 @@ def _collect():
             kwh, wprice = float(e[0]), float(e[1])
             ent["sensor.smartbox_forbrukning_idag"] = (_num(kwh, 1), {"friendly_name": "Smartbox Köpt el idag", "unit_of_measurement": "kWh", "device_class": "energy", "icon": "mdi:counter"})
             ent["sensor.smartbox_snittpris_idag"] = (_num(wprice, 3), {"friendly_name": "Smartbox Snittpris idag (viktat)", "unit_of_measurement": "kr/kWh", "icon": "mdi:cash", "dygnssnitt": _num(day_avg, 3)})
-            ent["sensor.smartbox_besparing_idag"] = (_num((day_avg - wprice) * kwh, 2), {"friendly_name": "Smartbox Besparing idag", "unit_of_measurement": "kr", "icon": "mdi:piggy-bank"})
+            # Samma besparing som kortet i appen och på webben: mot en vanlig hushållsprofil, med moms (savings.py)
+            try:
+                import savings
+                _today = [r for r in savings.daily_rows(c, days=1) if r["day"] == datetime.now(SWE).date().isoformat()]
+                _saved = _today[0]["saved_kr"] if _today else None
+            except Exception:
+                _saved = None
+            if _saved is not None:
+                ent["sensor.smartbox_besparing_idag"] = (_num(_saved, 2), {"friendly_name": "Smartbox Besparing idag", "unit_of_measurement": "kr", "icon": "mdi:piggy-bank",
+                                                                         "jamfort_med": "vanlig hushållsprofil, inkl. moms"})
     # Planerad last framåt (elbilens laddplan) - läsbar för Predbat via load_forecast:
     #   load_forecast: [sensor.smartbox_planerad_last$predbat]   (se planned_load.py)
     try:
