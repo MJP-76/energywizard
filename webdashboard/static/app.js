@@ -529,7 +529,7 @@ async function loadPage(path, build) {
 function evPlanChart(elId, d) {
   const el = document.getElementById(elId);
   if (!el) return;
-  const mut = "#93a0b8", colors = { tesla: "#22d3a0", nissan: "#38bdf8" };
+  const mut = "#93a0b8";
   const times = [...new Set([...d.plan.map((p) => p.t.slice(0, 16)), ...d.plan_prices.map((p) => p.t.slice(0, 16))])].sort();
   const first = d.plan[0].t.slice(0, 16), last = d.plan[d.plan.length - 1].t.slice(0, 16);
   const ts = times.filter((t) => t >= first.slice(0, 13) && t <= last);       // planens första timme -> sista slotten
@@ -545,7 +545,7 @@ function evPlanChart(elId, d) {
     xAxis: { type: "category", data: ts.map((t) => t.slice(11, 16)), axisLabel: { color: mut, interval: (i) => ts[i].slice(14, 16) === "00" && Number(ts[i].slice(11, 13)) % 2 === 0 } },
     yAxis: [{ type: "value", name: "kW", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
             { type: "value", name: "kr/kWh", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { show: false } }],
-    series: [...cars.map((c) => ({ name: c[0].toUpperCase() + c.slice(1), type: "bar", stack: "ev", color: colors[c] || "#a78bfa", data: ts.map((t) => (byKey[c + t] ? byKey[c + t].kw : 0)), itemStyle: { color: colors[c] || "#a78bfa", borderRadius: 2 } })),
+    series: [...cars.map((c) => ({ name: c[0].toUpperCase() + c.slice(1), type: "bar", stack: "ev", color: CAR_COL[cars.indexOf(c) % CAR_COL.length], data: ts.map((t) => (byKey[c + t] ? byKey[c + t].kw : 0)), itemStyle: { color: CAR_COL[cars.indexOf(c) % CAR_COL.length], borderRadius: 2 } })),
              { name: "Elpris", type: "line", color: "#fbbf24", step: "end", yAxisIndex: 1, data: ts.map(priceAt), symbol: "none", lineStyle: { color: "#fbbf24", width: 2 } }],
   });
   new ResizeObserver(() => chart.resize()).observe(el);

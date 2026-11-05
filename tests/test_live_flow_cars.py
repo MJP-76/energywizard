@@ -15,6 +15,6 @@ def test_bara_installationens_bilar_och_inget_spa():
     assert "Kia EV6" in txt and "Tesla" not in txt and "Nissan" not in txt and "Spabad" not in txt
 
 
-def test_aldre_anrop_som_forut():
+def test_utan_installation_bara_neutrala_laddboxar():
     txt = str(live_flow.nodes(dict(ROW)))
-    assert "Tesla" in txt and "Nissan" in txt
+    assert "Laddbox 1" in txt and "Nissan" not in txt and "Tesla" not in txt      # inga fasta bilnamn

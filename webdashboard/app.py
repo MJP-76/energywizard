@@ -1097,35 +1097,14 @@ async def api_spa():
             "history": [{"t": h.isoformat(), "temp": _n(a), "target": _n(b), "heating": _n(hr)} for h, a, b, hr in hist]}
 
 
-ROOMS = [("temp_vardagsrum", "Vardagsrum"), ("temp_masterbedroom", "Sovrum"), ("temp_barnrum_nere", "Barnrum nere"),
-         ("temp_cesars_rum", "Cesars rum"), ("temp_isacs_rum", "Isacs rum"), ("temp_utbyggnad", "Utbyggnad"),
-         ("temp_tvattstuga", "Tvättstuga"), ("temp_friggebod", "Friggebod"), ("temp_garage", "Garage"),
-         ("temp_matter_1", "Sensor Matter 1"), ("temp_matter_2", "Sensor Matter 2"), ("temp_matter_3", "Sensor Matter 3"),
-         ("temp_esp", "ESP-sensor")]
-
-
 @app.get("/api/temperatures")
 async def api_temperatures():
-    """Temperaturer-sidan: samma rumslista som ewapp:s /api/rooms (ROOMS ovan är en
-    medveten kopia, inte en delad import - webdashboard har ingen HA-koppling att
-    dela, bara sensor_log)."""
+    """Temperaturer-sidan: rummen är de valda innegivarna (homeassistant.room_temps, samma som appens /api/rooms)."""
     with ENGINE.connect() as c:
         row = _latest_row(c)
     if row is None:
         return {"ok": False, "error": "Ingen data i sensor_log än"}
-    rooms = [{"name": n, "temp": _n(row.get(col))} for col, n in ROOMS]
-    # De valda innegivarna (Inställningar -> Givare), live ur Home Assistant (issue #128: utan Emils rumskolumner syntes
-    # inga rum alls)
-    try:
-        chosen = homeassistant.indoor_sensors()
-        if chosen:
-            homeassistant.update_states()
-            seen = {r["name"] for r in rooms if r["temp"] is not None}
-            for sn in chosen:
-                if sn.get("entity") and sn["label"] not in seen:
-                    rooms.append({"name": sn["label"], "temp": _n(homeassistant._get_numeric_state(sn["entity"]))})
-    except Exception as e:
-        print(f"⚠️ Givarna till Temperaturer-sidan: {e}", flush=True)
+    rooms = homeassistant.room_temps()        # de valda innegivarna, live (#128 - inga fasta rum)
     return {"ok": True, "indoor_temp": _n(row.get("indoor_temp")), "outdoor_temp": _n(row.get("outdoor_temp")),
             "indoor_humidity": _n(row.get("indoor_humidity")), "rooms": [r for r in rooms if r["temp"] is not None],
             "vent_supply_temp": _n(row.get("vent_supply_temp")), "vent_exhaust_temp": _n(row.get("vent_exhaust_temp")),

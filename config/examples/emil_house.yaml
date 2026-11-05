@@ -115,6 +115,10 @@ solar:
     mode: solaredge_modbus_proprietary
     entity: number.solaredge_modbus_active_power_limit
 
+appliances:            # hushållsmaskiner som ger en "startad"-notis (Inställningar -> Notiser -> Övrigt)
+  - name: Tvättmaskinen
+    entity: sensor.tvattmaskin
+
 weather_entity: weather.malmgatan_34   # väderprognosen i appens hälsning (annars första weather.* i HA)
 
 spa:

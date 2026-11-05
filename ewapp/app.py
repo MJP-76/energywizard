@@ -1209,45 +1209,43 @@ async def energy_action(what: str, request: Request):
     raise HTTPException(404, "Okänd åtgärd")
 
 
-ROOMS = [("temp_vardagsrum", "Vardagsrum"), ("temp_masterbedroom", "Sovrum"), ("temp_barnrum_nere", "Barnrum nere"), ("temp_cesars_rum", "Cesars rum"), ("temp_isacs_rum", "Isacs rum"), ("temp_utbyggnad", "Utbyggnad"),
-         ("temp_tvattstuga", "Tvättstuga"), ("temp_friggebod", "Friggebod"), ("temp_garage", "Garage"), ("temp_matter_1", "Sensor Matter 1"), ("temp_matter_2", "Sensor Matter 2"), ("temp_matter_3", "Sensor Matter 3"), ("temp_esp", "ESP-sensor")]
-
-
 @app.get("/api/rooms")
 def rooms():
-    cols = ", ".join(c for c, _ in ROOMS)
+    """Rummen = de valda innegivarna, live ur HA (homeassistant.room_temps) - inga fasta rum i koden."""
     try:
         with ENGINE.connect() as c:
-            r = c.execute(text(f"SELECT timestamp, {cols}, indoor_humidity FROM sensor_log ORDER BY timestamp DESC LIMIT 1")).first()
+            hum = c.execute(text("SELECT indoor_humidity FROM sensor_log ORDER BY timestamp DESC LIMIT 1")).scalar()
     except Exception:
-        r = None
-    if not r:
-        return {"rows": [], "ts": None}
-    ts = r[0]
-    out = [{"name": n, "temp": None if r[i + 1] is None else round(float(r[i + 1]), 1)} for i, (_, n) in enumerate(ROOMS)]
-    return {"rows": [x for x in out if x["temp"] is not None], "humidity": None if r[-1] is None else round(float(r[-1])), "ts": ts.astimezone(TZ).strftime("%H:%M")}
+        hum = None
+    return {"rows": H.room_temps(), "humidity": None if hum is None else round(float(hum)), "ts": dt.datetime.now(TZ).strftime("%H:%M")}
 
 
 # -- Hälsning, väder och dagens peppord ----------------------------------------------------------------------------------------
 COND = {"clear-night": "Klart", "cloudy": "Molnigt", "fog": "Dimma", "hail": "Hagel", "lightning": "Åska", "lightning-rainy": "Åska och regn", "partlycloudy": "Halvklart", "pouring": "Spöregn", "rainy": "Regn", "snowy": "Snö",
         "snowy-rainy": "Snöblandat regn", "sunny": "Soligt", "windy": "Blåsigt", "windy-variant": "Blåsigt", "exceptional": "Extremt väder"}
-NAMES = {"owner": "Emil", "elin": "Elin"}
-PEP_ELIN = ["Du ser fräsh ut idag.", "Din rumpa är fortfarande världsklass.", "Du är dagens finaste i hela huset.", "Ditt leende laddar batterier snabbare än 16 ampere.", "Charmig utan att anstränga sig – det är du.",
-            "Jag är glad att du är min. Teslan är bara glad att du kör den.", "Idag klarar du precis allt du tar i.", "Du är sjukt snygg, bara så du vet.", "Världen är lite bättre med dig i den.", "Du har den där glöden som får solpanelerna att jobba hårdare.",
-            "Någon här tänker på dig just nu. Gissa vem.", "Du är en total raket – och dessutom jättesnygg.", "Ta det lugnt, du förtjänar en mysig stund idag."]
-PEP_EMIL = ["Dagens energichef har anlänt.", "Elpriset darrar när du loggar in.", "Du ser stark ut idag, chefen.", "Systemet jobbar. Du behöver bara vara du.", "Allt är under kontroll – eller så ser det i alla fall ut så.",
-            "Smart hus, smartare ägare.", "Din rumpa är också fortfarande otroligt snygg.", "Du har byggt något riktigt coolt här.", "Dagens mål: ladda billigt, leva gott.", "Kilowattimmarna lyder dig."]
+# Namn och personliga peppfraser är husets egna (ew_settings "names" och "pep": {användare: {"sv": [...], "en": [...]}})
+# - inget i koden. Utan egna fraser: ordspråk och dagsaktuella kommentarer.
+def _names() -> dict:
+    n = (ew_settings.get("names") if ew_settings else None) or {}
+    return n if isinstance(n, dict) else {}
+
+
+def _pep(user, lang) -> list:
+    p = ((ew_settings.get("pep") if ew_settings else None) or {}).get(user or "") or {}
+    v = p.get(lang) if isinstance(p, dict) else None
+    return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+
+
+def _family_user():
+    return next((u for u, r in EXTRA_ROLES.items() if r == "family"), "familj")
+
+
 PROVERBS = ["Det som inte dödar dig gör dig starkare – men dyr el gör dig bara fattigare.", "Borta bra men hemma bäst.", "Den som väntar på något gott väntar ofta på billig el.", "Ordning och reda ger laddade batterier.",
             "Små steg varje dag tar en långt.", "Gör det du kan, med det du har, där du är.", "Lyckan ler mot den som laddar på natten.", "Bättre en sparad kilowattimme än tio planerade."]
 
 
 COND_EN = {"clear-night": "Clear", "cloudy": "Cloudy", "fog": "Fog", "hail": "Hail", "lightning": "Thunder", "lightning-rainy": "Thunder and rain", "partlycloudy": "Partly cloudy", "pouring": "Pouring rain", "rainy": "Rain", "snowy": "Snow",
            "snowy-rainy": "Sleet", "sunny": "Sunny", "windy": "Windy", "windy-variant": "Windy", "exceptional": "Extreme weather"}
-PEP_ELIN_EN = ["You look fresh today.", "Your backside is still world class.", "You are the finest one in the whole house today.", "Your smile charges batteries faster than 16 amps.", "Charming without even trying – that's you.",
-               "I'm happy you're mine. The Tesla is just happy you drive it.", "Today you can handle anything you take on.", "You are seriously good looking, just so you know.", "The world is a little better with you in it.", "You have that glow that makes the solar panels work harder.",
-               "Someone here is thinking of you right now. Guess who.", "You're a total rocket – and gorgeous too.", "Take it easy, you deserve a cozy moment today."]
-PEP_EMIL_EN = ["Today's energy chief has arrived.", "The electricity price trembles when you log in.", "You look strong today, boss.", "The system is working. You just need to be you.", "Everything is under control – or at least it looks that way.",
-               "Smart home, smarter owner.", "Your backside is also still incredibly good looking.", "You've built something really cool here.", "Today's goal: charge cheaply, live well.", "The kilowatt hours obey you."]
 PROVERBS_EN = ["What doesn't kill you makes you stronger – but expensive electricity just makes you poorer.", "Away is good but home is best.", "Those who wait for something good often wait for cheap electricity.", "Order and tidiness give charged batteries.",
                "Small steps every day take you far.", "Do what you can, with what you have, where you are.", "Luck smiles on those who charge at night.", "Better one saved kilowatt hour than ten planned."]
 
@@ -1267,12 +1265,12 @@ def forecast_today(st: dict):
 @app.get("/api/greeting")
 def greeting(request: Request):
     role, user = _session(request)
-    if role == "owner" and request.query_params.get("as") == "family":      # ägarens förhandsvisning av Elins vy
-        role, user = "family", "elin"
+    if role == "owner" and request.query_params.get("as") == "family":      # ägarens förhandsvisning av familjens vy
+        role, user = "family", _family_user()
     elif role == "owner" and request.query_params.get("as") == "guest":
-        role, user = "guest", "klanten87"
+        role, user = "guest", "gäst"
     now = dt.datetime.now(TZ)
-    name = NAMES.get(user or "", ("guest" if request.query_params.get("lang") == "en" else "gäst") if role == "guest" else ("you" if request.query_params.get("lang") == "en" else "du"))
+    name = _names().get(user or "") or (("guest" if request.query_params.get("lang") == "en" else "gäst") if role == "guest" else ("you" if request.query_params.get("lang") == "en" else "du"))
     en = request.query_params.get("lang") == "en"
     part = ("Good night" if now.hour < 5 else "Good morning" if now.hour < 10 else "Hello" if now.hour < 17 else "Good evening") if en else ("God natt" if now.hour < 5 else "God morgon" if now.hour < 10 else "Hej" if now.hour < 17 else "God kväll")
     st = states()
@@ -1286,7 +1284,7 @@ def greeting(request: Request):
         bits.append(f"{'wind' if en else 'vind'} {wa['wind_speed'] / 3.6:.0f} m/s")
     if rain:
         bits.append(f"{'rain' if en else 'regn'} {rain:.0f} mm")
-    pool = ((PEP_ELIN_EN if user == "elin" else PEP_EMIL_EN if user == "owner" else []) + PROVERBS_EN) if en else ((PEP_ELIN if user == "elin" else PEP_EMIL if user == "owner" else []) + PROVERBS)
+    pool = (_pep(user, "en") + PROVERBS_EN) if en else (_pep(user, "sv") + PROVERBS)
     pr = prices()
     net = net_now()
     data_quips = []
@@ -1305,7 +1303,7 @@ def greeting(request: Request):
 # -- Familjelogg ------------------------------------------------------------------------------------------------------------
 def _who(request: Request) -> str:
     u = _session(request)[1] or "?"
-    return "Emil" if u == "owner" else u.capitalize()
+    return _names().get(u) or ("Ägaren" if u == "owner" else u.capitalize())
 
 
 def logact(request: Request, txt: str) -> None:

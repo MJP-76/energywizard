@@ -250,7 +250,6 @@ last_pump_operating_mode = None
 
 # --- NOTIS-TILLSTÅND ---
 last_morning_notify_date = None
-APPLIANCE_NOTIFY = ["diskmaskin", "tvattmaskin"]
 APPLIANCE_ON_W   = 50
 APPLIANCE_MIN_RUNTIME_MIN = 10
 appliance_active_since = {}
@@ -263,7 +262,7 @@ last_pump_alarm_code  = None
 last_solar_error_sent = False
 last_spa_reached     = True
 last_ev_status       = {}          # bil -> laddboxens senaste status (för "laddningen startade"-aviseringen)
-last_washer_running  = True
+last_appliance_running = {}   # hushållsmaskin -> körde den förra varvet (appliances i installationen)
 # Säkerhetslarm för kallt inne (auto-värme kan vara avstängd i manuellt pumpläge)
 INDOOR_COLD_ALERT_C  = 18.0
 indoor_cold_alerted  = False
@@ -459,7 +458,7 @@ spa_should_heat_now = False
 
 last_sent_ev_limit = {}  # {car_id: int|None} - ersätter de tidigare hårdkodade _nissan/_tesla-varianterna
 last_ev_full_notified = _dd(lambda: False)
-raw_ev_schedule = settings.get_ev_schedule()
+raw_ev_schedule = settings.get_ev_schedule(car_ids)
 ev_schedule = {}
 for car, days in raw_ev_schedule.items():
     ev_schedule[car] = {int(k): v for k, v in days.items() if str(k).isdigit()}
@@ -753,7 +752,7 @@ while True:
             except Exception as e:
                 print(f"❌ Kunde inte läsa spa_force_heat från databasen: {e}")
 
-            raw_ev_schedule = settings.get_ev_schedule()
+            raw_ev_schedule = settings.get_ev_schedule(car_ids)
             ev_schedule = {car: {int(k): v for k, v in days.items() if str(k).isdigit()} for car, days in raw_ev_schedule.items()}
 
             # Uppdatera väderprognos var 4:e timme
@@ -805,14 +804,20 @@ while True:
                     car_data[_drv.id] = {}
             if not _soc_mem["loaded"]:
                 _load_last_known_soc()
+                _po = list(physical_charger_drivers)
+                ha_publisher.CHARGER_CARS = [(default_car_per_charger.get(_po[k]) if k < len(_po) else None) or f"laddbox_{k + 1}" for k in range(2)]
                 ha_publisher.start()   # startar bakgrundstråden en gång
                 _seed_sensor_watch()
             car_soc_stale = {c: _remember_soc(c, car_data.get(c), now) for c in car_ids}
             car_soc = {c: (car_data.get(c) or {}).get("soc") for c in car_ids}
 
             if _cached_ev_profiles_time is None or (now - _cached_ev_profiles_time) > timedelta(hours=6):
+                _order = list(physical_charger_drivers)
                 for _c in car_ids:
-                    _cached_ev_profiles[_c] = learning.get_ev_habit_profile(_c)
+                    # Bilens hemmaladdbox i installationens ordning: första loggas som ev_status, andra ev_carport_status
+                    _home = next((p for p, c in default_car_per_charger.items() if c == _c), None)
+                    _idx = _order.index(_home) if _home in _order else car_ids.index(_c)
+                    _cached_ev_profiles[_c] = learning.get_ev_habit_profile(_c, status_col="ev_status" if _idx == 0 else "ev_carport_status")
                 _cached_ev_profiles_time = now
 
             if _cached_outdoor_avg_time is None or (now - _cached_outdoor_avg_time) > timedelta(hours=4):
@@ -912,7 +917,9 @@ while True:
                 notifier.send_emil("🛁⚠️ Spabad-säkerhet",
                                    f"Spabadets skyddssensor(er) har löst ut: {', '.join(_fmap[f] for f in _spa_faults)}.")
                 last_spa_safety_notify = now
-            miele_data   = homeassistant.read_miele()
+            # Hushållsmaskiner ur installationen (appliances: [{name, entity}]) - "startad"-notis, inget fast märke
+            appliance_states = {a["name"]: homeassistant._get_raw_state(a["entity"])
+                                for a in (house_cfg.get("appliances") or []) if isinstance(a, dict) and a.get("name") and a.get("entity")}
             # Bilarnas position (entities.tracker per bil i installationen)
             trackers = {}
             for _ev in house_cfg.get("evs", []) or []:
@@ -1081,7 +1088,7 @@ while True:
 
             # Klimatschema Bil
             outdoor_temp_for_climate = pump_data.get("outdoor_temp") if pump_data else (forecast_temp or 10.0)
-            climate_schedules = settings.get_climate_schedule()
+            climate_schedules = settings.get_climate_schedule(car_ids)
             away_mode_enabled = cfg.get("away_mode_enabled", False)
             away_return_date = cfg.get("away_return_date")  # FIX: saknades → NameError när bortaläge var på
 
@@ -1901,11 +1908,11 @@ while True:
                         notifier.notify_ev_charging(CAR_SPECS.get(_c, {}).get("name", _c), _cd.get("power_kw") or 0.0)
                 last_ev_status[_c] = c_status
 
-            if miele_data:
-                is_running = miele_data.get("status") not in ["off", "unavailable", "unknown", None]
-                if is_running and not last_washer_running:
-                    if cfg.get("notify_washer_start", True): notifier.notify_washing_machine()
-                last_washer_running = is_running
+            for _an, _ast in appliance_states.items():
+                _run = str(_ast).lower() not in ("off", "unavailable", "unknown", "none", "idle", "standby", "av", "0", "0.0")
+                if _run and last_appliance_running.get(_an) is False and cfg.get("notify_washer_start", True):
+                    notifier.send_emil(f"🧺 {_an} har startat", f"{_an} är igång.", key="ovrigt")
+                last_appliance_running[_an] = _run
 
             # --- SÄKERHETSLARM: Kallt inomhus (slår INTE på värmen) ---
             # Viktigt när pumpen står i manuellt läge, då GPM:s automatiska kylskydd är ur spel.

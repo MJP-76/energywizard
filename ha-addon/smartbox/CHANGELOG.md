@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.7 (2026-11-05)
+- **Inga bilnamn, rum eller personer från ett annat hus**: laddschemat och klimatschemat byggs av dina egna bilar
+  (förut fasta "nissan"/"tesla" - andra bilars scheman kunde ignoreras), rummen är dina valda innegivare,
+  hälsningen använder bara namn och fraser du själv lagt in, och "Visa som familj" i stället för ett namn.
+- **Hushållsmaskiner** (t.ex. tvättmaskin) väljs i installationen (`appliances`), inget fast märke.
+- Attributen i Home Assistant (elbil solel) heter efter dina bilar.
+
 ## 1.2.6 (2026-11-05)
 - **Varning när husbatteriet inte gör som det blir tillsagt**: avviker batteriet från kommandot i mer än 5 minuter
   (t.ex. laddar fast det ska ladda ur) syns en röd ruta i appen och på webben, och en notis skickas.

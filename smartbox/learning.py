@@ -478,14 +478,14 @@ def predict_house_cooling_rate(outdoor_temp, wind_speed, solar_w, solar_w_roll_3
     rate = model.predict(df_predict)[0]
     return max(-1.0, min(rate, 0.6)) # Rimlighetsgränser för ett hus
 
-def get_ev_habit_profile(car_id="nissan", max_age_hours=24):
+def get_ev_habit_profile(car_id, max_age_hours=24, status_col="ev_status"):
     """
     Skapar en sannolikhetsmatris (0.0 - 1.0) för när en specifik elbil är inkopplad hemma,
     baserat på veckodag och timme. Tränas på de senaste 60 dagarna.
     """
     try:
         with sm_logger.get_db() as conn:
-            status_col = "ev_status" if car_id == "nissan" else "ev_carport_status"
+            status_col = status_col if status_col in ("ev_status", "ev_carport_status") else "ev_status"
             df = pd.read_sql(f"""
                 SELECT timestamp AT TIME ZONE 'Europe/Stockholm' as ts, 
                        {status_col} as status

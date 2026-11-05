@@ -105,19 +105,7 @@ EASEE_CARPORT_ENTITIES = {
     "current_l3":      "sensor.carport_strom_l3",
 }
 
-NISSAN_ENTITIES = {
-    "soc": "sensor.leaf_battery_level",
-    "climate": "climate.leaf_climate",
-    "plugged_in": "binary_sensor.leaf_plugged_in"
-}
-
-TESLA_ENTITIES = {
-    "soc": "sensor.tesla_model_y_battery", # Kommer börja fungera tyst och automatiskt på måndag!
-    "amps": "number.tesla_model_y_charging_amps",
-    "charging": "binary_sensor.tesla_model_y_charging",
-    "plugged_in": "binary_sensor.tesla_model_y_charger",
-    "charging_state": "sensor.tesla_model_y_charging_state"
-}
+# Bilarnas entiteter kommer ur installationen (evs[].entities, drivers/car_generic.py) - inga inbyggda namn.
 
 # --- TIBBER (Ersätter Shelly för husets total) ---
 # Elmätaren (nätimport/-export, fasströmmar) kommer från husets config (power_meter: i
@@ -282,6 +270,22 @@ def _get_numeric_state(entity_id):
         # Kan vara en status-text (t.ex. 'charging'), skippa varning.
         return None
 
+def room_temps():
+    """Rummen = de valda innegivarna (Inställningar -> Givare), live: [{'name', 'temp'}]. Inga fasta rum i koden."""
+    out = []
+    try:
+        chosen = indoor_sensors()
+        if chosen:
+            update_states()
+        for sn in chosen:
+            v = _get_numeric_state(sn["entity"]) if sn.get("entity") else None
+            if isinstance(v, (int, float)):
+                out.append({"name": sn.get("label") or sn["entity"], "temp": round(float(v) + float(sn.get("offset") or 0), 1)})
+    except Exception as e:
+        print(f"⚠️ Rumstemperaturerna: {e}", flush=True)
+    return out
+
+
 def get_power_w(entity_id):
     """Effekt i watt oavsett vilken enhet sensorn har (W, kW, MW enligt unit_of_measurement). En batteri- eller
     mätarsensor i kW lästes förut som watt (#139)."""
@@ -399,21 +403,6 @@ def read_easee_lite():
 
 def read_easee_carport():
     return _read_easee_charger(EASEE_CARPORT_ENTITIES)
-
-def read_nissan_data():
-    return {
-        "soc": _get_numeric_state(NISSAN_ENTITIES["soc"]),
-        "climate_temp": _get_numeric_attribute(NISSAN_ENTITIES["climate"], "current_temperature"),
-        "climate_state": _get_raw_state(NISSAN_ENTITIES["climate"]),
-        "plugged_in": _get_numeric_state(NISSAN_ENTITIES["plugged_in"])
-    }
-
-def read_tesla_data():
-    return {
-        "soc": _get_numeric_state(TESLA_ENTITIES["soc"]),
-        "plugged_in": _get_numeric_state(TESLA_ENTITIES["plugged_in"]),
-        "charging_state": ("charging" if _get_raw_state("binary_sensor.tesla_model_y_charging") == "on" else _get_raw_state(TESLA_ENTITIES["charging_state"]))   # sensor.tesla_model_y_charging_state finns inte längre
-    }
 
 _PULSE_PATTERNS = {
     "voltage": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:spanning_fas|voltage_phase|voltage_l)([123])$"),
@@ -573,23 +562,6 @@ def read_spa_activities(entities=None):
     def _on(eid):
         return str(_get_raw_state(eid)).lower() in ('on', 'heating', 'true')
     return {k: _on(v) for k, v in ((entities or {}).get("activities") or {}).items() if v}
-
-def read_ev_trackers():
-    """Läser av GPS-positioner för bilarna för Smart Hemkomst-prognos."""
-    return {
-        "nissan_lat": _get_numeric_attribute("device_tracker.leaf_location", "latitude"),
-        "nissan_lon": _get_numeric_attribute("device_tracker.leaf_location", "longitude"),
-        "tesla_lat": _get_numeric_attribute("device_tracker.tesla_model_y_location_tracker", "latitude"),
-        "tesla_lon": _get_numeric_attribute("device_tracker.tesla_model_y_location_tracker", "longitude"),
-    }
-
-def read_miele():
-    """Läs av Miele tvättmaskin."""
-    return {
-        "status":     _get_raw_state("sensor.tvattmaskin"),
-        "phase":      _get_raw_state("sensor.tvattmaskin_programfas"),
-        "remote":     _get_numeric_state("binary_sensor.tvattmaskin_fjarrkontroll"),
-    }
 
 def set_gecko_economy(enable: bool, entity: str | None = None):
     """Slår på eller av Economy Mode för Spabadet via HA (spa.entities.economy_mode)."""

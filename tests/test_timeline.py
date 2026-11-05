@@ -55,7 +55,8 @@ def test_flode_bara_det_huset_har():
 def test_flode_bilar_spa_batteri_och_varfor():
     row = {"pv_power_w": 0, "net_power": 9000, "ev_carport_power_kw": 11.0, "tesla_soc": 54, "ev_power_kw": 0, "nissan_soc": 80,
            "spa_temp": 37.5, "spa_power_w": 3000, "spa_heater_running": 1, "battery_power_w": -800, "battery_soc": 60}
-    d = nodes(row, [{"key": "elbil", "text": "Laddar enligt schema."}, {"key": "spabad", "text": "Minuspris – värmer."}])
+    d = nodes(row, [{"key": "elbil", "text": "Laddar enligt schema."}, {"key": "spabad", "text": "Minuspris – värmer."}],
+              cars=[("nissan", "Nissan", "ev_power_kw"), ("tesla", "Tesla", "ev_carport_power_kw")])    # installationens bilar
     n = {x["key"]: x for x in d["nodes"]}
     assert n["ev_tesla"]["active"] and n["ev_tesla"]["detail"] == "Laddar 11.0 kW · 54 %"
     assert not n["ev_nissan"]["active"]

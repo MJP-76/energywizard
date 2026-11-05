@@ -238,12 +238,9 @@ def set_fuse_size_from_house_config(house_cfg: dict) -> None:
         print(f"⚠️ Kunde inte läsa in huvudsäkringen ur installationen: {e}")
 
 
-def get_climate_schedule():
-    """Hämtar klimatschemat från databasen."""
-    schedule = {
-        'nissan': {'enabled': False, 'target_time': '07:00', 'target_temp': 21.0},
-        'tesla': {'enabled': False, 'target_time': '07:00', 'target_temp': 21.0}
-    }
+def get_climate_schedule(car_ids=None):
+    """Hämtar klimatschemat från databasen - en rad per bil i installationen (car_ids), inga fasta bilnamn."""
+    schedule = {c: {'enabled': False, 'target_time': '07:00', 'target_temp': 21.0} for c in (car_ids or [])}
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -259,7 +256,7 @@ def get_climate_schedule():
             df = pd.read_sql("SELECT * FROM climate_schedule", conn)
             for _, row in df.iterrows():
                 car = row['car_id']
-                if car in schedule:
+                if car in schedule or car_ids is None:
                     schedule[car] = {
                         'enabled': row['enabled'],
                         'target_time': row['target_time'].strftime('%H:%M'),
@@ -269,12 +266,14 @@ def get_climate_schedule():
         print(f"❌ Kunde inte ladda klimatschema: {e}")
     return schedule
 
-def get_ev_schedule():
-    """Hämtar laddningsschemat från databasen."""
-    schedule = {
-        'nissan': {i: {'enabled': False, 'target_time': '07:00', 'target_soc': 100, 'panic_mode': False} for i in range(7)},
-        'tesla': {i: {'enabled': False, 'target_time': '07:00', 'target_soc': 100, 'panic_mode': False} for i in range(7)}
-    }
+def _empty_week():
+    return {i: {'enabled': False, 'target_time': '07:00', 'target_soc': 100, 'panic_mode': False} for i in range(7)}
+
+
+def get_ev_schedule(car_ids=None):
+    """Hämtar laddningsschemat från databasen - en vecka per bil i installationen (car_ids). Förut fasta nycklarna
+    nissan/tesla: andra bilars scheman ignorerades och "Nissan" syntes i hus utan Nissan."""
+    schedule = {c: _empty_week() for c in (car_ids or [])}
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -298,6 +297,8 @@ def get_ev_schedule():
             for _, row in df.iterrows():
                 car = row['car_id']
                 day = row['day_of_week']
+                if car_ids is None and car not in schedule:
+                    schedule[car] = _empty_week()
                 if car in schedule and 0 <= day <= 6:
                     schedule[car][day] = {
                         'enabled': row['enabled'],

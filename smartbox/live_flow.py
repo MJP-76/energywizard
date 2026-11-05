@@ -72,7 +72,7 @@ def nodes(row, decision_items=None, cars=None, has_spa=None):
         on = bool(r.get("spa_heater_running")) or spa_w > 500
         add("spabad", "Spabad", "🛁", spa_w, on, (f"{spa_t:.1f} °C" if spa_t is not None else "–") + (" · värms" if on else ""), "spabad")
 
-    car_list = cars if cars is not None else [("nissan", "Nissan", "ev_power_kw"), ("tesla", "Tesla", "ev_carport_power_kw")]
+    car_list = cars if cars is not None else [("laddbox_1", "Laddbox 1", "ev_power_kw"), ("laddbox_2", "Laddbox 2", "ev_carport_power_kw")]
     for car, car_name, col in car_list:
         kw = _f(r.get(col)) if col else None
         soc = _f(r.get(f"{car}_soc"))

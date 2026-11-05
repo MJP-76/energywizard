@@ -16,6 +16,9 @@ import planned_load
 import pump_runtime
 from database_engine import engine
 
+# Bilen per laddbox i installationens ordning (main.py sätter den) - attributen heter efter bilarna, inga fasta namn
+CHARGER_CARS = ["laddbox_1", "laddbox_2"]
+
 SWE = zoneinfo.ZoneInfo("Europe/Stockholm")
 INTERVAL_S = 60
 
@@ -192,12 +195,12 @@ def _collect():
             ent["sensor.smartbox_elbil_solel"] = (cur["lite_sol_kwh"] + cur["carport_sol_kwh"], {
                 "friendly_name": "Smartbox Elbil solel (denna månad)", "unit_of_measurement": "kWh", "icon": "mdi:car-electric",
                 "manad_kwh": cur["lite_kwh"] + cur["carport_kwh"], "manad_sparat_kr": cur["lite_kr"] + cur["carport_kr"],
-                "nissan_manad_sol_kwh": cur["lite_sol_kwh"], "nissan_manad_kwh": cur["lite_kwh"],
-                "tesla_manad_sol_kwh": cur["carport_sol_kwh"], "tesla_manad_kwh": cur["carport_kwh"],
+                f"{CHARGER_CARS[0]}_manad_sol_kwh": cur["lite_sol_kwh"], f"{CHARGER_CARS[0]}_manad_kwh": cur["lite_kwh"],
+                f"{CHARGER_CARS[1]}_manad_sol_kwh": cur["carport_sol_kwh"], f"{CHARGER_CARS[1]}_manad_kwh": cur["carport_kwh"],
                 "ar_kwh": sm("lite_kwh", yr) + sm("carport_kwh", yr), "ar_sol_kwh": sm("lite_sol_kwh", yr) + sm("carport_sol_kwh", yr),
                 "ar_sparat_kr": sm("lite_kr", yr) + sm("carport_kr", yr),
-                "nissan_ar_sol_kwh": sm("lite_sol_kwh", yr), "nissan_ar_kwh": sm("lite_kwh", yr),
-                "tesla_ar_sol_kwh": sm("carport_sol_kwh", yr), "tesla_ar_kwh": sm("carport_kwh", yr),
+                f"{CHARGER_CARS[0]}_ar_sol_kwh": sm("lite_sol_kwh", yr), f"{CHARGER_CARS[0]}_ar_kwh": sm("lite_kwh", yr),
+                f"{CHARGER_CARS[1]}_ar_sol_kwh": sm("carport_sol_kwh", yr), f"{CHARGER_CARS[1]}_ar_kwh": sm("carport_kwh", yr),
                 "manader": [[to_ms(m["manad"]), m["lite_sol_kwh"], m["carport_sol_kwh"], m["lite_kwh"], m["carport_kwh"]] for m in evm[-24:]]})
     except Exception as e:
         print(f"⚠️ elbil_solel: {e}")
