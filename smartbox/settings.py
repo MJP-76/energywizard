@@ -216,6 +216,28 @@ def get_settings():
 
     return defaults
 
+def set_fuse_size_from_house_config(house_cfg: dict) -> None:
+    """Huvudsäkringen ur installationen (fuse.main_fuse_a) gäller tills man ändrar den i appen (issue #129: filens
+    16 A användes aldrig, motorn läste bara inställningen som börjar på 25 A). Körs vid start: står inställningen
+    kvar på fabriksvärdet 25 A och filen anger något annat, skrivs filens värde in."""
+    try:
+        if not house_cfg.get("_fuse_in_file"):
+            return
+        want = float((house_cfg.get("fuse") or {}).get("main_fuse_a"))
+        if not 6 <= want <= 200:
+            return
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT fuse_size_a FROM system_settings LIMIT 1")
+                row = cur.fetchone()
+                if row is not None and (row[0] is None or float(row[0]) == 25.0) and want != 25.0:
+                    cur.execute("UPDATE system_settings SET fuse_size_a = %s", (want,))
+                    conn.commit()
+                    print(f"⚡ Huvudsäkring: {want:.0f} A ur house_config.yaml (ändras sedan i appens inställningar).")
+    except Exception as e:
+        print(f"⚠️ Kunde inte läsa in huvudsäkringen ur installationen: {e}")
+
+
 def get_climate_schedule():
     """Hämtar klimatschemat från databasen."""
     schedule = {

@@ -171,6 +171,7 @@ print(f"🔋 Batteri: läge '{battery_cfg['control']}', styrbara lägen {sorted(
 homeassistant.configure_power_meter(house_config.power_meter_entities(house_cfg))
 car_ids = [c.id for c in car_drivers]
 CAR_SPECS = house_config.car_specs(house_cfg)
+settings.set_fuse_size_from_house_config(house_cfg)   # fuse.main_fuse_a i installationen -> inställningen (#129)
 # Namnet i HA-sensorn sensor.smartbox_<namn>_batteri: evs[].ha_name, annars bilens id
 CAR_HA_NAME = {ev["id"]: re.sub(r"[^a-z0-9_]", "_", str(ev.get("ha_name") or ev["id"]).lower())
                for ev in house_cfg.get("evs", []) or [] if ev.get("id")}   # {bil: {name, max_a, phases}} - laddboxens faser ("1"/"3"/"auto") och maxström
@@ -1168,21 +1169,25 @@ while True:
                                      if x.get("entity") and isinstance(ha_temps.get(x["key"]), (int, float)) and ha_temps.get(x["key"]) > 0])
             except Exception:
                 pass
-            if pump_data and pump_data.get("outdoor_temp") is not None:
+            _pump_ok = bool(pump_data and pump_data.get("outdoor_temp") is not None)
+            if _pump_ok:
                 last_heartbeat = now
-                if temps_to_avg:
-                    # Median (>=3 sensorer) tål en enskild avvikande givare (t.ex. en Timmerflotte i solen/vid värmekälla).
-                    if len(temps_to_avg) >= 3:
-                        indoor_temp = statistics.median(temps_to_avg)
-                    else:
-                        indoor_temp = sum(temps_to_avg) / len(temps_to_avg)
-                    last_valid_ha_temp_time = now
-                    ha_temp_alert_sent = False
+            # Innetemperaturen ur de valda givarna även utan värmepump (issue #128: förut bara när pumpen svarade, så
+            # utan pump - eller med en generisk climate-pump utan utegivare - blev den aldrig satt).
+            if temps_to_avg:
+                # Median (>=3 sensorer) tål en enskild avvikande givare (t.ex. en Timmerflotte i solen/vid värmekälla).
+                if len(temps_to_avg) >= 3:
+                    indoor_temp = statistics.median(temps_to_avg)
                 else:
-                    indoor_temp = pump_indoor_temp
-                    if (now - last_valid_ha_temp_time) > timedelta(minutes=15) and not ha_temp_alert_sent:
-                        notifier.alert_indoor_temp_sensor_offline()
-                        ha_temp_alert_sent = True
+                    indoor_temp = sum(temps_to_avg) / len(temps_to_avg)
+                last_valid_ha_temp_time = now
+                ha_temp_alert_sent = False
+            elif _pump_ok or pump_indoor_temp is not None:
+                indoor_temp = pump_indoor_temp
+                # Larma bara om det finns valda innegivare som har tystnat
+                if _indoor_sensors and (now - last_valid_ha_temp_time) > timedelta(minutes=15) and not ha_temp_alert_sent:
+                    notifier.alert_indoor_temp_sensor_offline()
+                    ha_temp_alert_sent = True
 
             water_temp   = pump_data.get("water_temp_top")    if pump_data else None
             forward_temp = pump_data.get("forward_temp")      if pump_data else None
@@ -1267,6 +1272,8 @@ while True:
                         logger.set_override("winter_heat_stop", "auto")
 
             outdoor_temp = pump_data.get("outdoor_temp") if pump_data else None
+            if outdoor_temp is None and isinstance(ha_temps.get("ute"), (int, float)):
+                outdoor_temp = ha_temps["ute"]            # vald utegivare när pumpen saknar egen (#128)
             # Huset = sol + nät - batteriets effekt (+ = laddar): laddar batteriet går en del av solen/nätet dit, laddar
             # det ur får huset mer än sol + nät (issue #125: översikten och historiken visade fel med batteri).
             try:

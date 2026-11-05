@@ -1001,8 +1001,10 @@ async def api_consumption():
         lb = c.execute(text(
             "SELECT total_w, ev_w, pump_w, spa_w, unexplained_w FROM load_breakdown ORDER BY timestamp DESC LIMIT 1"
         )).mappings().first()
-        cfg = _settings_row(c, ("peak_shaving_enabled", "power_limit_kw"))
-    return {"ok": True, "avg_w_l1": _n(row.get("avg_w_l1")), "avg_w_l2": _n(row.get("avg_w_l2")),
+        cfg = _settings_row(c, ("peak_shaving_enabled", "power_limit_kw", "fuse_size_a"))
+    # avg_w_l1..3 är (trots namnet) fasströmmar i ampere ur elmätaren - visas i A mot huvudsäkringen (#130)
+    return {"ok": True, "fuse_size_a": _n(cfg.get("fuse_size_a")),
+            "avg_w_l1": _n(row.get("avg_w_l1")), "avg_w_l2": _n(row.get("avg_w_l2")),
             "avg_w_l3": _n(row.get("avg_w_l3")), "avg_w_tot": _n(row.get("avg_w_tot")),
             "house_consumption_w": _n(row.get("house_consumption_w")), "power_oven_w": _n(row.get("power_oven_w")),
             "power_computer_w": _n(row.get("power_computer_w")), "peak_shaving_active": bool(row.get("peak_shaving_active")),
@@ -1053,6 +1055,18 @@ async def api_temperatures():
     if row is None:
         return {"ok": False, "error": "Ingen data i sensor_log än"}
     rooms = [{"name": n, "temp": _n(row.get(col))} for col, n in ROOMS]
+    # De valda innegivarna (Inställningar -> Givare), live ur Home Assistant (issue #128: utan Emils rumskolumner syntes
+    # inga rum alls)
+    try:
+        chosen = homeassistant.indoor_sensors()
+        if chosen:
+            homeassistant.update_states()
+            seen = {r["name"] for r in rooms if r["temp"] is not None}
+            for sn in chosen:
+                if sn.get("entity") and sn["label"] not in seen:
+                    rooms.append({"name": sn["label"], "temp": _n(homeassistant._get_numeric_state(sn["entity"]))})
+    except Exception as e:
+        print(f"⚠️ Givarna till Temperaturer-sidan: {e}", flush=True)
     return {"ok": True, "indoor_temp": _n(row.get("indoor_temp")), "outdoor_temp": _n(row.get("outdoor_temp")),
             "indoor_humidity": _n(row.get("indoor_humidity")), "rooms": [r for r in rooms if r["temp"] is not None],
             "vent_supply_temp": _n(row.get("vent_supply_temp")), "vent_exhaust_temp": _n(row.get("vent_exhaust_temp")),
@@ -1399,6 +1413,14 @@ def _build_house_config_yaml(sel: dict) -> str:
             lines.append(f"  secondary_power_w: {pm['secondary_power_w']}   # annan byggnad - visas, styr inte säkringsskyddet")
     lines += ["", "fuse:", "  main_fuse_a: 25  # FYLL I - din huvudsäkring i Ampere"]
 
+    # Ett "entities:" utan rader under blir None i YAML - skriv en tom lista över givare i stället (#127)
+    def _indent(t):
+        return len(t) - len(t.lstrip())
+    for i, ln in enumerate(lines):
+        if ln.rstrip().endswith("entities:"):
+            nxt = next((x for x in lines[i + 1:] if x.strip() and not x.strip().startswith("#")), "")
+            if _indent(nxt) <= _indent(ln):
+                lines[i] = ln.rstrip() + " {}"
     return "\n".join(lines) + "\n"
 
 

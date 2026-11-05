@@ -84,6 +84,7 @@ def load_house_config(path: str) -> dict:
     cfg.setdefault("solar", {"enabled": False})
     cfg.setdefault("spa", {"enabled": False})
     cfg.setdefault("battery", {"enabled": False})
+    cfg["_fuse_in_file"] = bool((cfg.get("fuse") or {}).get("main_fuse_a"))   # angav installationen säkringen själv?
     cfg.setdefault("fuse", {"main_fuse_a": 25})
     return cfg
 
@@ -94,7 +95,7 @@ def build_car_drivers(cfg: dict) -> list:
     out = []
     for ev in cfg.get("evs", []):
         driver_cls = CAR_DRIVER_REGISTRY.get(ev.get("driver"), NullCarDriver)
-        out.append(driver_cls(id=ev.get("id", ""), battery_kwh=ev.get("battery_kwh", 0.0), entities=ev.get("entities", {})))
+        out.append(driver_cls(id=ev.get("id", ""), battery_kwh=ev.get("battery_kwh", 0.0), entities=(ev.get("entities") or {})))
     return out
 
 
@@ -141,7 +142,7 @@ def build_charger_drivers(cfg: dict) -> dict:
         if driver_cls is EaseeChargerDriver:
             out[car_id] = _easee_driver(charger_cfg)
         elif driver_cls is GenericChargerDriver:
-            out[car_id] = GenericChargerDriver(id=charger_cfg.get("id", ""), entities=charger_cfg.get("entities", {}))
+            out[car_id] = GenericChargerDriver(id=charger_cfg.get("id", ""), entities=(charger_cfg.get("entities") or {}))
         else:
             out[car_id] = driver_cls(id=charger_cfg.get("id", ""))
     return out
@@ -165,7 +166,7 @@ def build_physical_charger_drivers(cfg: dict) -> dict:
             out[physical_id] = drv
         elif driver_cls is GenericChargerDriver:
             physical_id = charger_cfg.get("id", "")
-            out[physical_id] = GenericChargerDriver(id=physical_id, entities=charger_cfg.get("entities", {}))
+            out[physical_id] = GenericChargerDriver(id=physical_id, entities=(charger_cfg.get("entities") or {}))
         else:
             physical_id = charger_cfg.get("id", "")
             out[physical_id] = driver_cls(id=physical_id)
@@ -191,14 +192,14 @@ def build_default_car_per_charger(cfg: dict) -> dict:
 
 
 def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
-    hp = cfg.get("heat_pump", {})
+    hp = (cfg.get("heat_pump") or {})
     if not hp.get("enabled"):
         return NullHeatPumpDriver()
     driver_cls = HEAT_PUMP_DRIVER_REGISTRY.get(hp.get("driver"), NullHeatPumpDriver)
     if driver_cls is GenericClimateHeatPumpDriver:
-        return GenericClimateHeatPumpDriver(entity_id=hp.get("entities", {}).get("climate"))
+        return GenericClimateHeatPumpDriver(entity_id=(hp.get("entities") or {}).get("climate"))
     if driver_cls is MyUplinkHeatPumpDriver:
-        return MyUplinkHeatPumpDriver(entities=hp.get("entities", {}))
+        return MyUplinkHeatPumpDriver(entities=(hp.get("entities") or {}))
     if driver_cls is NibeLocalHeatPumpDriver:
         return NibeLocalHeatPumpDriver(connection=hp.get("connection"), points=hp.get("points"),
                                        control_enabled=hp.get("control_enabled", False),
@@ -250,16 +251,16 @@ def battery_settings(cfg: dict) -> dict:
 
 
 def build_solar_driver(cfg: dict) -> SolarDriver:
-    sol = cfg.get("solar", {})
+    sol = (cfg.get("solar") or {})
     if not sol.get("enabled"):
         return NullSolarDriver()
     driver_cls = SOLAR_DRIVER_REGISTRY.get(sol.get("driver"), NullSolarDriver)
     if driver_cls is GenericNumberSolarDriver:
-        return GenericNumberSolarDriver(entities=sol.get("entities", {}))
+        return GenericNumberSolarDriver(entities=(sol.get("entities") or {}))
     if driver_cls is HuaweiSolarServiceDriver:
-        return HuaweiSolarServiceDriver(entities=sol.get("entities", {}))
+        return HuaweiSolarServiceDriver(entities=(sol.get("entities") or {}))
     if driver_cls is ModbusRegisterSolarDriver:
-        return ModbusRegisterSolarDriver(entities=sol.get("entities", {}), modbus=sol.get("modbus", {}))
+        return ModbusRegisterSolarDriver(entities=(sol.get("entities") or {}), modbus=(sol.get("modbus") or {}))
     if driver_cls is FerroampSolarDriver:
         return FerroampSolarDriver(modbus=sol.get("modbus"), control_enabled=sol.get("control_enabled", False),
                                   max_export_w=sol.get("max_export_w"))
@@ -267,24 +268,24 @@ def build_solar_driver(cfg: dict) -> SolarDriver:
 
 
 def build_spa_driver(cfg: dict) -> SpaDriver:
-    spa = cfg.get("spa", {})
+    spa = (cfg.get("spa") or {})
     if not spa.get("enabled"):
         return NullSpaDriver()
     driver_cls = SPA_DRIVER_REGISTRY.get(spa.get("driver"), NullSpaDriver)
     if driver_cls in (BalboaSpaDriver, SwitchSpaDriver):
-        return driver_cls(entities=spa.get("entities", {}))
+        return driver_cls(entities=(spa.get("entities") or {}))
     return driver_cls()
 
 
 def build_battery_driver(cfg: dict) -> BatteryDriver:
     """Batteriets drivrutin. Besluten fattas i battery_control.py (se battery_settings)."""
-    bat = cfg.get("battery", {})
+    bat = (cfg.get("battery") or {})
     if not bat.get("enabled"):
         return NullBatteryDriver()
     driver_cls = BATTERY_DRIVER_REGISTRY.get(bat.get("driver"), NullBatteryDriver)
     if driver_cls is GenericBatteryDriver:
-        return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=bat.get("entities", {}),
-                                    modes=bat.get("modes", {}), power_invert=bat.get("power_invert", False),
+        return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=(bat.get("entities") or {}),
+                                    modes=(bat.get("modes") or {}), power_invert=bat.get("power_invert", False),
                                     keepalive_s=bat.get("keepalive_s"))
     if driver_cls is FerroampBatteryDriver:
         return FerroampBatteryDriver(modbus=bat.get("modbus"),

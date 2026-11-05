@@ -20,8 +20,14 @@ ENV APP_VERSION=${ENERGYWIZARD_COMMIT}
 # Repot att klona: standard är projektet självt; CI sätter forkens adress för pull requests från forkar
 # (grenen finns bara där, annars misslyckas kloningen).
 ARG ENERGYWIZARD_REPO=https://github.com/murre87/energywizard
-RUN echo "EnergyWizard ${ENERGYWIZARD_REPO} ${ENERGYWIZARD_REF} ${ENERGYWIZARD_COMMIT}" && git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
-        "${ENERGYWIZARD_REPO}" /src
+# Byggcachen får ALDRIG återanvända en gammal klon (2026-11-04, #125: tilläggsanvändare fick gammal kod trots ny
+# version, eftersom kloningssteget såg likadant ut varje gång när HA bygger själv). Två skydd:
+#  - BUILD_VERSION sätts av Home Assistant (tilläggets version) - ny version = ny klon.
+#  - ADD av grenens senaste commit från GitHub: Docker jämför innehållet, så en ändrad main ger alltid en ny klon.
+ARG BUILD_VERSION=
+ADD https://github.com/murre87/energywizard/commits/main.atom /tmp/energywizard-main.json
+RUN echo "EnergyWizard ${ENERGYWIZARD_REPO} ${ENERGYWIZARD_REF} ${ENERGYWIZARD_COMMIT} ${BUILD_VERSION}" && git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
+        "${ENERGYWIZARD_REPO}" /src && rm -f /tmp/energywizard-main.json
 
 # Samma layout som docker-compose-driften: ewapp och webdashboard gör
 # sys.path.insert(0, "/smartbox") och importerar motorns moduler därifrån

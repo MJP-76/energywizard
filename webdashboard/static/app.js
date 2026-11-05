@@ -488,9 +488,10 @@ function statTile(label, value, sub) {
   return `<div class="stat"><div class="v">${value}</div><div class="l">${label}</div>${sub ? `<div class="l">${sub}</div>` : ""}</div>`;
 }
 
-function barRow(name, pct, valueLabel) {
+function barRow(name, pct, valueLabel, color) {
   const p = pct == null ? 0 : Math.max(0, Math.min(100, pct));
-  return `<div class="barrow"><div class="name">${name}</div><div class="track"><div class="fill" style="width:${p}%"></div></div><div class="val">${valueLabel}</div></div>`;
+  const bg = color ? `;background:${color}` : "";
+  return `<div class="barrow"><div class="name">${name}</div><div class="track"><div class="fill" style="width:${p}%${bg}"></div></div><div class="val">${valueLabel}</div></div>`;
 }
 
 function lineChart(elId, series, opts) {
@@ -704,10 +705,18 @@ async function renderEkonomi() {
   api("api/savings").then((sv) => { if (sv.ok) savingsBars("econsavingsbars", sv.days, 220); }).catch(() => {});
 }
 
+// Fasström i A mot huvudsäkringen: full stapel = 150 % av säkringen, gul från 80 %, röd över säkringen (#130)
+function phaseBar(name, amps, fuse) {
+  if (amps == null) return barRow(name, 0, "–");
+  const color = amps > fuse ? "#e5484d" : amps > fuse * 0.8 ? "#f5a524" : null;
+  return barRow(name, amps / (fuse * 1.5) * 100, fmt(amps, 1, " A"), color);
+}
+
 async function renderElforbrukning() {
   const d = await loadPage("api/consumption", (d) => {
     const b = d.breakdown;
     const maxW = b ? Math.max(b.total_w || 0, 1) : 1;
+    const fuse = d.fuse_size_a || 25;
     return `
     <div class="grid" style="margin-bottom:16px">
       ${statTile("⚡ Just nu", fmt(d.avg_w_tot != null ? d.avg_w_tot / 1000 : null, 2, " kW"))}
@@ -716,10 +725,8 @@ async function renderElforbrukning() {
       ${statTile("🛡️ Effektvakt", d.peak_shaving_active ? badge("warn", "griper in") : badge("on", "normal läge"))}
     </div>
     <div class="card" style="margin-bottom:16px">
-      <h2>🔌 Faser</h2>
-      ${barRow("L1", d.avg_w_l1 != null ? d.avg_w_l1 / maxW * 100 : 0, fmt(d.avg_w_l1, 0, " W"))}
-      ${barRow("L2", d.avg_w_l2 != null ? d.avg_w_l2 / maxW * 100 : 0, fmt(d.avg_w_l2, 0, " W"))}
-      ${barRow("L3", d.avg_w_l3 != null ? d.avg_w_l3 / maxW * 100 : 0, fmt(d.avg_w_l3, 0, " W"))}
+      <h2>🔌 Faser <span class="muted" style="font-weight:400;font-size:.8em">(huvudsäkring ${fmt(fuse, 0, " A")}, full stapel = 150 %)</span></h2>
+      ${["l1", "l2", "l3"].map((ph) => phaseBar(ph.toUpperCase(), d["avg_w_" + ph], fuse)).join("")}
     </div>
     ${b ? `<div class="card">
       <h2>📦 Vad drar strömmen</h2>
