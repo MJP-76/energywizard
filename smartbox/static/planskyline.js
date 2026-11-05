@@ -97,6 +97,11 @@
     const tag = ([i, p], col) => { const x = X(i) + (X(Math.min(N - 1, i + step)) - X(i)) / 2, y = GROUND - (28 + 175 * lev(p)) - 6;
       return `<text x="${f1(x)}" y="${f1(y)}" font-size="9" fill="${col}" text-anchor="middle">${p.toFixed(2).replace(".", opts.lang === "en" ? "." : ",")}</text>`; };
     const tags = tag(cheap, "#86efac") + tag(dear, "#fca5a5");
+    // Soluppgången (första kvarten med solprognos efter natt) som en liten etikett vid horisonten
+    let sunrise = "";
+    const sr = S.findIndex((s, i) => i > 0 && (s.sun_w || 0) > 50 && (S[i - 1].sun_w || 0) <= 50);
+    if (sr > 0 && (S[0].sun_w || 0) <= 50) sunrise = `<text x="${f1(X(sr))}" y="${GROUND - 4}" font-size="8.5" fill="#fcd34d" text-anchor="middle" opacity=".85">☀ ${new Date(S[sr].t).toTimeString().slice(0, 5)}</text>`;
+    const nowMark = `<line x1="${f1(X(0))}" x2="${f1(X(0))}" y1="${GROUND - 210}" y2="${GROUND}" stroke="#fff" stroke-opacity=".35" stroke-dasharray="2 3"/>`;
     el.innerHTML = `<div class="ewsk"><div class="g"></div><svg viewBox="0 0 ${W} ${H}" role="slider" tabindex="0" aria-label="${esc(L.sky)}"><defs>
         <linearGradient id="ewskS" x1="0" x2="1">${sky}</linearGradient>
         <linearGradient id="ewskB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2547"/><stop offset="1" stop-color="#0a0f22"/></linearGradient>
@@ -107,7 +112,7 @@
       </defs>
       <rect x="-40" y="-20" width="${W + 80}" height="${GROUND + 40}" fill="url(#ewskS)" filter="url(#ewskBlur)"/>${stars}${moon}
       <g class="sun"><circle r="58" fill="url(#ewskSun)"/><circle r="10" fill="#fff7d6"/></g>
-      ${bld}${win}${glow}${tags}${road}${carLanes}${bat}${ticks}
+      ${nowMark}${bld}${win}${glow}${tags}${sunrise}${road}${carLanes}${bat}${ticks}
       <line class="cur" y1="0" y2="${H - 14}" stroke="rgba(255,255,255,.75)" stroke-width="1"/><circle class="nowd" cx="${f1(X(0))}" cy="${GROUND}" r="3" fill="#fff"/>
     </svg></div>
     <div class="ewsk-leg"><span><i style="background:#1c2547;height:8px"></i>${esc(L.legend[0])}</span><span><i style="background:#fde68a"></i>${esc(L.legend[1])}</span>
