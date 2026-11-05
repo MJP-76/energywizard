@@ -108,11 +108,14 @@ solar:
   enabled: true
   driver: solaredge
   entities:
-    pv_power_w: sensor.solaredge_aktuell_effekt
+    # Modbus (snabb) först, molnet (var 15:e min) som reserv
+    pv_power_w: [sensor.solaredge_i1_ac_power, sensor.solaredge_aktuell_effekt]
     today_kwh: sensor.solaredge_el_i_dag
   curtailment:
     mode: solaredge_modbus_proprietary
     entity: number.solaredge_modbus_active_power_limit
+
+weather_entity: weather.malmgatan_34   # väderprognosen i appens hälsning (annars första weather.* i HA)
 
 spa:
   enabled: true
@@ -120,9 +123,26 @@ spa:
   entities:
     current_temp: sensor.spa_malmgatan_34_current_temperature
     target_temp: sensor.spa_malmgatan_34_target_temperature
+    climate: climate.spabad_heater
+    water_heater: water_heater.spa_malmgatan_34_heater
     economy_mode: switch.spabad_economy_mode
-    power_w: sensor.spabad_pahsemeter_effekt   # tecknet vänds internt i drivrutinen (CT-klämmans riktning)
+    power_phases: [sensor.spabad_phase_a_effekt, sensor.spabad_phase_b_effekt, sensor.spabad_phase_c_effekt]
+    power_w: sensor.spabad_pahsemeter_effekt   # används om fassensorerna saknas; beloppet tas (CT-klämmans riktning)
     smart_plug: switch.shelly2
+    error: sensor.spa_malmgatan_34_error_s   # felkod som visas i appen
+    safety:
+      overcurrent: binary_sensor.shelly2_overstrom
+      overvoltage: binary_sensor.shelly2_overspanning
+      overheated: binary_sensor.shelly2_overhettad
+      power_exceeded: binary_sensor.shelly2_effekt_overskrids
+    activities:
+      heating: binary_sensor.spa_malmgatan_34_heating
+      circ_pump: binary_sensor.spabad_circulating_pump
+      pump1: fan.spabad_pump_1
+      blower: fan.spa_malmgatan_34_blower
+      waterfall: fan.spabad_waterfall
+      lights: light.spabad_lights
+      ozone: binary_sensor.spabad_ozone
 
 power_meter:
   driver: tibber_pulse

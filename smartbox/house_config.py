@@ -261,6 +261,9 @@ def build_solar_driver(cfg: dict) -> SolarDriver:
         return HuaweiSolarServiceDriver(entities=(sol.get("entities") or {}))
     if driver_cls is ModbusRegisterSolarDriver:
         return ModbusRegisterSolarDriver(entities=(sol.get("entities") or {}), modbus=(sol.get("modbus") or {}))
+    if driver_cls is SolarEdgeSolarDriver:
+        return SolarEdgeSolarDriver(entities=(sol.get("entities") or {}),
+                                    limit_entity=(sol.get("curtailment") or {}).get("entity"))
     if driver_cls is FerroampSolarDriver:
         return FerroampSolarDriver(modbus=sol.get("modbus"), control_enabled=sol.get("control_enabled", False),
                                   max_export_w=sol.get("max_export_w"))
@@ -272,7 +275,7 @@ def build_spa_driver(cfg: dict) -> SpaDriver:
     if not spa.get("enabled"):
         return NullSpaDriver()
     driver_cls = SPA_DRIVER_REGISTRY.get(spa.get("driver"), NullSpaDriver)
-    if driver_cls in (BalboaSpaDriver, SwitchSpaDriver):
+    if driver_cls in (BalboaSpaDriver, SwitchSpaDriver, GeckoSpaDriver):
         return driver_cls(entities=(spa.get("entities") or {}))
     return driver_cls()
 

@@ -894,7 +894,7 @@ while True:
                     physical_charger_data[_pid] = None
             _charger_list = [physical_charger_data.get(p) for p in physical_charger_drivers]
             gecko_data   = spa_driver.read_state()
-            spa_power_data = homeassistant.read_spa_power()
+            spa_power_data = spa_driver.read_power_detail() if HAS_SPA else {}
             spa_power_w  = spa_power_data.get('total_w')
             # Spa-säkerhet: larma (strypt 1/timme) om skyddssensorerna slår till.
             _spa_faults = [k for k in ('overcurrent', 'overvoltage', 'overheated', 'power_exceeded')

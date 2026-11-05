@@ -34,6 +34,14 @@ class SpaDriver(ABC):
         """None om ingen effektsensor finns konfigurerad för spat."""
         raise NotImplementedError
 
+    def read_power_detail(self) -> dict:
+        """Per-fas-effekt + säkerhetsflaggor om drivrutinen har dem: {'phase_a_w', 'phase_b_w', 'phase_c_w',
+        'total_w', 'overcurrent', 'overvoltage', 'overheated', 'power_exceeded'}. Standard: bara totalen."""
+        try:
+            return {"total_w": self.read_power_w()}
+        except Exception:
+            return {"total_w": None}
+
     @abstractmethod
     def read_activities(self) -> dict:
         """Vilka delfunktioner som är PÅ just nu (värme, cirkulationspump, bubbel m.fl.)

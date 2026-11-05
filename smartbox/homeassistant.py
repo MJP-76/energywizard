@@ -135,23 +135,20 @@ def configure_power_meter(entities: dict | None):
     POWER_METER.clear()
     POWER_METER.update({k: v for k, v in (entities or {}).items() if v not in (None, "")})
 
-# --- SOLAREDGE (Från HA) ---
-SOLAREDGE_ENTITIES = {
-    "pv_power_w": "sensor.solaredge_aktuell_effekt",
-    "today_kwh": "sensor.solaredge_el_i_dag",
-}
+# --- SOLAREDGE / GECKO ---
+# Entiteterna kommer ur installationen (solar.entities / spa.entities i house_config.yaml) - inga husspecifika
+# namn här. För SolarEdge finns bara de officiella integrationernas egna standardnamn som reserv.
+SOLAREDGE_DEFAULT_PV = ["sensor.solaredge_i1_ac_power", "sensor.solaredge_current_power", "sensor.solaredge_ac_power"]
+SOLAREDGE_DEFAULT_TODAY = ["sensor.solaredge_energy_today"]
+SOLAREDGE_DEFAULT_STATUS = ["sensor.solaredge_i1_status", "sensor.solaredge_status"]
+SOLAREDGE_DEFAULT_LIMIT = "number.solaredge_modbus_active_power_limit"   # solaredge_modbus-integrationens namn
 
-# --- GECKO SPABAD ---
-GECKO_ENTITIES = {
-    "current_temp": "sensor.spa_malmgatan_34_current_temperature",
-    "target_temp":  "sensor.spa_malmgatan_34_target_temperature",
-    "economy_mode": "switch.spabad_economy_mode",
-}
 
-# --- SPABADETS SMARTPLUGG ---
-# Spabadets Shelly Plug S Gen3 (enheten "Spabadsplugg" i Shelly-integrationen). Tidigare pekade koden på Matter-entiteten
-# switch.shelly_plug_s_gen3, men den noden finns inte längre i Matter-servern (otillgänglig sedan dess), så omstarten av spabadet fungerade aldrig.
-SPA_PLUG = "switch.shelly2"
+def _as_list(v):
+    if v in (None, ""):
+        return []
+    return [x for x in (v if isinstance(v, (list, tuple)) else [v]) if x]
+
 
 def normalize_ha_url(url: str) -> str:
     """'192.168.1.10' -> 'http://192.168.1.10:8123'. En adress med http:// eller https://
@@ -495,84 +492,77 @@ def read_hour_kwh():
 read_tibber_data = read_power_meter      # gammalt namn, kvar för bakåtkompatibilitet
 
 
-def read_solaredge():
-    """Hämtar solproduktion från SolarEdge via Home Assistant, med fallback till moln-integrationen om Modbus strular."""
-    def get_first_numeric(entities):
-        for e in entities:
-            val = _get_numeric_state(e)
-            if val is not None: return val
+def read_solaredge(entities=None):
+    """Solproduktion från SolarEdge via Home Assistant. entities (solar.entities i installationen):
+    pv_power_w, today_kwh, status - var och en en entitet eller en lista (första som har ett värde vinner).
+    Lägg den snabba Modbus-entiteten först och moln-integrationen efter (molnet uppdateras bara var 15:e minut och kan
+    ligga flera kW fel när det växlar molnigt/soligt, 2026-09-20). De officiella integrationernas standardnamn
+    prövas sist."""
+    e = entities or {}
+
+    def get_first_numeric(ents):
+        for x in ents:
+            val = _get_numeric_state(x)
+            if val is not None:
+                return val
         return None
 
-    def get_first_raw(entities):
-        for e in entities:
-            val = _get_raw_state(e)
-            if val is not None: return val
+    def get_first_raw(ents):
+        for x in ents:
+            val = _get_raw_state(x)
+            if val is not None:
+                return val
         return None
-        
-    # CLEANUP: använd SOLAREDGE_ENTITIES som primär källa i fallback-listorna så att
-    # det bara finns EN sanningskälla för entitets-id (dicten var tidigare oanvänd/vilseledande).
-    # Samma primära entiteter som förut -> oförändrat beteende.
+
+    def _chain(own, defaults):
+        own = _as_list(own)
+        return own + [d for d in defaults if d not in own]
+
     return {
-        # Live-värdet från Modbus (uppdateras var några sekunder) FÖRST. Moln-integrationen (solaredge_aktuell_effekt)
-        # uppdateras bara var 15:e minut och kan därför ligga flera kW fel när det växlar molnigt/soligt
-        # (2026-09-20: 6865 W kvar från molnet medan inverterns riktiga effekt var ~270 W -> falsk "oförklarad last").
-        # Moln-värdet används bara om Modbus saknas/är otillgänglig.
-        "pv_power_w": get_first_numeric(["sensor.solaredge_i1_ac_power", SOLAREDGE_ENTITIES["pv_power_w"], "sensor.solaredge_current_power", "sensor.solaredge_ac_power"]),
-        "today_kwh": get_first_numeric([SOLAREDGE_ENTITIES["today_kwh"], "sensor.solaredge_energy_today"]),
-        "status": get_first_raw(["sensor.solaredge_i1_status", "sensor.solaredge_status"])
+        "pv_power_w": get_first_numeric(_chain(e.get("pv_power_w"), SOLAREDGE_DEFAULT_PV)),
+        "today_kwh": get_first_numeric(_chain(e.get("today_kwh"), SOLAREDGE_DEFAULT_TODAY)),
+        "status": get_first_raw(_chain(e.get("status"), SOLAREDGE_DEFAULT_STATUS)),
     }
 
-def read_gecko():
-    """Läs av spabadets nuvarande och måltemperatur."""
-    data = {key: _get_numeric_state(entity) for key, entity in GECKO_ENTITIES.items()}
-    
-    # Läs den sanna måltemperaturen direkt från climate-entitetens attribut om möjligt
-    try:
-        r = requests.get(f"{_BASE}/states/climate.spabad_heater", headers=_HEADERS, timeout=5, verify=_VERIFY)
-        if r.status_code == 200:
-            attrs = r.json().get("attributes", {})
-            if "temperature" in attrs and attrs["temperature"] is not None:
-                data["target_temp"] = float(attrs["temperature"])
-    except Exception:
-        pass
-
-    data["heater_state"] = _get_raw_state("water_heater.spa_malmgatan_34_heater")
+def read_gecko(entities=None):
+    """Spabadets temperaturer och värmarens läge. entities (spa.entities): current_temp, target_temp (sensorer),
+    climate (climate-entiteten - dess temperature-attribut är den sanna måltemperaturen), water_heater, economy_mode."""
+    e = entities or {}
+    data = {k: (_get_numeric_state(e[k]) if e.get(k) else None) for k in ("current_temp", "target_temp", "economy_mode")}
+    if e.get("climate"):
+        t = _get_numeric_attribute(e["climate"], "temperature")
+        if t is not None:
+            data["target_temp"] = float(t)
+        if data["current_temp"] is None:
+            data["current_temp"] = _get_numeric_attribute(e["climate"], "current_temperature")
+    data["heater_state"] = _get_raw_state(e["water_heater"]) if e.get("water_heater") else None
     return data
 
-def read_spa_power():
-    """Läser 3-fas-mätaren på spabadet (Shelly 'Spabad'). Effekten rapporteras NEGATIV pga
-    CT-klämmans riktning → vi tar beloppet. Returnerar per-fas + total effekt (W) samt
-    säkerhetsflaggorna från spa-pluggen (shelly2). None om mätaren inte svarar."""
-    def _p(ph):
-        v = _get_numeric_state(f"sensor.spabad_phase_{ph}_effekt")
-        return abs(float(v)) if v is not None else None
-    pa, pb, pc = _p('a'), _p('b'), _p('c')
-    present = [x for x in (pa, pb, pc) if x is not None]
-    total = sum(present) if present else None
-    def _flag(eid):
-        return str(_get_raw_state(eid)).lower() == 'on'
-    return {
-        'phase_a_w': pa, 'phase_b_w': pb, 'phase_c_w': pc, 'total_w': total,
-        'overcurrent':   _flag('binary_sensor.shelly2_overstrom'),
-        'overvoltage':   _flag('binary_sensor.shelly2_overspanning'),
-        'overheated':    _flag('binary_sensor.shelly2_overhettad'),
-        'power_exceeded':_flag('binary_sensor.shelly2_effekt_overskrids'),
-    }
+def read_spa_power(entities=None):
+    """Spabadets effekt. entities: power_phases (lista med en sensor per fas) eller power_w (en sensor). Värdena tas
+    som belopp (en CT-klämma åt fel håll ger negativt). safety: {nyckel: binary_sensor} - overcurrent, overvoltage,
+    overheated, power_exceeded. Returnerar per-fas + total effekt (W) och säkerhetsflaggorna."""
+    e = entities or {}
 
-def read_spa_activities():
-    """Läser spabadets AKTIVITETS-states (Gecko) — vilken funktion som är PÅ just nu. Används för
-    att LÄRA sig vilken fas som driver vad genom att korrelera mot per-fas-effekten."""
+    def _abs(eid):
+        v = _get_numeric_state(eid) if eid else None
+        return abs(float(v)) if v is not None else None
+    phases = [_abs(x) for x in _as_list(e.get("power_phases"))[:3]]
+    phases += [None] * (3 - len(phases))
+    present = [x for x in phases if x is not None]
+    total = sum(present) if present else (_abs(e.get("power_w")) if e.get("power_w") else None)
+    safety = e.get("safety") or {}
+    out = {'phase_a_w': phases[0], 'phase_b_w': phases[1], 'phase_c_w': phases[2], 'total_w': total}
+    for k in ('overcurrent', 'overvoltage', 'overheated', 'power_exceeded'):
+        out[k] = bool(safety.get(k)) and str(_get_raw_state(safety[k])).lower() == 'on'
+    return out
+
+def read_spa_activities(entities=None):
+    """Vilka av spabadets funktioner som är PÅ just nu - entities.activities: {namn: entitet}, t.ex. heating,
+    circ_pump, pump1, blower, waterfall, lights, ozone. Används för att lära sig vilken fas som driver vad."""
     def _on(eid):
         return str(_get_raw_state(eid)).lower() in ('on', 'heating', 'true')
-    return {
-        'heating':   _on('binary_sensor.spa_malmgatan_34_heating'),
-        'circ_pump': _on('binary_sensor.spabad_circulating_pump'),
-        'pump1':     _on('fan.spabad_pump_1'),
-        'blower':    _on('fan.spa_malmgatan_34_blower'),
-        'waterfall': _on('fan.spabad_waterfall'),
-        'lights':    _on('light.spabad_lights'),
-        'ozone':     _on('binary_sensor.spabad_ozone'),
-    }
+    return {k: _on(v) for k, v in ((entities or {}).get("activities") or {}).items() if v}
 
 def read_ev_trackers():
     """Läser av GPS-positioner för bilarna för Smart Hemkomst-prognos."""
@@ -591,13 +581,15 @@ def read_miele():
         "remote":     _get_numeric_state("binary_sensor.tvattmaskin_fjarrkontroll"),
     }
 
-def set_gecko_economy(enable: bool):
-    """Slår på eller av Economy Mode för Spabadet via HA."""
+def set_gecko_economy(enable: bool, entity: str | None = None):
+    """Slår på eller av Economy Mode för Spabadet via HA (spa.entities.economy_mode)."""
+    if not entity:
+        return False
     try:
         r = requests.post(
             f"{_BASE}/services/switch/turn_{'on' if enable else 'off'}",
             headers=_HEADERS,
-            json={"entity_id": "switch.spabad_economy_mode"},
+            json={"entity_id": entity},
             timeout=5,
             verify=_VERIFY,
         )
@@ -608,13 +600,15 @@ def set_gecko_economy(enable: bool):
         print(f"❌ Spabad: Fel vid ändring av Economy Mode: {e}")
         return False
 
-def set_gecko_target(temp: float):
-    """Sätter spabadets måltemperatur via HA."""
+def set_gecko_target(temp: float, entity: str | None = None):
+    """Sätter spabadets måltemperatur via HA (spa.entities.climate)."""
+    if not entity:
+        return False
     try:
         r = requests.post(
             f"{_BASE}/services/climate/set_temperature",
             headers=_HEADERS,
-            json={"entity_id": "climate.spabad_heater", "temperature": float(temp)},
+            json={"entity_id": entity, "temperature": float(temp)},
             timeout=5,
             verify=_VERIFY,
         )
@@ -708,17 +702,17 @@ def turn_off_charger(charger_id: str):
         print(f"❌ Easee ({charger_id}): Fel vid turn_off: {e}")
         return False
 
-def get_solaredge_limit():
-    """Hämtar Active Power Limit (%) för SolarEdge."""
-    return _get_numeric_state("number.solaredge_modbus_active_power_limit")
+def get_solaredge_limit(entity: str | None = None):
+    """Hämtar Active Power Limit (%) för SolarEdge (solar.curtailment.entity, annars integrationens standardnamn)."""
+    return _get_numeric_state(entity or SOLAREDGE_DEFAULT_LIMIT)
 
-def set_solaredge_limit(limit: int):
+def set_solaredge_limit(limit: int, entity: str | None = None):
     """Sätter Active Power Limit (%) för SolarEdge."""
     try:
         r = requests.post(
             f"{_BASE}/services/number/set_value",
             headers=_HEADERS,
-            json={"entity_id": "number.solaredge_modbus_active_power_limit", "value": str(limit)},
+            json={"entity_id": entity or SOLAREDGE_DEFAULT_LIMIT, "value": str(limit)},
             timeout=5,
             verify=_VERIFY,
         )
@@ -783,17 +777,19 @@ def turn_on_lights(entity_ids: list):
         print(f"❌ Fel vid tändning av lampor i HA: {e}")
         return False
 
-def toggle_spa_plug(turn_on: bool):
-    """Slår på eller av strömmen till spabadets smartplug (Shelly, SPA_PLUG). Samma
+def toggle_spa_plug(turn_on: bool, entity: str | None = None):
+    """Slår på eller av strömmen till spabadets smartplug (spa.entities.smart_plug). Samma
     mönster som turn_on_charger - main.py:s egen ha_toggle_switch() gör samma sak
     men via sina egna råa env-anrop (bygger inte på _VERIFY/SUPERVISOR_TOKEN); den
     här versionen används av SpaDriver istället, inte en ersättning för den befintliga."""
+    if not entity:
+        return False
     service = "turn_on" if turn_on else "turn_off"
     try:
         r = requests.post(
             f"{_BASE}/services/switch/{service}",
             headers=_HEADERS,
-            json={"entity_id": SPA_PLUG},
+            json={"entity_id": entity},
             timeout=5,
             verify=_VERIFY,
         )

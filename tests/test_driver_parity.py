@@ -70,9 +70,9 @@ def test_solar_set_och_get_export_limit():
     with patch("drivers.solar_solaredge.homeassistant") as mock_ha:
         mock_ha.get_solaredge_limit.return_value = 77
         mock_ha.set_solaredge_limit.return_value = True
-        driver = SolarEdgeSolarDriver()
+        driver = SolarEdgeSolarDriver(limit_entity="number.x_limit")
         assert driver.set_export_limit_pct(50) is True
-        mock_ha.set_solaredge_limit.assert_called_once_with(50)
+        mock_ha.set_solaredge_limit.assert_called_once_with(50, "number.x_limit")
         assert driver.get_export_limit_pct() == 77
 
 
@@ -90,8 +90,7 @@ def test_spa_read_state_ger_radata_rakt_av():
 
 
 def test_spa_read_activities_vidarekopplar_samma_funktion_main_py_anvander():
-    """main.py:1837 läser homeassistant.read_spa_activities() direkt - drivrutinen
-    ska ge exakt samma dict, inte en egen tolkning."""
+    """Drivrutinen ger homeassistant.read_spa_activities() dict rakt av, inte en egen tolkning."""
     with patch("drivers.spa_gecko.homeassistant") as mock_ha:
         mock_ha.read_spa_activities.return_value = {"heating": True, "circ_pump": False}
         result = GeckoSpaDriver().read_activities()
@@ -101,17 +100,17 @@ def test_spa_read_activities_vidarekopplar_samma_funktion_main_py_anvander():
 def test_spa_set_plug_power_vidarekopplar_ny_toggle_spa_plug():
     with patch("drivers.spa_gecko.homeassistant") as mock_ha:
         mock_ha.toggle_spa_plug.return_value = True
-        assert GeckoSpaDriver().set_plug_power(True) is True
-        mock_ha.toggle_spa_plug.assert_called_once_with(True)
+        assert GeckoSpaDriver({"smart_plug": "switch.plugg"}).set_plug_power(True) is True
+        mock_ha.toggle_spa_plug.assert_called_once_with(True, "switch.plugg")
 
 
 def test_spa_set_target_temp_och_economy():
     with patch("drivers.spa_gecko.homeassistant") as mock_ha:
-        driver = GeckoSpaDriver()
+        driver = GeckoSpaDriver({"climate": "climate.spa", "economy_mode": "switch.eco"})
         driver.set_target_temp(39.0)
-        mock_ha.set_gecko_target.assert_called_once_with(39.0)
+        mock_ha.set_gecko_target.assert_called_once_with(39.0, "climate.spa")
         driver.set_economy(True)
-        mock_ha.set_gecko_economy.assert_called_once_with(True)
+        mock_ha.set_gecko_economy.assert_called_once_with(True, "switch.eco")
 
 
 # ---------- Laddare (EaseeChargerDriver -> homeassistant.py) ----------
@@ -195,3 +194,43 @@ def test_set_climate_utan_konfigurerad_climate_entity_ar_no_op():
     with patch("drivers.car_generic.homeassistant") as mock_ha:
         NissanCarDriver(id="nissan", battery_kwh=40, entities={"soc": "sensor.x"}).set_climate("heat_cool", 21.0)
     mock_ha.set_car_climate.assert_not_called()
+
+
+# ---------- Entiteterna kommer ur installationen (inga husspecifika namn i koden) ----------
+
+def test_solaredge_och_gecko_laser_installationens_entiteter():
+    import homeassistant as H
+    states = {"sensor.min_pv": "1234", "sensor.min_idag": "5.5", "sensor.spa_t": "37.5",
+              "climate.spa": ("heat", {"temperature": 38.0}), "water_heater.spa": "heating",
+              "sensor.fa": "-1000", "sensor.fb": "200", "sensor.fc": "300", "binary_sensor.ov": "on",
+              "fan.blower": "on"}
+
+    def raw(e):
+        v = states.get(e)
+        return v[0] if isinstance(v, tuple) else v
+
+    def num(e):
+        v = raw(e)
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return {"on": 1, "off": 0}.get(v)
+
+    def attr(e, a):
+        v = states.get(e)
+        return v[1].get(a) if isinstance(v, tuple) else None
+    with patch.object(H, "_get_raw_state", raw), patch.object(H, "_get_numeric_state", num), \
+            patch.object(H, "_get_numeric_attribute", attr):
+        d = SolarEdgeSolarDriver({"pv_power_w": ["sensor.saknas", "sensor.min_pv"], "today_kwh": "sensor.min_idag"}).read_production()
+        assert d["pv_power_w"] == 1234 and d["today_kwh"] == 5.5
+        spa = GeckoSpaDriver({"current_temp": "sensor.spa_t", "climate": "climate.spa", "water_heater": "water_heater.spa",
+                              "power_phases": ["sensor.fa", "sensor.fb", "sensor.fc"],
+                              "safety": {"overvoltage": "binary_sensor.ov"}, "activities": {"blower": "fan.blower"}})
+        st = spa.read_state()
+        assert st["current_temp"] == 37.5 and st["target_temp"] == 38.0 and st["heater_state"] == "heating"
+        p = spa.read_power_detail()
+        assert p["total_w"] == 1500 and p["phase_a_w"] == 1000 and p["overvoltage"] and not p["overcurrent"]
+        assert spa.read_activities() == {"blower": True}
+        # Utan entiteter: inga gissade husnamn, bara tomt
+        assert GeckoSpaDriver().read_state()["current_temp"] is None
+        assert GeckoSpaDriver().set_plug_power(True) is False

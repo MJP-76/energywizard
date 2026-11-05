@@ -74,6 +74,84 @@ def _load_cars():
 
 
 CARS, CHARGER_DRV = _load_cars()
+
+
+def _load_house_parts():
+    """Sol, spabad och väder ur installationen (house_config.yaml) - inga husspecifika entitetsnamn i appen."""
+    try:
+        cfg = HC.load_house_config(HOUSE_CONFIG_PATH)
+    except Exception:
+        cfg = {}
+    sol = cfg.get("solar") or {}
+    on = bool(sol.get("enabled"))
+    se = (sol.get("entities") or {}) if on else {}
+    is_se = on and sol.get("driver") == "solaredge"
+
+    def chain(own, defaults):
+        own = H._as_list(own)
+        return own + ([d for d in defaults if d not in own] if is_se else [])
+    try:
+        drv = HC.build_solar_driver(cfg) if on else None
+    except Exception as e:
+        print(f"⚠️ Soldrivrutinen: {e}", flush=True)
+        drv = None
+    solar = {"pv": chain(se.get("pv_power_w"), H.SOLAREDGE_DEFAULT_PV), "today": chain(se.get("today_kwh"), H.SOLAREDGE_DEFAULT_TODAY),
+             "status": chain(se.get("status"), H.SOLAREDGE_DEFAULT_STATUS),
+             "limit": (sol.get("curtailment") or {}).get("entity") or se.get("limit") or (H.SOLAREDGE_DEFAULT_LIMIT if is_se else None),
+             "driver": drv}
+    spa = cfg.get("spa") or {}
+    spa_e = (spa.get("entities") or {}) if spa.get("enabled") else {}
+    ents = set()
+
+    def walk(x):
+        if isinstance(x, dict):
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+        elif isinstance(x, str) and re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", x):
+            ents.add(x)
+    walk(cfg)
+    return solar, spa_e, cfg.get("weather_entity"), ents
+
+
+SOLAR, SPA_E, WEATHER_CFG, CFG_ENTITIES = _load_house_parts()
+
+
+def first_num(st: dict, ents):
+    for e in ents or []:
+        v = num(st, e)
+        if v is not None:
+            return v
+    return None
+
+
+def attr_num(st: dict, e, a):
+    try:
+        v = ((st.get(e) or {}).get("attributes") or {}).get(a) if e else None
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def spa_temps(st: dict):
+    """(vattentemp, måltemp, värmarens läge) ur spa.entities."""
+    e = SPA_E
+    temp = num(st, e["current_temp"]) if e.get("current_temp") else None
+    target = num(st, e["target_temp"]) if e.get("target_temp") else None
+    if e.get("climate"):
+        temp = temp if temp is not None else attr_num(st, e["climate"], "current_temperature")
+        t = attr_num(st, e["climate"], "temperature")
+        target = t if t is not None else target
+    return temp, target, (val(st, e["water_heater"]) if e.get("water_heater") else None)
+
+
+def weather_entity(st: dict):
+    """Väderentiteten: weather_entity i installationen, annars den första weather.* i Home Assistant."""
+    if WEATHER_CFG:
+        return WEATHER_CFG
+    return next((e for e in sorted(st) if e.startswith("weather.")), None)
 WATCH_AFTER_S = {c["soc"]: 48 * 3600 for c in CARS.values() if c["sleeps"] and c["soc"]}
 WATCH = [x for c in CARS.values() for x in (c["status"], c["soc"]) if x]
 
@@ -499,7 +577,7 @@ def state(request: Request):
         if v is None:
             health.append(("Saknas i Home Assistant: " if e not in st else "Otillgänglig: ") + e)
     return {"ok": True, "role": _role(request), "user": _session(request)[1], "ts": int(time.time()), "version": os.environ.get("APP_VERSION", "dev"), "cars": [car_state(k, st, ov) for k in CARS], "price": prices(), "health": health,
-            "solar_w": num(st, "sensor.solaredge_aktuell_effekt")}
+            "solar_w": first_num(st, SOLAR["pv"])}
 
 
 def car_command(car: str, kind: str, body: dict | None = None) -> dict | None:
@@ -672,12 +750,12 @@ def home():
             "heat": {"inside": num(st, "sensor.smartbox_inomhustemp"), "target": num(st, "sensor.smartbox_maltemperatur"), "outside": num(st, "sensor.smartbox_utetemperatur"), "mode": ov.get("heat", "auto"),
                      "pump_w": num(st, "sensor.smartbox_effekt_varmepump"), "price_mode": val(st, "sensor.smartbox_lage"), "cop": num(st, "sensor.smartbox_cop"), "temp_cheap": cfg.get("temp_cheap"), "temp_expensive": cfg.get("temp_expensive")},
             "water": {"temp": num(st, "sensor.smartbox_varmvatten"), "mode": ov.get("hotwater", "auto")},
-            "spa": {"temp": num(st, "sensor.spa_malmgatan_34_current_temperature"), "target": num(st, "sensor.spa_malmgatan_34_target_temperature"), "heater": val(st, "water_heater.spa_malmgatan_34_heater"),
+            "spa": {"temp": spa_temps(st)[0], "target": spa_temps(st)[1], "heater": spa_temps(st)[2],
                     "force_heat": bool(cfg.get("spa_force_heat")), "eco": ov.get("spa_force_eco") == "on",
-                    "ready_at": (cfg["spa_target_datetime"].astimezone(TZ).strftime("%a %H:%M") if cfg.get("spa_schedule_enabled") and cfg.get("spa_target_datetime") else None), "ready_temp": cfg.get("spa_target_temp") if cfg.get("spa_schedule_enabled") else None, "power_w": num(st, "sensor.smartbox_effekt_spa"), "error": val(st, "sensor.spa_malmgatan_34_error_s")},
+                    "ready_at": (cfg["spa_target_datetime"].astimezone(TZ).strftime("%a %H:%M") if cfg.get("spa_schedule_enabled") and cfg.get("spa_target_datetime") else None), "ready_temp": cfg.get("spa_target_temp") if cfg.get("spa_schedule_enabled") else None, "power_w": num(st, "sensor.smartbox_effekt_spa"), "error": val(st, SPA_E["error"]) if SPA_E.get("error") else None},
             "power": {"total_w": num(st, "sensor.smartbox_effekt_total"), "ev_w": num(st, "sensor.smartbox_effekt_elbil"), "limit_kw": cfg.get("power_limit_kw"), "peak": bool(cfg.get("peak_shaving_enabled")),
-                      "solar_w": num(st, "sensor.solaredge_aktuell_effekt"), "solar_forecast_w": num(st, "sensor.smartbox_solprognos"), "saving_today": num(st, "sensor.smartbox_besparing_idag"),
-                      "net_w": net_now(), "solar_limit_pct": num(st, "number.solaredge_modbus_active_power_limit"), "price_now": prices().get("now")}}
+                      "solar_w": first_num(st, SOLAR["pv"]), "solar_forecast_w": num(st, "sensor.smartbox_solprognos"), "saving_today": num(st, "sensor.smartbox_besparing_idag"),
+                      "net_w": net_now(), "solar_limit_pct": num(st, SOLAR["limit"]) if SOLAR["limit"] else None, "price_now": prices().get("now")}}
 
 
 @app.post("/api/home/{what}")
@@ -1008,7 +1086,7 @@ def insights(st: dict, ov: dict, pr: dict) -> list:
             out.append({"i": "🔌", "t": f"{c['name'].split()[0]} laddas {g['day']} {g['start']}–{g['end']}" + (f" ({g['soc0']}→{g['soc1']} %)" if g.get("soc0") is not None else "") + "."})
             break
     sol = num(st, "sensor.smartbox_solprognos")
-    today = num(st, "sensor.solaredge_el_i_dag")
+    today = first_num(st, SOLAR["today"])
     ev_sun = num(st, "sensor.smartbox_elbil_solel")
     if today is not None or sol is not None:
         t = (f"Solen har gett {today:.0f} kWh idag" if today is not None else "Sol") + (f", prognos nu {sol / 1000:.1f} kW" if sol is not None else "")
@@ -1034,9 +1112,9 @@ def energy():
     st = states()
     ov = overrides()
     pr = prices()
-    raw_lim = val(st, "number.solaredge_modbus_active_power_limit")
-    # Motorns egna loggade värden (från vilken soldrivrutin som helst) - reserv när SolarEdge-
-    # entiteterna från det här huset saknas (andra märken, eller SolarEdge via officiella solaredge_modbus).
+    raw_lim = val(st, SOLAR["limit"]) if SOLAR["limit"] else None
+    # Motorns egna loggade värden (från vilken soldrivrutin som helst) - reserv när solentiteterna saknas
+    # (märken som läses via Modbus eller tjänsteanrop i stället för entiteter).
     now_items, sl = [], {}
     try:
         with ENGINE.connect() as c:
@@ -1049,8 +1127,8 @@ def energy():
         pass
     fb = lambda v, k: v if v is not None else (float(sl[k]) if sl.get(k) is not None else None)
     return {"ok": True, "now": now_items,
-            "solar": {"w": fb(num(st, "sensor.solaredge_aktuell_effekt"), "w"), "today_kwh": fb(num(st, "sensor.solaredge_el_i_dag"), "today"), "forecast_w": num(st, "sensor.smartbox_solprognos"), "status": SE_STATUS.get(val(st, "sensor.solaredge_i1_status"), val(st, "sensor.solaredge_i1_status")),
-                      "limit_pct": fb(None if raw_lim is None else num(st, "number.solaredge_modbus_active_power_limit"), "limit"), "ai_limit": str(ov.get("ai_solar_limit_active", "false")).lower() == "true",
+            "solar": {"w": fb(first_num(st, SOLAR["pv"]), "w"), "today_kwh": fb(first_num(st, SOLAR["today"]), "today"), "forecast_w": num(st, "sensor.smartbox_solprognos"), "status": (lambda v: SE_STATUS.get(v, v))(next((val(st, e) for e in SOLAR["status"] if val(st, e) is not None), None)),
+                      "limit_pct": fb(None if raw_lim is None else num(st, SOLAR["limit"]), "limit"), "ai_limit": str(ov.get("ai_solar_limit_active", "false")).lower() == "true",
                       "export_price_floor": float(ov.get("solar_export_price_limit", -1.0) or -1.0), "notify": str(ov.get("notify_solar_limit", "true")).lower() == "true"},
             "grid": {"net_w": net_now(), "price": pr.get("now"), "level": pr.get("level")},
             "peaks": month_peaks(), "today_kwh": num(st, "sensor.smartbox_forbrukning_idag"), "saving_today": num(st, "sensor.smartbox_besparing_idag"), "decision": val(st, "sensor.smartbox_beslut"),
@@ -1069,9 +1147,12 @@ async def energy_action(what: str, request: Request):
         price = r[0] if r else None
         if auto and price is not None and float(price) < 0:
             raise HTTPException(409, "Automatiken styr exportgränsen just nu (minuspris). Stäng av automatiken för att styra själv.")
-        if not H.set_solaredge_limit(pct):
-            raise HTTPException(502, "SolarEdge svarade inte")
-        return {"ok": True, "msg": f"SolarEdge-gräns satt till {pct} %"}
+        drv = SOLAR["driver"]
+        if drv is None or not drv.supports_curtailment():
+            raise HTTPException(409, "Solcellerna i installationen går inte att begränsa")
+        if not drv.set_export_limit_pct(pct):
+            raise HTTPException(502, "Växelriktaren svarade inte")
+        return {"ok": True, "msg": f"Exportgräns satt till {pct} %"}
     if what == "floor":
         f = round(max(-1.0, min(5.0, float(v))), 2)
         set_override("solar_export_price_limit", str(f))
@@ -1129,9 +1210,12 @@ PROVERBS_EN = ["What doesn't kill you makes you stronger – but expensive elect
 
 
 def forecast_today(st: dict):
+    we = weather_entity(st)
+    if not we:
+        return None, None, None
     try:
-        r = requests.post(f"{H._BASE}/services/weather/get_forecasts?return_response", headers=H._HEADERS, json={"entity_id": "weather.malmgatan_34", "type": "daily"}, timeout=8, verify=False)
-        f = r.json()["service_response"]["weather.malmgatan_34"]["forecast"][0]
+        r = requests.post(f"{H._BASE}/services/weather/get_forecasts?return_response", headers=H._HEADERS, json={"entity_id": we, "type": "daily"}, timeout=8, verify=False)
+        f = r.json()["service_response"][we]["forecast"][0]
         return f.get("temperature"), f.get("templow"), f.get("precipitation")
     except Exception:
         return None, None, None
@@ -1149,7 +1233,7 @@ def greeting(request: Request):
     en = request.query_params.get("lang") == "en"
     part = ("Good night" if now.hour < 5 else "Good morning" if now.hour < 10 else "Hello" if now.hour < 17 else "Good evening") if en else ("God natt" if now.hour < 5 else "God morgon" if now.hour < 10 else "Hej" if now.hour < 17 else "God kväll")
     st = states()
-    w = st.get("weather.malmgatan_34") or {}
+    w = st.get(weather_entity(st) or "") or {}
     wa = w.get("attributes", {})
     hi, lo, rain = forecast_today(st)
     bits = [(COND_EN if en else COND).get(w.get("state"), (w.get("state") or "").capitalize())]
@@ -1338,7 +1422,7 @@ def _stream_sig() -> str:
     st = states()
     parts = []
     for e, s in sorted(st.items()):
-        if e.startswith(("light.", "switch.")) or (e.startswith(("sensor.", "binary_sensor.", "device_tracker.")) and any(k in e for k in ("easee", "leaf", "tesla_model_y", "smartbox", "spa", "nibe", "solaredge"))):
+        if e.startswith(("light.", "switch.")) or e.startswith("sensor.smartbox") or e in CFG_ENTITIES:
             v = s.get("state")
             try:
                 v = str(round(float(v), 1 if "soc" in e or "battery" in e or "temp" in e else 0 if abs(float(v)) > 50 else 1))      # brus under mätnoggrannheten ska inte ge ny uppdatering
