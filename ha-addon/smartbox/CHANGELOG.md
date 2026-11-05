@@ -1,5 +1,17 @@
 # Ändringar
 
+## 1.2.11 (2026-11-06)
+- **Gästbil** (#131): ladda en bil som inte är din på valfri laddbox – ange kWh och ev. klar-tid i appen (Bil → Gästbil),
+  så laddas de billigaste timmarna fram till dess, alltid under säkringen. Avslutas när kabeln dras ur.
+- **Effektavgift efter månadens högsta timmar** (#141): för Norges effektledd och nätbolag som tar betalt efter snittet
+  av de högsta timmarna i trappsteg (Elförbrukning → Effektavgift efter högsta timmar).
+- **Fler batterier kan styras**: färdiga förinställningar för GoodWe, SolarEdge med batteri, Sungrow (mkaiser),
+  Huawei LUNA2000, Tesla Powerwall och Enphase – installationsguiden fyller i dem själv. Kör i skuggläge först.
+- **Sourcefuls FTW-drivrutiner** (`driver: ftw`): 93 drivrutiner för växelriktare, batterier och mätare som läser
+  direkt från enheten utan Home Assistant-integration (t.ex. Pixii). Läsande; styrning slås på per verifierad enhet.
+- **Batteriet säljer aldrig när export är avstängd**: urladdningen begränsas till det huset köper.
+- Huawei-batterier hittas av installationsguiden (räknades förut som en telefon), och en Powerwall tas inte för en bil.
+
 ## 1.2.10 (2026-11-05)
 - **Planvyn Skyline** överst på förstasidan i appen och på webben (förvald), med planklockan som val. Dygnet som en
   stad: högt hus = dyr el, tända fönster = huset använder el, solen över staden, bilarna på vägen, batteriet i vattnet.
