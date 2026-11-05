@@ -73,7 +73,7 @@ def _request(host, port, pin, method, path, timeout, payload=None):
         while True:
             # Pumpen svarar med Connection: close - när svaret är färdigläst har http.client redan stängt socketen,
             # och settimeout() på den gav "Bad file descriptor" (#145, verifierat av Lars mot en riktig S1255)
-            if response.isclosed():
+            if getattr(response, "isclosed", lambda: False)():
                 break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
