@@ -787,6 +787,35 @@ async function renderLogg() {
   load();
 }
 
+// Effektavgift efter månadens högsta timmar (#141, Norges effektledd m.fl.)
+async function mountCapacityTariff(slotId) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  let d; try { d = await api("api/capacity-tariff"); } catch (e) { return; }
+  if (!d.ok) return;
+  const st = d.status || {}, kw = (v) => v == null ? "–" : String(Math.round(v * 10) / 10).replace(".", ",") + " kW";
+  slot.innerHTML = `<div class="card" style="margin-top:16px">
+    <h2>📊 Effektavgift efter högsta timmar</h2>
+    <div class="note">För nätbolag som tar betalt efter snittet av månadens högsta timmar i trappsteg (Norges effektledd, vissa svenska nätbolag). Då ersätter den här den fasta effektgränsen: varje timme får gå så högt som möjligt utan att snittet går upp ett steg.</div>
+    <div class="togglerow" style="margin-top:8px"><span>Använd effektavgift efter högsta timmar</span><label class="switch"><input type="checkbox" id="ctOn" ${d.enabled ? "checked" : ""}><span class="slider"></span></label></div>
+    <div class="numfield" style="margin-top:8px;flex-wrap:wrap;gap:8px">Antal timmar <input type="number" id="ctN" min="1" max="10" value="${d.top_n}" style="width:64px">
+      <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ctDist" ${d.distinct_days ? "checked" : ""}> på olika dygn</label></div>
+    <div class="numfield" style="margin-top:8px">Trappsteg (kW) <input type="text" id="ctSteps" value="${esc((d.steps || []).join(", "))}" style="flex:1;min-width:0"></div>
+    <div class="numfield" style="margin-top:8px">Sikta på steget upp till <input type="number" id="ctTarget" step="1" value="${d.target_kw ?? ""}" style="width:80px"> kW <span class="note">(tomt = det steg du redan är i)</span></div>
+    <button class="icobtn" id="ctSave" style="margin-top:10px">Spara</button>
+    <div class="note" style="margin-top:12px">Just nu: snitt ${kw(st.avg_kw)} (steg ${kw(st.step && st.step[0])}–${kw(st.step && st.step[1])}) · gräns för den här timmen <b>${kw(st.limit_kw)}</b>${st.free_below_kw ? ` · under ${kw(st.free_below_kw)} påverkar inte avgiften alls` : ""}</div>
+    <div class="note">Månadens högsta: ${(st.top_days || []).map(([dd, k]) => `${esc(dd.slice(5))} ${kw(k)}`).join(" · ") || "–"}</div>
+  </div>`;
+  document.getElementById("ctSave").onclick = async () => {
+    try {
+      await postJSON("api/capacity-tariff", { enabled: document.getElementById("ctOn").checked, top_n: +document.getElementById("ctN").value,
+        distinct_days: document.getElementById("ctDist").checked, steps: document.getElementById("ctSteps").value.split(/[;,\s]+/).filter(Boolean),
+        target_kw: document.getElementById("ctTarget").value });
+      toast("Sparat"); mountCapacityTariff(slotId);
+    } catch (e) { toast(e.message); }
+  };
+}
+
 async function renderElforbrukning() {
   const d = await loadPage("api/consumption", (d) => {
     const b = d.breakdown;
@@ -815,12 +844,14 @@ async function renderElforbrukning() {
       <h2>🛡️ Effektvakt (peak shaving)</h2>
       <div class="togglerow"><span>Effektvakt på</span><label class="switch"><input type="checkbox" id="peakenabled" ${d.peak_shaving_enabled ? "checked" : ""}><span class="slider"></span></label></div>
       <div class="numfield${d.peak_shaving_enabled ? "" : " row-disabled"}" style="margin-top:8px" id="peaklimitrow">Gräns: <input type="number" id="peaklimit" step="0.5" min="1" value="${d.power_limit_kw != null ? d.power_limit_kw : ""}"> kW <button class="icobtn" id="peaklimitbtn">Spara</button></div>
-    </div>`;
+    </div>
+    <div id="captariffslot"></div>`;
   });
   if (d) {
     document.getElementById("peakenabled").onchange = (e) => postAction("api/settings-action", { key: "peak_shaving_enabled", value: e.target.checked }).then(renderElforbrukning);
     const btn = document.getElementById("peaklimitbtn");
     if (btn) btn.onclick = () => postAction("api/settings-action", { key: "power_limit_kw", value: parseFloat(document.getElementById("peaklimit").value) }).then(renderElforbrukning);
+    mountCapacityTariff("captariffslot");
   }
 }
 

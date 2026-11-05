@@ -32,6 +32,7 @@ import battery_control   # Husbatteriet som del av hela systemet (styr / samarbe
 import ew_journal
 import battery_follow
 import guest_charge
+import capacity_tariff
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
@@ -146,7 +147,8 @@ def charger_set_phases(cid, phases):
 battery_cfg = house_config.battery_settings(house_cfg)
 _battery = {"last": None, "at": None, "plan": None, "plan_at": None, "model": None, "model_at": None}
 _battery_follow = battery_follow.FollowWatch()
-_guest_state, _guest_price = {}, {}          # gästbil per bilens laddbox (guest_charge.py)
+_guest_state, _guest_price = {}, {}
+_cap_cache = {"at": None, "peaks": [], "info": None}   # effektavgift efter högsta timmar (capacity_tariff.py)          # gästbil per bilens laddbox (guest_charge.py)
 
 
 def _battery_to_auto(reason):
@@ -1362,6 +1364,27 @@ while True:
                     current_target_limit = hog_avg
                 else:
                     current_target_limit = bas_avg
+
+            # Effektavgift efter månadens högsta timmar (#141): gränsen för timmen = så högt som möjligt utan att snittet
+            # av de N högsta timmarna går upp ett trappsteg (capacity_tariff.py). Ersätter den fasta gränsen när påslagen.
+            try:
+                _ct = _ew_settings.get("capacity_tariff") or {}
+                if _ct.get("enabled"):
+                    if _cap_cache["at"] is None or (now - _cap_cache["at"]) > timedelta(minutes=10):
+                        with logger.get_db() as _c, _c.cursor() as _cur:
+                            _cur.execute("""SELECT (h AT TIME ZONE 'Europe/Stockholm')::date, kw FROM (
+                                              SELECT date_trunc('hour', timestamp) h, avg(GREATEST(net_power, 0)) / 1000.0 kw
+                                              FROM sensor_log WHERE timestamp >= date_trunc('month', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm'
+                                                AND timestamp < date_trunc('hour', now()) GROUP BY 1) x""")
+                            _cap_cache["peaks"] = [(d, float(k or 0)) for d, k in _cur.fetchall()]
+                        _cap_cache["at"] = now
+                    _lim, _ci = capacity_tariff.limit_kw(_cap_cache["peaks"], now.date(), int(_ct.get("top_n") or 3),
+                                                         _ct.get("distinct_days", True) is not False, _ct.get("steps"), _ct.get("target_kw"))
+                    if _lim and _lim != float("inf"):
+                        current_target_limit = float(_lim)
+                    _cap_cache["info"] = _ci
+            except Exception as _cte:
+                print(f"⚠️ Effektavgiften (högsta timmar): {_cte}")
 
             power_limit_w = current_target_limit * 1000
             peak_shaving_active = 1 if house_consumption_w > power_limit_w else 0

@@ -455,6 +455,46 @@ async def control_alerts():
     return {"ok": True, "alerts": out}
 
 
+@app.get("/api/capacity-tariff")
+async def capacity_tariff_get():
+    """Effektavgift efter månadens högsta timmar (#141): inställningen och läget just nu (smartbox/capacity_tariff.py)."""
+    import capacity_tariff
+    from datetime import datetime
+    cfg = ew_settings.get("capacity_tariff") or {}
+    with ENGINE.connect() as c:
+        rows = c.execute(text("""SELECT (h AT TIME ZONE 'Europe/Stockholm')::date, kw FROM (
+                                   SELECT date_trunc('hour', timestamp) h, avg(GREATEST(net_power, 0)) / 1000.0 kw FROM sensor_log
+                                   WHERE timestamp >= date_trunc('month', now() AT TIME ZONE 'Europe/Stockholm') AT TIME ZONE 'Europe/Stockholm'
+                                     AND timestamp < date_trunc('hour', now()) GROUP BY 1) x""")).fetchall()
+    peaks = [(d, float(k or 0)) for d, k in rows]
+    today = datetime.now(zoneinfo.ZoneInfo("Europe/Stockholm")).date()
+    n, distinct = int(cfg.get("top_n") or 3), cfg.get("distinct_days", True) is not False
+    lim, info = capacity_tariff.limit_kw(peaks, today, n, distinct, cfg.get("steps"), cfg.get("target_kw"))
+    top = capacity_tariff.top_hours(peaks, n, distinct)
+    return {"ok": True, "enabled": bool(cfg.get("enabled")), "top_n": n, "distinct_days": distinct,
+            "steps": cfg.get("steps") or capacity_tariff.DEFAULT_STEPS, "target_kw": cfg.get("target_kw"),
+            "status": {**info, "top_days": [[str(d), round(k, 2)] for d, k in top]}}
+
+
+@app.post("/api/capacity-tariff")
+async def capacity_tariff_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra effektavgiften"}, status_code=403)
+    b = await request.json()
+    try:
+        steps = sorted({float(str(x).replace(",", ".")) for x in (b.get("steps") or []) if str(x).strip()})
+        n = max(1, min(10, int(b.get("top_n") or 3)))
+        target = float(str(b.get("target_kw")).replace(",", ".")) if b.get("target_kw") not in (None, "") else None
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Ogiltigt värde"}, status_code=400)
+    if steps and (steps[0] <= 0 or len(steps) > 20):
+        return JSONResponse({"error": "Trappstegen ska vara positiva kW-värden"}, status_code=400)
+    ew_settings.update(capacity_tariff={"enabled": bool(b.get("enabled")), "top_n": n, "distinct_days": b.get("distinct_days", True) is not False,
+                                        "steps": steps or None, "target_kw": target})
+    return {"ok": True, "message": "Sparat"}
+
+
 @app.get("/api/notify-prefs")
 async def notify_prefs_get():
     """Notiskategorierna och om de är på (smartbox/notify_prefs.py) - alla notiser går att stänga av."""
