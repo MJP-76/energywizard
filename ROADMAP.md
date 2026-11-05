@@ -10,6 +10,13 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 ## Att göra (önskemål från Discord och Emil, 2026-11-04)
 
+- **Kör Sourcefuls FTW-drivrutiner direkt** (srcfl/device-drivers, 93 Lua-drivrutiner för växelriktare, batterier,
+  laddboxar och mätare - AGPL-3.0 som vi, och vi har deras OK): en liten Lua-värd (lupa) som ger drivrutinerna
+  samma host-API som i FTW (Modbus TCP, HTTP, MQTT, emit av telemetri) och översätter till våra drivrutinsgränssnitt.
+  Då fungerar t.ex. Pixii, Sungrow, Deye, GoodWe, Sigenergy, Victron utan Home Assistant-integration. Börja läsande,
+  styrning per drivrutin efter test mot srcfl/device-simulator.
+- **Planklockan i FTW-klass**: dagens version (smartbox/static/planclock.js) är inte påkopplad - görs om mörk,
+  luftig och lugn innan den visas (Emils skärminspelning 2026-11-05).
 - **Tillägget använder färdigbyggda images** (`image:` i ha-addon/smartbox/config.yaml, som Sourcefuls tillägg) i
   stället för att klona och bygga hos användaren: inga gamla cachade byggen, snabbare installation. CI bygger redan
   images - behöver en arm64-variant (aarch64, Raspberry Pi) och versionstagg per release.
