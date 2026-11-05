@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.8 (2026-11-05)
+- **Logg för hela installationen**: allt EnergyWizard läser in, bestämmer (med orsak), skickar till enheterna,
+  aviserar och får för fel - från motorn, appen och webben. Webben: sidan Logg (filter, sök, ladda ner 2 dygn som
+  supportfil att bifoga i en issue). Appen: Inställningar → Logg. Sparas i ditt hus i 14 dygn, bara ägaren ser den.
+- **Bilens värme visas inte som "på" när man kör**: klimatet räknas som förvärmning bara när bilen står hemma och
+  inte är i körläge (`shift_state` om bilen har det).
+
 ## 1.2.7 (2026-11-05)
 - **Inga bilnamn, rum eller personer från ett annat hus**: laddschemat och klimatschemat byggs av dina egna bilar
   (förut fasta "nissan"/"tesla" - andra bilars scheman kunde ignoreras), rummen är dina valda innegivare,

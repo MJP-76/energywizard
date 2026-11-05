@@ -721,6 +721,43 @@ function phaseBar(name, amps, fuse) {
   return barRow(name, amps / (fuse * 1.5) * 100, fmt(amps, 1, " A"), color);
 }
 
+// ---------- Logg: allt installationen läst, beslutat, skickat och fått för fel (smartbox/ew_journal.py) ----------
+let loggF = { hours: 6, lvl: "", src: "", q: "" };
+const LVL_COL = { fel: "var(--bad, #ef4444)", varning: "var(--warn, #f59e0b)", notis: "#a78bfa", info: "var(--mut)" };
+async function renderLogg() {
+  const main = document.getElementById("main");
+  const sel = (id, opts, cur) => `<select id="${id}">${opts.map(([v, t]) => `<option value="${v}"${String(cur) === String(v) ? " selected" : ""}>${t}</option>`).join("")}</select>`;
+  main.innerHTML = `<div class="card" style="margin-bottom:16px">
+      <h2>📜 Logg</h2>
+      <div class="note">Allt EnergyWizard läser in, bestämmer (med orsak), skickar till dina enheter, aviserar och får för fel - från motorn, appen och webben. Sparas i ditt hus i två veckor och lämnar det aldrig av sig själv.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center">
+        ${sel("lgh", [[1, "Senaste timmen"], [6, "6 timmar"], [24, "Dygnet"], [72, "3 dygn"], [336, "14 dygn"]], loggF.hours)}
+        ${sel("lgl", [["", "Alla nivåer"], ["fel", "Fel"], ["varning", "Varningar"], ["notis", "Notiser"], ["info", "Info"]], loggF.lvl)}
+        ${sel("lgs", [["", "Alla delar"], ["motor", "Motorn"], ["app", "Appen"], ["webb", "Webben"]], loggF.src)}
+        <input id="lgq" type="search" placeholder="Sök (t.ex. batteri, Easee, ❌)" value="${esc(loggF.q)}" style="flex:1 1 180px;min-width:0">
+        <button class="icobtn" id="lgdl">⬇️ Ladda ner (2 dygn)</button>
+      </div></div>
+    <div class="card"><div id="lgrows" class="note">Laddar…</div></div>`;
+  const load = async () => {
+    loggF = { hours: +document.getElementById("lgh").value, lvl: document.getElementById("lgl").value, src: document.getElementById("lgs").value, q: document.getElementById("lgq").value };
+    const qs = new URLSearchParams({ hours: loggF.hours, lvl: loggF.lvl, src: loggF.src, q: loggF.q, limit: 800 });
+    let d; try { d = await api("api/journal?" + qs); } catch (e) { document.getElementById("lgrows").textContent = e.message; return; }
+    const box = document.getElementById("lgrows");
+    if (!d.rows.length) { box.innerHTML = `<div class="note">Inget i loggen för det urvalet.</div>`; return; }
+    box.classList.remove("note");
+    box.innerHTML = d.rows.map((r) => `<div style="display:flex;flex-wrap:wrap;column-gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:.85rem">
+        <span style="flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--mut)">${esc(new Date(r.ts).toLocaleString("sv-SE", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }))}</span>
+        <span style="flex:0 0 auto;color:${LVL_COL[r.lvl] || "var(--mut)"};font-weight:600">${esc(r.lvl)}</span>
+        <span style="flex:0 0 auto;color:var(--mut)">${esc(r.src)} · ${esc(r.mod)}</span>
+        <span style="flex:1 1 100%;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere">${esc(r.msg)}</span></div>`).join("")
+      + (d.rows.length >= 800 ? `<div class="note" style="margin-top:8px">Visar de 800 senaste - snäva in med sök eller nivå.</div>` : "");
+  };
+  ["lgh", "lgl", "lgs"].forEach((id) => document.getElementById(id).onchange = load);
+  let t = null; document.getElementById("lgq").oninput = () => { clearTimeout(t); t = setTimeout(load, 350); };
+  document.getElementById("lgdl").onclick = () => { location.href = "api/journal/download?days=2"; };
+  load();
+}
+
 async function renderElforbrukning() {
   const d = await loadPage("api/consumption", (d) => {
     const b = d.breakdown;
@@ -1734,6 +1771,8 @@ function openPage(id) {
     renderHistorik();
   } else if (id === "aviseringar") {
     renderAviseringar();
+  } else if (id === "logg") {
+    renderLogg();
   } else {
     document.getElementById("main").innerHTML = `<div class="placeholder">"${PAGES.find(p => p.id === id)?.name}" byggs i en senare fas.</div>`;
   }

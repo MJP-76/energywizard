@@ -469,12 +469,14 @@ function cycleTheme() {
 }
 let setSec = "effekt";
 let NP = null;                                 // notiskategorierna (smartbox/notify_prefs.py)
+let LG = null, LGL = "";                        // loggen (smartbox/ew_journal.py)
 async function settingsSheet() {
   if (!SET) { try { SET = await api("settings"); } catch (e) { return toast(e.message); } }
   if (!NP && ER() === "owner") { try { NP = (await api("notify-prefs")).categories; } catch (e) { NP = null; } }
+  if (setSec === "logg" && LG === null && ER() === "owner") { LG = undefined; api("journal?hours=6&lvl=" + LGL).then((d) => { LG = d.rows || []; settingsSheet(); }).catch(() => { LG = []; settingsSheet(); }); }
   const v = SET.values, R = SET.rules, off = (k) => k === "power_limit_kw" && !v.peak_shaving_enabled, row = (k, label, unit) => { const r = R[k]; return `<div class="setrow${off(k) ? " dim" : ""}"${off(k) ? ' title="Gäller bara när effektvakten är på"' : ""}><span>${label}${off(k) ? ' <span class="note">(effektvakt av)</span>' : ""}</span>${r[0] === "bool" ? `<button class="sw ${v[k] ? "on" : ""}" data-set="${k}" data-bool="1"></button>` : `<div class="step"><button data-set="${k}" data-d="-${r[3]}" ${off(k) ? "disabled" : ""}>−</button><span>${f1(v[k], r[3] < 1 ? 1 : 0)}${unit}</span><button data-set="${k}" data-d="${r[3]}" ${off(k) ? "disabled" : ""}>+</button></div>`}</div>`; };
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  const owner = ER() === "owner", secs = [...(owner ? [["effekt", "Effekt"], ["notiser", "Notiser"]] : []), ["appen", "Appen"], ["konto", "Konto"]];
+  const owner = ER() === "owner", secs = [...(owner ? [["effekt", "Effekt"], ["notiser", "Notiser"], ["logg", "Logg"]] : []), ["appen", "Appen"], ["konto", "Konto"]];
   if (!secs.some(([s]) => s === setSec)) setSec = secs[0][0];
   const tabs = `<div class="seg segtabs">${secs.map(([s, l]) => `<button data-s="sec:${s}" class="${setSec === s ? "on" : ""}">${l}</button>`).join("")}</div>`;
   const body = {
@@ -483,6 +485,9 @@ async function settingsSheet() {
       `<div class="note">Styr Home Assistants egen Nord Pool-integration direkt (radera+återskapa, ingen enkel "ändra ett fält"-knapp finns i HA) - priserna växlar om efter några sekunder. Kan inte visa nuvarande läge förrän du växlat minst en gång härifrån.</div>`,
     notiser: () => (NP ? NP.map((c) => `<div class="setrow"><span>${esc(c.label)}<div class="note">${esc(c.desc)}</div></span><button class="sw${c.on ? " on" : ""}" data-s="np:${esc(c.key)}" aria-label="${esc(c.label)}"></button></div>`).join("") : `<div class="note">Laddar…</div>`)
       + `<div class="note" style="margin-top:10px">Fler val inom kategorierna:</div>${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`,
+    logg: () => `<div class="seg">${[["", "Allt"], ["fel", "Fel"], ["varning", "Varningar"], ["notis", "Notiser"]].map(([v, t]) => `<button data-s="lg:${v}" class="${LGL === v ? "on" : ""}">${t}</button>`).join("")}</div>
+      <div class="note">Allt EnergyWizard läst in, bestämt, skickat och fått för fel de senaste 6 timmarna. <a href="api/journal/download?days=2">Ladda ner 2 dygn</a> (att bifoga i en issue).</div>
+      ${LG ? (LG.length ? LG.map((r) => `<div class="plrow" style="display:block;font-size:.8rem"><span class="note">${esc(new Date(r.ts).toLocaleTimeString("sv-SE"))} · ${esc(r.lvl)} · ${esc(r.src)}</span><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(r.msg)}</div></div>`).join("") : `<div class="note">Inget i loggen.</div>`) : `<div class="note">Laddar…</div>`}`,
     appen: () => `<div class="seg">${((S && S.cars) || []).map((c) => `<button data-s="car:${esc(c.key)}" class="${primary() === c.key ? "on" : ""}">Huvudbil: ${esc(c.name)}</button>`).join("")}</div><div class="seg"><button data-s="glass" class="${LS.get("ew_glass", "1") !== "0" ? "on" : ""}">Glasdesign</button><button data-s="ambient" class="${LS.get("ew_ambient", "1") !== "0" ? "on" : ""}">Dygnsfärger</button></div><div class="seg"><button data-s="simple" class="${LS.get("ew_simple", "") === "1" ? "on" : ""}">Enkel vy (bara huvudbilen)</button>${standalone ? "" : `<button data-s="install">${installEvt ? "Installera appen" : "Lägg till på hemskärmen"}</button>`}</div><div class="seg"><button data-s="reload">Ladda om appen</button></div>
       <div class="note" style="margin-top:6px">Språk / Language</div><div class="seg" data-noi18n>${Object.entries(I18N.languages).map(([k, v]) => `<button data-s="lang:${k}" class="${I18N.lang === k ? "on" : ""}">${esc(v)}</button>`).join("")}</div>
       <div class="seg"><a class="mini" href="${I18N.TRANSLATE_URL}" target="_blank" rel="noopener">Hjälp till att översätta</a><a class="mini" href="${SPONSOR_URL}" target="_blank" rel="noopener">❤️ Sponsra EnergyWizard</a></div>
@@ -496,6 +501,7 @@ async function settingsSheet() {
     if (x) { const k = x.dataset.set; let val; if (x.dataset.bool) val = !SET.values[k]; else { const r = SET.rules[k]; val = Math.round((SET.values[k] + parseFloat(x.dataset.d)) / r[3]) * r[3]; val = Math.max(r[1], Math.min(r[2], val)); } try { const r = await api("settings", { key: k, value: val }); SET.values[k] = r.value; settingsSheet(); } catch (er) { toast(er.message); } return; }
     const y = e.target.closest("[data-s]"); if (!y) return; const s = y.dataset.s;
     if (s.startsWith("sec:")) { setSec = s.slice(4); settingsSheet(); return; }
+    if (s.startsWith("lg:")) { LGL = s.slice(3); LG = null; settingsSheet(); return; }
     if (s.startsWith("np:")) { const k = s.slice(3), c = (NP || []).find((x) => x.key === k); if (!c) return; try { NP = (await api("notify-prefs", { on: { [k]: !c.on } })).categories; } catch (er) { toast(er.message); } settingsSheet(); return; }
     if (s.startsWith("lang:")) { const l = s.slice(5); if (ER() === "owner") { try { await api("setup/language", { language: l }); } catch {} } I18N.set(l); return; }
     if (s === "sponsornotice") { try { const r = await api("sponsor/notice", { enabled: !(SPONSOR && SPONSOR.enabled) }); SPONSOR = { ...(SPONSOR || {}), enabled: r.enabled }; } catch (er) { toast(er.message); } settingsSheet(); return; }

@@ -29,6 +29,7 @@ import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg
 import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
 import config_watch      # Startar om motorn när house_config.yaml ändras
 import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
+import ew_journal
 import battery_follow
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
@@ -182,6 +183,7 @@ print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepum
       f"sol={type(solar_driver).__name__}, spa={type(spa_driver).__name__}, laddare={list(physical_charger_drivers.keys())}")
 
 telemetry.send_driver_snapshot(house_cfg)  # no-op om TELEMETRY_OPT_IN inte är satt - se telemetry.py
+ew_journal.install("motor")              # installationens logg: allt som skrivs ut, i husets databas (ew_journal.py)
 telemetry.install_error_hook(house_cfg)    # "❌"-fel -> modul.funktion + feltyp (aldrig texten), se telemetry.py
 
 # Ny installation (house_config.yaml fortfarande i princip tomt) → EN envägs-notis i HA:s

@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, "/smartbox")
 import requests
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
@@ -62,7 +62,7 @@ def _load_cars():
             "soc": e.get("soc"), "tracker": e.get("tracker"), "cap_kwh": float(ev.get("battery_kwh") or 60),
             "phases": 1 if specs.get(cid, {}).get("phases") == "1" else 3, "fixed_phases": specs.get(cid, {}).get("phases") == "1",
             "arrival": e.get("arrival_time"), "dist": e.get("distance_to_arrival"), "destination": e.get("destination_tracker"),
-            "climate": e.get("climate"), "inside": e.get("inside_temp"),
+            "climate": e.get("climate"), "inside": e.get("inside_temp"), "shift": e.get("shift_state"),
             "lock": e.get("lock"), "trunk": e.get("trunk"), "frunk": e.get("frunk"),
             "facts": {k: e.get(k) for k in ("range", "outside_temp", "daily_distance") if e.get(k)},
             "tpms": [x for x in (e.get("tpms") or []) if x],
@@ -156,6 +156,11 @@ WATCH_AFTER_S = {c["soc"]: 48 * 3600 for c in CARS.values() if c["sleeps"] and c
 WATCH = [x for c in CARS.values() for x in (c["status"], c["soc"]) if x]
 
 app = FastAPI(title="EnergyWizard Mobil")
+try:
+    import ew_journal
+    ew_journal.install("app")                  # installationens logg (smartbox/ew_journal.py)
+except Exception as _je:
+    print(f"⚠️ Loggen startade inte: {_je}")
 _cache = {"t": 0.0, "states": {}}
 
 
@@ -502,7 +507,9 @@ def car_state(key: str, st: dict, ov: dict) -> dict:
             away = None
     return {"key": key, "name": c["name"], "soc": None if soc is None else round(soc), "soc_stale": soc_stale, "status": status, "plugged": plugged, "home": home, "charging": charging, "power_kw": round(power_kw, 1),
             "mode": mode, "amps": amps, "phases": phases, "eta": eta, "away": away, "online": (val(st, c["online"]) or "off") == "on", "default_phases": c["phases"],
-            "climate_on": (val(st, c["climate"]) or "off") not in ("off", "unavailable"), "inside": num(st, c["inside"]),
+            # Klimatet är igång när man kör - det är inte "förvärmning". Bara när bilen står hemma och inte är i körläge.
+            "driving": driving(st, c),
+            "climate_on": (val(st, c["climate"]) or "off") not in ("off", "unavailable") and home and not driving(st, c), "inside": num(st, c["inside"]),
             "age_h": age_h(st, c["soc"]), "facts": car_facts(key, st), "plan": plan_segments(key, soc, c["cap_kwh"]), "plan_all": plan_blocks_ui(key, soc, c["cap_kwh"]), "plan_slots": plan_slots(key), "solar": solar_info(ov),
             "access": ({"locked": val(st, c["lock"]) == "locked", "trunk": bool(c["trunk"]) and val(st, c["trunk"]) == "open",
                         "frunk": bool(c["frunk"]) and val(st, c["frunk"]) == "open", "has_trunk": bool(c["trunk"]), "has_frunk": bool(c["frunk"])}
@@ -578,6 +585,11 @@ def state(request: Request):
             health.append(("Saknas i Home Assistant: " if e not in st else "Otillgänglig: ") + e)
     return {"ok": True, "role": _role(request), "user": _session(request)[1], "ts": int(time.time()), "version": os.environ.get("APP_VERSION", "dev"), "cars": [car_state(k, st, ov) for k in CARS], "price": prices(), "health": health,
             "solar_w": first_num(st, SOLAR["pv"])}
+
+
+def driving(st: dict, c: dict) -> bool:
+    """Kör bilen? Växelläget (entities.shift_state: D/R/N) om bilen har det."""
+    return str(val(st, c.get("shift")) or "").upper() in ("D", "R", "N", "DRIVE", "REVERSE", "NEUTRAL") if c.get("shift") else False
 
 
 def car_command(car: str, kind: str, body: dict | None = None) -> dict | None:
@@ -919,6 +931,27 @@ def plan_api():
                                    [tuple(r) for r in ev_rows], nordpool.calculate_day_strategy,
                                    int(ch[0]) if ch and ch[0] else 8, mode_row[0] if mode_row else None, battery_rows=[tuple(r) for r in bat_rows])
     return {"ok": True, **brief, "solar_days": sun}
+
+
+@app.get("/api/journal")
+def journal_api(request: Request, hours: float = 6, lvl: str = "", q: str = ""):
+    """Installationens logg (smartbox/ew_journal.py) - bara ägaren."""
+    if _role(request) != "owner":
+        raise HTTPException(403, "Bara ägaren kan läsa loggen")
+    import ew_journal
+    with ENGINE.connect() as c:
+        return {"ok": True, "rows": ew_journal.read(c, since_h=max(0.1, min(hours, 336)), lvl=lvl or None, q=q.strip() or None, limit=300)}
+
+
+@app.get("/api/journal/download")
+def journal_download(request: Request, days: float = 2):
+    if _role(request) != "owner":
+        raise HTTPException(403, "Bara ägaren kan läsa loggen")
+    import ew_journal
+    with ENGINE.connect() as c:
+        body = ew_journal.export_text(c, days)
+    return Response(content=body, media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename=energywizard-logg-{dt.datetime.now(TZ).strftime('%Y%m%d-%H%M')}.txt"})
 
 
 @app.get("/api/notify-prefs")

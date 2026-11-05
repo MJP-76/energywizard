@@ -63,6 +63,7 @@ evs:
       charging: binary_sensor.tesla_model_y_charging
       charging_state: sensor.tesla_model_y_charging_state
       climate: climate.tesla_model_y_hvac_climate_system
+      shift_state: sensor.tesla_model_y_shift_state   # P/D/R/N - värmen räknas inte som förvärmning under körning
       inside_temp: sensor.tesla_model_y_temperature_inside
       tracker: device_tracker.tesla_model_y_location_tracker
       wake_button: button.tesla_model_y_wake_up  # väcks när den är inkopplad men batterivärdet är gammalt

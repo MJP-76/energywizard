@@ -123,9 +123,15 @@ PAGES = [
     {"id": "installningar", "name": "Inställningar", "icon": "⚙️", "built": True},
     {"id": "aviseringar", "name": "Aviseringar", "icon": "🔔", "built": True},
     {"id": "system", "name": "System", "icon": "🛠️", "built": True},
+    {"id": "logg", "name": "Logg", "icon": "📜", "built": True},
 ]
 
 app = FastAPI(title="EnergyWizard Webdashboard")
+try:
+    import ew_journal
+    ew_journal.install("webb")                 # installationens logg (smartbox/ew_journal.py)
+except Exception as _je:
+    print(f"⚠️ Loggen startade inte: {_je}")
 
 
 @app.on_event("startup")
@@ -402,6 +408,31 @@ async def notify_target_set(request: Request):
         return JSONResponse({"error": "Ogiltig telefon"}, status_code=400)
     ew_settings.update(notify_target=t or None)
     return {"ok": True, "message": "Sparat - aviseringarna går till " + (t or "den första telefonen i Home Assistant")}
+
+
+@app.get("/api/journal")
+async def api_journal(request: Request, hours: float = 24, lvl: str = "", q: str = "", src: str = "", limit: int = 500):
+    """Installationens logg (smartbox/ew_journal.py): allt motorn, appen och webben skrivit - nyast först. Bara ägaren."""
+    if AUTH.session(request)[0] != "owner":
+        return JSONResponse({"error": "Bara ägaren kan läsa loggen"}, status_code=403)
+    import ew_journal
+    with ENGINE.connect() as c:
+        rows = ew_journal.read(c, since_h=max(0.1, min(hours, 24 * ew_journal.KEEP_DAYS)), lvl=lvl or None, q=q.strip() or None,
+                               src=src or None, limit=limit)
+    return {"ok": True, "rows": rows, "keep_days": ew_journal.KEEP_DAYS}
+
+
+@app.get("/api/journal/download")
+async def api_journal_download(request: Request, days: float = 2):
+    """Supportfil: hela loggen de senaste dygnen som text - att bifoga i en issue (granska den först)."""
+    if AUTH.session(request)[0] != "owner":
+        return JSONResponse({"error": "Bara ägaren kan läsa loggen"}, status_code=403)
+    import ew_journal
+    from datetime import datetime
+    with ENGINE.connect() as c:
+        body = ew_journal.export_text(c, days)
+    name = f"energywizard-logg-{datetime.now().strftime('%Y%m%d-%H%M')}.txt"
+    return Response(content=body, media_type="text/plain; charset=utf-8", headers={"Content-Disposition": f"attachment; filename={name}"})
 
 
 @app.get("/api/control-alerts")
