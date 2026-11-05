@@ -540,7 +540,19 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                     battery["note"] = preset["note"]
                 if preset.get("keepalive_s"):
                     battery["generic_suggestion"]["keepalive_s"] = preset["keepalive_s"]
+        # En hybridväxelriktare utan inkopplat batteri (t.ex. Growatt/Solax med bara solceller) visar ofta
+        # batterisensorer som står på 0 % och 0 W. Det är inget batteri att föreslå (samma fel som srcfl/ftw#1669).
+        def _num(x):
+            try:
+                return float(x.get("st")) if x else None
+            except (TypeError, ValueError):
+                return None
+        if not is_known_brand and soc_e and _num(soc_e) == 0 and _num(power_e) in (0, None):
+            battery["maybe_absent"] = True
+            battery["note"] = "Laddnivå 0 % och ingen effekt - troligen inget batteri inkopplat på den här växelriktaren."
         battery_candidates.append(battery)
+    # Kandidater som troligen saknar batteri föreslås inte
+    battery_candidates = [b for b in battery_candidates if not b.get("maybe_absent")]
     # Flera träffar (t.ex. Solis/Fronius-växelriktaren OCH en BYD-integration som bara läser): välj den som går att
     # styra - batteriet laddas alltid via växelriktaren. Annars den första, som förut.
     battery = next((b for b in battery_candidates if (b.get("generic_suggestion") or {}).get("modes")),

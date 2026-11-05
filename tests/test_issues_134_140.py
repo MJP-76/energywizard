@@ -68,3 +68,17 @@ def test_tidslinjen_kopplar_laddbox_till_ratt_bil():
     labels = [ln["label"] for ln in d["lanes"]]
     assert labels == ["Tesla"]
     assert any(v for v in d["lanes"][0]["values"] if v)
+
+
+def test_vaxelriktare_utan_batteri_foreslas_inte_som_batteri():
+    """srcfl/ftw#1669: en hybridväxelriktare med bara solceller har batterisensorer på 0 % / 0 W."""
+    from discovery import discover_house
+
+    def ent(e, n, dc, u, st, d="d1"):
+        return {"e": e, "n": n, "d": d, "dn": "Growatt", "m": "Growatt", "mo": "MIN 6000TL-X", "dc": dc, "u": u, "st": st}
+    utan = [ent("sensor.growatt_battery_soc", "Battery SOC", "battery", "%", "0"),
+            ent("sensor.growatt_battery_power", "Battery Power", "power", "W", "0")]
+    assert not discover_house(utan).get("battery")
+    med = [ent("sensor.growatt_battery_soc", "Battery SOC", "battery", "%", "54"),
+           ent("sensor.growatt_battery_power", "Battery Power", "power", "W", "-800")]
+    assert discover_house(med).get("battery")
