@@ -210,7 +210,8 @@ function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
   const clock = window.EWPlanClock && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
-  return `<div class="page">${planNow()}${clock}<div class="grid2">
+  const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
+  return `<div class="page">${alerts}${planNow()}${clock}<div class="grid2">
   <section class="card tile" data-a="solarsheet"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">idag ${f1(s.today_kwh, 0)} kWh · ${s.limit_pct == null ? "gräns offline" : s.limit_pct >= 99.5 ? "ingen exportgräns" : `export ${Math.round(s.limit_pct)} %`}</div></section>
   <section class="card tile" data-a="insights"><h4>Nät</h4>${gridViz(net)}<div class="v" style="font-size:1.45rem">${net == null ? "–" : net < -50 ? `Säljer ${f1(-net / 1000)} kW` : `Köper ${f1(Math.max(0, net) / 1000)} kW`}</div><div class="note">${g.price != null ? f1(g.price, 2) : "–"} kr/kWh${g.level ? " · " + esc(g.level) : ""}</div></section>
   </div>${svLine()}${ljusRow()}</div>`;
@@ -467,8 +468,10 @@ function cycleTheme() {
   render();
 }
 let setSec = "effekt";
+let NP = null;                                 // notiskategorierna (smartbox/notify_prefs.py)
 async function settingsSheet() {
   if (!SET) { try { SET = await api("settings"); } catch (e) { return toast(e.message); } }
+  if (!NP && ER() === "owner") { try { NP = (await api("notify-prefs")).categories; } catch (e) { NP = null; } }
   const v = SET.values, R = SET.rules, off = (k) => k === "power_limit_kw" && !v.peak_shaving_enabled, row = (k, label, unit) => { const r = R[k]; return `<div class="setrow${off(k) ? " dim" : ""}"${off(k) ? ' title="Gäller bara när effektvakten är på"' : ""}><span>${label}${off(k) ? ' <span class="note">(effektvakt av)</span>' : ""}</span>${r[0] === "bool" ? `<button class="sw ${v[k] ? "on" : ""}" data-set="${k}" data-bool="1"></button>` : `<div class="step"><button data-set="${k}" data-d="-${r[3]}" ${off(k) ? "disabled" : ""}>−</button><span>${f1(v[k], r[3] < 1 ? 1 : 0)}${unit}</span><button data-set="${k}" data-d="${r[3]}" ${off(k) ? "disabled" : ""}>+</button></div>`}</div>`; };
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   const owner = ER() === "owner", secs = [...(owner ? [["effekt", "Effekt"], ["notiser", "Notiser"]] : []), ["appen", "Appen"], ["konto", "Konto"]];
@@ -478,7 +481,8 @@ async function settingsSheet() {
     effekt: () => `${row("peak_shaving_enabled", "Effektvakt (peak shaving)")}${row("power_limit_kw", "Effektgräns", " kW")}${row("fuse_size_a", "Huvudsäkring", " A")}${row("temp_cheap", "Värmare vid billig el", "°")}${row("temp_expensive", "Sänkt värme vid dyr el", "°")}${row("spa_normal_temp", "Spabad normal", "°")}` +
       `<div class="setrow"><span>Elpriser inkl. moms${v.nordpool_vat_enabled == null ? ' <span class="note">(nuvarande läge okänt)</span>' : ""}</span><button class="sw${v.nordpool_vat_enabled ? " on" : ""}" data-set="nordpool_vat_enabled" data-bool="1">${v.nordpool_vat_enabled == null ? "?" : ""}</button></div>` +
       `<div class="note">Styr Home Assistants egen Nord Pool-integration direkt (radera+återskapa, ingen enkel "ändra ett fält"-knapp finns i HA) - priserna växlar om efter några sekunder. Kan inte visa nuvarande läge förrän du växlat minst en gång härifrån.</div>`,
-    notiser: () => `${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`,
+    notiser: () => (NP ? NP.map((c) => `<div class="setrow"><span>${esc(c.label)}<div class="note">${esc(c.desc)}</div></span><button class="sw${c.on ? " on" : ""}" data-s="np:${esc(c.key)}" aria-label="${esc(c.label)}"></button></div>`).join("") : `<div class="note">Laddar…</div>`)
+      + `<div class="note" style="margin-top:10px">Fler val inom kategorierna:</div>${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`,
     appen: () => `<div class="seg">${((S && S.cars) || []).map((c) => `<button data-s="car:${esc(c.key)}" class="${primary() === c.key ? "on" : ""}">Huvudbil: ${esc(c.name)}</button>`).join("")}</div><div class="seg"><button data-s="glass" class="${LS.get("ew_glass", "1") !== "0" ? "on" : ""}">Glasdesign</button><button data-s="ambient" class="${LS.get("ew_ambient", "1") !== "0" ? "on" : ""}">Dygnsfärger</button></div><div class="seg"><button data-s="simple" class="${LS.get("ew_simple", "") === "1" ? "on" : ""}">Enkel vy (bara huvudbilen)</button>${standalone ? "" : `<button data-s="install">${installEvt ? "Installera appen" : "Lägg till på hemskärmen"}</button>`}</div><div class="seg"><button data-s="reload">Ladda om appen</button></div>
       <div class="note" style="margin-top:6px">Språk / Language</div><div class="seg" data-noi18n>${Object.entries(I18N.languages).map(([k, v]) => `<button data-s="lang:${k}" class="${I18N.lang === k ? "on" : ""}">${esc(v)}</button>`).join("")}</div>
       <div class="seg"><a class="mini" href="${I18N.TRANSLATE_URL}" target="_blank" rel="noopener">Hjälp till att översätta</a><a class="mini" href="${SPONSOR_URL}" target="_blank" rel="noopener">❤️ Sponsra EnergyWizard</a></div>
@@ -492,6 +496,7 @@ async function settingsSheet() {
     if (x) { const k = x.dataset.set; let val; if (x.dataset.bool) val = !SET.values[k]; else { const r = SET.rules[k]; val = Math.round((SET.values[k] + parseFloat(x.dataset.d)) / r[3]) * r[3]; val = Math.max(r[1], Math.min(r[2], val)); } try { const r = await api("settings", { key: k, value: val }); SET.values[k] = r.value; settingsSheet(); } catch (er) { toast(er.message); } return; }
     const y = e.target.closest("[data-s]"); if (!y) return; const s = y.dataset.s;
     if (s.startsWith("sec:")) { setSec = s.slice(4); settingsSheet(); return; }
+    if (s.startsWith("np:")) { const k = s.slice(3), c = (NP || []).find((x) => x.key === k); if (!c) return; try { NP = (await api("notify-prefs", { on: { [k]: !c.on } })).categories; } catch (er) { toast(er.message); } settingsSheet(); return; }
     if (s.startsWith("lang:")) { const l = s.slice(5); if (ER() === "owner") { try { await api("setup/language", { language: l }); } catch {} } I18N.set(l); return; }
     if (s === "sponsornotice") { try { const r = await api("sponsor/notice", { enabled: !(SPONSOR && SPONSOR.enabled) }); SPONSOR = { ...(SPONSOR || {}), enabled: r.enabled }; } catch (er) { toast(er.message); } settingsSheet(); return; }
     if (s === "glass" || s === "ambient") { LS.set("ew_" + s, LS.get("ew_" + s, "1") !== "0" ? "0" : "1"); applyLook(); }

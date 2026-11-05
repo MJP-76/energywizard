@@ -11,6 +11,7 @@ Ingen sida har riktigt innehåll än - det är Fas B och framåt.
 import asyncio
 import hashlib
 import hmac
+import json
 import math
 import os
 import sys
@@ -401,6 +402,45 @@ async def notify_target_set(request: Request):
         return JSONResponse({"error": "Ogiltig telefon"}, status_code=400)
     ew_settings.update(notify_target=t or None)
     return {"ok": True, "message": "Sparat - aviseringarna går till " + (t or "den första telefonen i Home Assistant")}
+
+
+@app.get("/api/control-alerts")
+async def control_alerts():
+    """Enheter som inte gör det EnergyWizard säger åt dem (t.ex. smartbox/battery_follow.py) - visas överst."""
+    with ENGINE.connect() as c:
+        try:
+            raw = c.execute(text("SELECT mode FROM overrides WHERE device = 'battery_follow'")).scalar()
+        except Exception:
+            raw = None
+    out = []
+    if raw and raw != "ok":
+        try:
+            d = json.loads(raw)
+            if d.get("status") == "not_following":
+                out.append({"device": "Husbatteriet", "title": "Följer inte", "text": d.get("text") or "",
+                            "hint": "Batteriet har inte sagt varför. Kolla dess app eller display."})
+        except ValueError:
+            pass
+    return {"ok": True, "alerts": out}
+
+
+@app.get("/api/notify-prefs")
+async def notify_prefs_get():
+    """Notiskategorierna och om de är på (smartbox/notify_prefs.py) - alla notiser går att stänga av."""
+    import notify_prefs
+    return {"ok": True, "categories": notify_prefs.listing()}
+
+
+@app.post("/api/notify-prefs")
+async def notify_prefs_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra notiserna"}, status_code=403)
+    import notify_prefs
+    on = (await request.json()).get("on") or {}
+    off = [k for k in notify_prefs.KEYS if on.get(k) is False or (k not in on and k in notify_prefs.disabled())]
+    notify_prefs.set_disabled(off)
+    return {"ok": True, "categories": notify_prefs.listing(), "message": "Sparat"}
 
 
 # ---- Givare (2026-11-04): innegivare, utegivare och fukt väljs av användaren - inget är hårdkodat --------------------

@@ -477,6 +477,11 @@ async function renderOversikt() {
   mountFlow("flowslot");
   mountSavings("savingsslot");
   mountPlan("planslot");
+  api("api/control-alerts").then((r) => {                // en enhet som inte gör som den blir tillsagd syns överst
+    if (!r || !r.alerts || !r.alerts.length || document.getElementById("ctrlalerts")) return;
+    main.insertAdjacentHTML("afterbegin", `<div id="ctrlalerts">${r.alerts.map((a) => `<div class="card" style="margin-bottom:16px;border:1.5px solid #ef4444">
+      <b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></div>`).join("")}</div>`);
+  }).catch(() => {});
   api("api/shadow").then((sh) => {                       // skuggläget syns alltid överst, så ingen tror att huset styrs
     if (!sh || !sh.active || document.getElementById("shadowbanner")) return;
     main.insertAdjacentHTML("afterbegin", `<div class="card" id="shadowbanner" style="margin-bottom:16px;border-color:var(--warn)">
@@ -1089,6 +1094,22 @@ async function mountPhoneSetting() {
   };
 }
 
+// Notiser: en strömbrytare per kategori (smartbox/notify_prefs.py). Sparas direkt när man slår om.
+async function mountNotifyPrefs() {
+  let d;
+  try { d = await api("api/notify-prefs"); } catch (e) { return; }
+  const card = document.getElementById("notifycard"), body = document.getElementById("notifybody");
+  if (!card || !d || !d.ok) return;
+  card.hidden = false;
+  body.innerHTML = d.categories.map((c) => `<div class="togglerow" style="align-items:flex-start;gap:12px;padding:6px 0">
+      <span style="flex:1 1 auto;min-width:0"><b>${esc(c.label)}</b><div class="note">${esc(c.desc)}</div></span>
+      <label class="switch" style="flex:none"><input type="checkbox" data-notify="${esc(c.key)}" ${c.on ? "checked" : ""}><span class="slider"></span></label></div>`).join("");
+  body.querySelectorAll("[data-notify]").forEach((cb) => cb.onchange = async () => {
+    try { await postJSON("api/notify-prefs", { on: { [cb.dataset.notify]: cb.checked } }); toast(cb.checked ? "Notisen är på" : "Notisen är avstängd"); }
+    catch (e) { cb.checked = !cb.checked; toast(e.message); }
+  });
+}
+
 // Givare: innegivare (med korrigering och fukt), utegivare. Inget förval i koden - förslagen kommer från namnen i HA.
 async function mountSensorSettings() {
   let d;
@@ -1442,6 +1463,11 @@ async function renderInstallningar() {
       <div class="note" style="margin-top:4px">Vilken telefon i Home Assistant som får EnergyWizards aviseringar.</div>
       <div id="phonebody" style="margin-top:10px"></div>
     </div>
+    <div class="card" style="margin-bottom:16px" id="notifycard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">🔔 Notiser</div>
+      <div class="note" style="margin-top:4px">Välj vilka notiser du vill få. Allt går att stänga av.</div>
+      <div id="notifybody" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="sensorcard" hidden>
       <div style="font-size:1.1rem;font-weight:700">🏠 Givare inne och ute</div>
       <div class="note" style="margin-top:4px">Välj vilka temperaturgivare som visar husets innetemperatur (medianen används när du har tre eller fler) och vilken som sitter ute. Förslagen är markerade ⭐.</div>
@@ -1495,6 +1521,7 @@ async function renderInstallningar() {
   mountPriceSettings();
   mountSensorSettings();
   mountPhoneSetting();
+  mountNotifyPrefs();
   mountShadow();
   mountMqtt();
   if (window.I18N && I18N.lang !== "sv") {

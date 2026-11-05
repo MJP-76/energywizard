@@ -85,8 +85,16 @@ def _send(target: str, title: str, message: str, data: dict = None):
         return False
 
 
-def send_emil(title: str, message: str, data: dict = None):
-    """Avisering till husets ägare (namnet är historiskt)."""
+def send_emil(title: str, message: str, data: dict = None, key: str | None = None):
+    """Avisering till husets ägare (namnet är historiskt). key = notiskategori (notify_prefs.py); utan den härleds
+    kategorin ur rubriken. Avstängda kategorier skickas inte."""
+    try:
+        import notify_prefs
+        if not notify_prefs.enabled(key, title):
+            print(f"🔕 Notis avstängd ({key or notify_prefs.category_for(title)}): {title}")
+            return False
+    except Exception:
+        pass
     t = target()
     if not t:
         return False

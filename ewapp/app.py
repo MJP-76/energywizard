@@ -921,6 +921,23 @@ def plan_api():
     return {"ok": True, **brief, "solar_days": sun}
 
 
+@app.get("/api/notify-prefs")
+def notify_prefs_get():
+    import notify_prefs
+    return {"ok": True, "categories": notify_prefs.listing()}
+
+
+@app.post("/api/notify-prefs")
+async def notify_prefs_set(request: Request):
+    if _role(request) != "owner":
+        raise HTTPException(403, "Bara ägaren kan ändra notiserna")
+    import notify_prefs
+    on = (await request.json()).get("on") or {}
+    off = [k for k in notify_prefs.KEYS if on.get(k) is False or (k not in on and k in notify_prefs.disabled())]
+    notify_prefs.set_disabled(off)
+    return {"ok": True, "categories": notify_prefs.listing()}
+
+
 @app.get("/api/planclock")
 def planclock_api():
     """Den dragbara planklockan: en rad per kvart 24 h framåt (smartbox/plan_clock.py, samma som webben)."""
@@ -1142,7 +1159,23 @@ def energy():
                       "export_price_floor": float(ov.get("solar_export_price_limit", -1.0) or -1.0), "notify": str(ov.get("notify_solar_limit", "true")).lower() == "true"},
             "grid": {"net_w": net_now(), "price": pr.get("now"), "level": pr.get("level")},
             "peaks": month_peaks(), "today_kwh": num(st, "sensor.smartbox_forbrukning_idag"), "saving_today": num(st, "sensor.smartbox_besparing_idag"), "decision": val(st, "sensor.smartbox_beslut"),
-            "solar_ev_kwh": num(st, "sensor.smartbox_elbil_solel"), "insights": safe_insights(st, ov, pr), "log": val(st, "sensor.smartbox_beslut")}
+            "solar_ev_kwh": num(st, "sensor.smartbox_elbil_solel"), "insights": safe_insights(st, ov, pr), "log": val(st, "sensor.smartbox_beslut"),
+            "alerts": control_alerts(ov)}
+
+
+def control_alerts(ov: dict) -> list:
+    """Enheter som inte gör det EnergyWizard säger åt dem (motorn skriver dem, t.ex. smartbox/battery_follow.py)."""
+    out = []
+    raw = ov.get("battery_follow")
+    if raw and raw != "ok":
+        try:
+            d = json.loads(raw)
+            if d.get("status") == "not_following":
+                out.append({"device": "Husbatteriet", "title": "Följer inte", "text": d.get("text") or "",
+                            "hint": "Batteriet har inte sagt varför. Kolla dess app eller display."})
+        except ValueError:
+            pass
+    return out
 
 
 @app.post("/api/energy/{what}")
@@ -1503,7 +1536,13 @@ def _phones() -> dict:
 _prev: dict = {"status": {}, "bad": {}}
 
 
-def push(targets: list, title: str, msg: str) -> None:
+def push(targets: list, title: str, msg: str, key: str | None = None) -> None:
+    try:
+        import notify_prefs
+        if not notify_prefs.enabled(key, title):        # kategorin avstängd under Inställningar -> Notiser
+            return
+    except Exception:
+        pass
     for t in targets:
         try:
             _svc = _phones().get(t)
@@ -1526,9 +1565,9 @@ def watch_once():
         soc = num(st, c["soc"])
         to = c.get("notify") or list(_phones())
         if prev == "charging" and cur in ("completed", "ready_to_charge"):
-            push(to, f"{c['name']} är fulladdad", f"Batteri {soc:.0f} %." if soc is not None else "Laddningen är klar.")
+            push(to, f"{c['name']} är fulladdad", f"Batteri {soc:.0f} %." if soc is not None else "Laddningen är klar.", key="elbil")
         elif prev == "charging" and cur == "disconnected":
-            push(to, f"{c['name']}: kabeln lossnade", "Laddningen avbröts – laddkabeln verkar ha kopplats ur.")
+            push(to, f"{c['name']}: kabeln lossnade", "Laddningen avbröts – laddkabeln verkar ha kopplats ur.", key="elbil")
     now = time.time()
     _wg = _windows_group()
     for e in list(_members(st, _wg)) + _up_lights():
@@ -1539,7 +1578,7 @@ def watch_once():
             first = _prev["bad"].setdefault(key, now)
             if now - first > 1800 and _prev["bad"].get(key + "_sent") is None:
                 _prev["bad"][key + "_sent"] = now
-                push(["owner"], "EnergyWizard: lampa offline", f"{(st.get(e) or {}).get('attributes', {}).get('friendly_name', e)} har varit onåbar i över 30 minuter.")
+                push(["owner"], "EnergyWizard: lampa offline", f"{(st.get(e) or {}).get('attributes', {}).get('friendly_name', e)} har varit onåbar i över 30 minuter.", key="lampor")
         else:
             _prev["bad"].pop(key, None); _prev["bad"].pop(key + "_sent", None)
     for e in WATCH:
@@ -1549,7 +1588,7 @@ def watch_once():
             # En sovande Tesla ger inget batterivärde: smartboxen räknar då med senast kända nivå (högst 48 h) och väcker bilen när det är dags. Larma först när det gått längre än så.
             if now - first > WATCH_AFTER_S.get(e, 900) and _prev["bad"].get(e + "_sent") is None:
                 _prev["bad"][e + "_sent"] = now
-                push(["owner"], "EnergyWizard: sensor saknas", f"{e} har saknat värde i över 15 minuter.")
+                push(["owner"], "EnergyWizard: sensor saknas", f"{e} har saknat värde i över 15 minuter.", key="system")
         else:
             _prev["bad"].pop(e, None); _prev["bad"].pop(e + "_sent", None)
 

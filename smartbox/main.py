@@ -29,6 +29,7 @@ import decision_summary  # Vad görs nu och varför, per enhet (ur gpm.py:s logg
 import solar_write_guard # Hur ofta exportgränsen får skrivas (flashminnet i växelriktaren)
 import config_watch      # Startar om motorn när house_config.yaml ändras
 import battery_control   # Husbatteriet som del av hela systemet (styr / samarbete / av)
+import battery_follow
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
@@ -142,6 +143,7 @@ def charger_set_phases(cid, phases):
     return drv.set_phases(phases) if drv else homeassistant.set_easee_phases(cid, phases)
 battery_cfg = house_config.battery_settings(house_cfg)
 _battery = {"last": None, "at": None, "plan": None, "plan_at": None, "model": None, "model_at": None}
+_battery_follow = battery_follow.FollowWatch()
 
 
 def _battery_to_auto(reason):
@@ -1664,6 +1666,20 @@ while True:
                         if battery_driver.apply_intent(_bdec["intent"], _bdec.get("power_w")):
                             _battery.update(last=_bdec, at=now)
                             print(f"🔋 Batteri: {_bdec['intent']} - {_bdec['reason']}")
+                    # Följer batteriet det vi säger åt det? (battery_follow.py) - visas i appen/webben, notis vid avvikelse
+                    if battery_cfg["control"] == "styr" and _battery.get("last"):
+                        _bl = _battery["last"]
+                        _st, _txt, _new = _battery_follow.step(_bl.get("intent"), _bl.get("power_w"), battery_state.get("power_w"),
+                                                              battery_state.get("soc_pct"), battery_cfg.get("reserve_soc"), time.time())
+                        _stored = json.dumps({"status": _st, "text": _txt}, ensure_ascii=False) if _st in ("not_following",) else "ok"
+                        if _stored != _battery.get("follow_stored"):
+                            logger.set_override("battery_follow", _stored)
+                            _battery["follow_stored"] = _stored
+                        if _new:
+                            print(f"🔋⚠️ Batteriet följer inte: {_txt}")
+                            notifier.send_emil("🔋 Husbatteriet gör inte som det blir tillsagt",
+                                               f"{_txt} Batteriet har inte sagt varför - kolla dess app eller display. "
+                                               f"EnergyWizard fortsätter försöka.", key="batteri")
             except Exception as _be:
                 print(f"⚠️ Batteribeslutet hoppade över: {_be}")
             ai_thoughts_list = gpm_actions["log"].copy()

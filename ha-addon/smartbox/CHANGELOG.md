@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.6 (2026-11-05)
+- **Varning när husbatteriet inte gör som det blir tillsagt**: avviker batteriet från kommandot i mer än 5 minuter
+  (t.ex. laddar fast det ska ladda ur) syns en röd ruta i appen och på webben, och en notis skickas.
+- **Alla notiser går att stänga av** per kategori (elbil, batteri, sol, värmepump, spabad, elpris, effekt, lampor,
+  system, övrigt) under Inställningar → Notiser, på webben och i appen.
+- **Egen färg när batteriet laddar ur och säljer** till nätet, skilt från urladdning för eget bruk.
+- Upptäckten föreslår inte batteri för en växelriktare som saknar batteri (0 % och 0 W).
+
 ## 1.2.5 (2026-11-05)
 - **Inga främmande lampnotiser** (#134): appen bevakade och styrde lampor som inte hör till ditt hus. Nu bara lampor du
   själv valt; utan val syns inga lampknappar. "Exportgräns offline" larmar bara om växelriktaren går att begränsa.
