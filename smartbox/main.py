@@ -1217,7 +1217,9 @@ while True:
                     notifier.alert_indoor_temp_sensor_offline()
                     ha_temp_alert_sent = True
 
-            water_temp   = pump_data.get("water_temp_top")    if pump_data else None
+            # Thermia ger water_temp_top, övriga drivrutiner (NIBE, HeishaMon, generisk) water_temp (#145)
+            water_temp   = (pump_data.get("water_temp_top") if pump_data.get("water_temp_top") is not None
+                            else pump_data.get("water_temp")) if pump_data else None
             forward_temp = pump_data.get("forward_temp")      if pump_data else None
             return_temp  = pump_data.get("return_temp")       if pump_data else None
             calc_forward = pump_data.get("calc_forward_temp") if pump_data else None

@@ -71,6 +71,10 @@ def _request(host, port, pin, method, path, timeout, payload=None):
             raise LocalRestError("request rejected")
         chunks, size = [], 0
         while True:
+            # Pumpen svarar med Connection: close - när svaret är färdigläst har http.client redan stängt socketen,
+            # och settimeout() på den gav "Bad file descriptor" (#145, verifierat av Lars mot en riktig S1255)
+            if response.isclosed():
+                break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise LocalRestError("request deadline exceeded")
@@ -144,9 +148,13 @@ class NibeLocalHeatPumpDriver(HeatPumpDriver):
             raise LocalRestError("missing connection, credentials or valid SHA-256 pin")
         try:
             return _request(self._host, self._port, pin, method, path, self._timeout, payload)
-        except Exception:
-            # Never expose credentials, device response bodies or auth headers in logs.
-            raise LocalRestError("local request could not be confirmed") from None
+        except Exception as e:
+            # Aldrig uppgifter, svarstext eller auth-huvuden i loggen - men felets typ, så att orsaken syns (#145)
+            kind = type(e).__name__ if not isinstance(e, LocalRestError) else str(e)
+            if getattr(self, "_last_err", None) != kind:
+                self._last_err = kind
+                print(f"⚠️ NIBE lokalt REST: {method} {path.split('?')[0]} misslyckades ({kind})", flush=True)
+            raise LocalRestError(f"local request could not be confirmed ({kind})") from None
 
     def _read_points(self):
         if self._device is None:
@@ -158,10 +166,13 @@ class NibeLocalHeatPumpDriver(HeatPumpDriver):
             product = matches[0].get("product", {})
             if not isinstance(product, dict):
                 raise LocalRestError("invalid device identity")
-            if ((self._expected_product and product.get("name") != self._expected_product)
-                    or (self._expected_serial and product.get("serialNumber") != self._expected_serial)):
+            # En riktig S1255 svarar med tomt product.name (#145): jämför bara det pumpen faktiskt anger, och välj då
+            # register efter den förväntade modellen i installationen
+            name = str(product.get("name") or "")
+            if ((self._expected_product and name and name != self._expected_product)
+                    or (self._expected_serial and product.get("serialNumber") and product.get("serialNumber") != self._expected_serial)):
                 raise LocalRestError("device identity mismatch")
-            self._product, self._device = str(product.get("name", "")), str(self._index)
+            self._product, self._device = name or str(self._expected_product or ""), str(self._index)
         points = self._call("GET", f"/api/v1/devices/{self._device}/points")
         if not isinstance(points, dict):
             raise LocalRestError("invalid point response")
