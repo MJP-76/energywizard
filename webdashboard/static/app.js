@@ -383,18 +383,23 @@ function timelineChart(elId, d) {
   const laneData = [];
   lanes.forEach((ln, li) => ln.values.forEach((v, i) => { if (v != null && v > 0.02) laneData.push([i, li, v, d.future[i] ? 1 : 0]); }));
   const futArea = nowIdx >= 0 ? [[{ xAxis: labels[nowIdx], itemStyle: { color: "rgba(148,163,184,.08)" } }, { xAxis: labels[n - 1] }]] : [];
+  // Mobil: smalare etikettkolumn, färre klockslag och axelnamnen i förklaringen (förut överlappade allt)
+  const narrow = el.clientWidth < 560, L = narrow ? 70 : 120, R = narrow ? 30 : 52;
+  const short = (t) => (narrow && t.length > 9 ? t.split(" ")[0].slice(0, 9) : t);
+  const step = Math.max(1, Math.ceil(n / Math.max(4, Math.floor((el.clientWidth - L - R) / 34))));
   chart.setOption({
     axisPointer: { link: [{ xAxisIndex: "all" }] },
-    grid: [{ left: 120, right: 52, top: 28, height: "36%" }, { left: 120, right: 52, top: "52%", bottom: 34 }],
-    legend: { data: ["Elpris", "Sol"], top: 0, left: 120, textStyle: { color: mut } },
+    grid: [{ left: L, right: R, top: 30, height: "36%" }, { left: L, right: R, top: "52%", bottom: 34 }],
+    legend: { data: ["Elpris", "Sol"], top: 0, left: narrow ? "center" : L, itemWidth: 14, itemHeight: 8, textStyle: { color: mut, fontSize: narrow ? 11 : 12 },
+              formatter: (nm) => (nm === "Elpris" ? "Elpris kr/kWh" : "Sol kW") },
     xAxis: [
       { type: "category", data: labels, gridIndex: 0, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { lineStyle: { color: mut } } },
-      { type: "category", data: labels, gridIndex: 1, axisLabel: { color: mut, interval: 2 }, axisLine: { lineStyle: { color: mut } } },
+      { type: "category", data: labels, gridIndex: 1, axisLabel: { color: mut, interval: step - 1, fontSize: narrow ? 10 : 12 }, axisTick: { interval: step - 1 }, axisLine: { lineStyle: { color: mut } } },
     ],
     yAxis: [
-      { type: "value", gridIndex: 0, name: "kr/kWh", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
-      { type: "value", gridIndex: 0, name: "kW sol", nameTextStyle: { color: mut }, axisLabel: { color: mut }, splitLine: { show: false } },
-      { type: "category", gridIndex: 1, data: lanes.map((l) => l.label), inverse: true, axisLabel: { color: css.getPropertyValue("--txt").trim() || "#fff", fontWeight: 600 }, axisLine: { show: false }, axisTick: { show: false } },
+      { type: "value", gridIndex: 0, axisLabel: { color: mut, fontSize: narrow ? 10 : 12 }, splitLine: { lineStyle: { color: "rgba(148,163,184,.12)" } } },
+      { type: "value", gridIndex: 0, axisLabel: { color: mut, fontSize: narrow ? 10 : 12 }, splitLine: { show: false } },
+      { type: "category", gridIndex: 1, data: lanes.map((l) => short(l.label)), inverse: true, axisLabel: { color: css.getPropertyValue("--txt").trim() || "#fff", fontWeight: 600, fontSize: narrow ? 11 : 12 }, axisLine: { show: false }, axisTick: { show: false } },
     ],
     tooltip: {
       trigger: "axis",
@@ -415,7 +420,8 @@ function timelineChart(elId, d) {
           const i = api.value(0), li = api.value(1), v = api.value(2), fut = api.value(3);
           const p0 = api.coord([i, li]), bw = api.size([1, 0])[0], bh = api.size([0, 1])[1] * 0.62;
           const color = lanes[li].color;
-          return { type: "rect", shape: { x: p0[0] - bw / 2 + 1, y: p0[1] - bh / 2, width: bw - 2, height: bh, r: 4 },
+          const gap = bw > 8 ? 1 : 0.25;
+          return { type: "rect", shape: { x: p0[0] - bw / 2 + gap, y: p0[1] - bh / 2, width: Math.max(1, bw - 2 * gap), height: bh, r: bw > 8 ? 4 : 1 },
                    style: { fill: color, opacity: (fut ? 0.12 : 0.2) + v * (fut ? 0.45 : 0.8), stroke: fut ? color : null, lineDash: fut ? [3, 3] : null, lineWidth: fut ? 1 : 0 } };
         } },
     ],
@@ -473,7 +479,7 @@ async function renderOversikt() {
       <div class="card"><div class="note">🔋 Värmebatteri</div><div style="margin-top:8px">${heatBatteryHtml(d.heat_battery, true)}</div></div>
     </div>
     <div id="timelineslot"></div>
-    <div class="note" style="margin-top:10px">Senast mätt: ${d.sthlm_time}</div>`;
+    <div class="note" style="margin-top:10px">Senast mätt: ${esc(String(d.sthlm_time || "").slice(0, 16))}</div>`;
   mountFlow("flowslot");
   mountSavings("savingsslot");
   mountPlan("planslot");
