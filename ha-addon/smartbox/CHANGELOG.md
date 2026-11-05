@@ -1,5 +1,15 @@
 # Ändringar
 
+## 1.2.9 (2026-11-05)
+- **Laddschemat för hela veckan på webben** (#142): Elbil-fliken har en rad per veckodag (som appen), en knapp för
+  samma schema alla dagar, och visar vilket mål planen räknar med just nu ("fredag 07:00 · 100 %"). Översikten
+  skriver veckodagen.
+- **Planklockan på förstasidan** i appen och på webben: en kvart per streck, färg när batteri eller bil gör något,
+  solprognosen som krans, dra visaren för att se pris och plan vid valfri tid, och de närmaste 12 timmarna under.
+- **Graferna i appens Historik** har tunna linjer och en skala (förut breda band utan värden).
+- **Sourcefuls FTW-drivrutiner kan köras** (lua_host.py): alla 54 host-funktioner finns, 91 av 93 drivrutiner startar
+  (de två sista kräver inloggning/nyckel). Verifierad mot en riktig Shelly 3EM. Inte inkopplad i motorn än.
+
 ## 1.2.8 (2026-11-05)
 - **Logg för hela installationen**: allt EnergyWizard läser in, bestämmer (med orsak), skickar till enheterna,
   aviserar och får för fel - från motorn, appen och webben. Webben: sidan Logg (filter, sök, ladda ner 2 dygn som

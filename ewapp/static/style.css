@@ -230,3 +230,4 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .page.t2 .plrow .note, .page.t2 .latest { display:none; } .page.t2 .svline h4 { display:none; }
 .page.t3 .ljquick .mini:nth-child(3) { display:none; } .page.t3 .ljquick { grid-template-columns:repeat(3, minmax(0, 1fr)); } .page.t3 .plrow:nth-of-type(n+5) { display:none; }
 .page.t4 .plannow .pnrow:nth-child(2) { display:none; } .page.t4 .plrow:nth-of-type(n+4) { display:none; }
+.pccard .ewpc{max-width:min(270px,64vw)} .pccard .ewpc-strip{margin-top:8px} .pccard .ewpc-legend{margin-top:6px}   /* planklockan på Hem: plats kvar för sol- och nätrutorna */

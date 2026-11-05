@@ -14,14 +14,14 @@
   const COL = { discharge: "#f59e0b", export: "#d946ef", charge: "#2dd4bf", hold: "#64748b", idle: "#475569", car: ["#a78bfa", "#f472b6", "#60a5fa", "#34d399"],
                 cheap: "#3fb68b", mid: "#7c8aa0", dear: "#e0675e", sun: "#facc15" };
   const T = {
-    sv: { now: "Nu", today: "Idag", tomorrow: "Imorgon", discharge: "Batteriet laddar ur", export: "Batteriet laddar ur och säljer", charge: "Batteriet laddar", hold: "Batteriet sparas",
-          idle: "Batteriet vilar", auto: "Batteriet: självförbrukning", charges: "laddar", sun: "Sol", nothing: "Inget planerat",
-          heat: { CHEAP: "Värmepumpen värmer på (billigt)", EXPENSIVE: "Värmepumpen sänkt (dyrt)" }, drag: "Dra visaren för att se planen",
-          legend: ["Laddar ur", "Laddar", "Bil", "Solprognos"], cheap: "Billigt", dear: "Dyrt" },
-    en: { now: "Now", today: "Today", tomorrow: "Tomorrow", discharge: "Battery discharges", export: "Battery discharges and sells", charge: "Battery charges", hold: "Battery holds",
-          idle: "Battery idle", auto: "Battery: self-consumption", charges: "charges", sun: "Sun", nothing: "Nothing planned",
-          heat: { CHEAP: "Heat pump pre-heats (cheap)", EXPENSIVE: "Heat pump lowered (expensive)" }, drag: "Drag the hand to explore the plan",
-          legend: ["Discharging", "Charging", "Car", "Sun forecast"], cheap: "Cheap", dear: "Expensive" },
+    sv: { next12: "Nästa 12 h · totalpris", now: "Nu", today: "Idag", tomorrow: "Imorgon", until: "till", discharge: "Laddar ur", export: "Laddar ur · säljer", charge: "Laddar", hold: "Sparas",
+          idle: "Vilar", auto: "Självförbrukning", charges: "laddar", sun: "Sol", nothing: "Inget planerat",
+          heat: { CHEAP: "Värmer på huset", EXPENSIVE: "Värmen sänkt" }, drag: "Dra visaren för att se planen",
+          legend: ["Laddar ur", "Laddar", "Bil", "Solprognos"], legExport: "Laddar ur · säljer", cheap: "Billigt", dear: "Dyrt" },
+    en: { next12: "Next 12 h · total price", now: "Now", today: "Today", tomorrow: "Tomorrow", until: "until", discharge: "Discharging", export: "Discharging · selling", charge: "Charging", hold: "Holding",
+          idle: "Idle", auto: "Self-consumption", charges: "charges", sun: "Sun", nothing: "Nothing planned",
+          heat: { CHEAP: "Pre-heating", EXPENSIVE: "Heat lowered" }, drag: "Drag the hand to explore the plan",
+          legend: ["Discharging", "Charging", "Car", "Sun forecast"], legExport: "Discharging · selling", cheap: "Cheap", dear: "Expensive" },
   };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   let styled = false;
@@ -30,22 +30,25 @@
     styled = true;
     const css = document.createElement("style");
     css.textContent = `
-.ewpc{position:relative;max-width:420px;margin:0 auto;user-select:none;-webkit-user-select:none;touch-action:none;container-type:inline-size}
+.ewpc{position:relative;max-width:400px;margin:0 auto;user-select:none;-webkit-user-select:none;touch-action:none;container-type:inline-size}
 .ewpc svg{width:100%;height:auto;display:block;overflow:visible}
-.ewpc .ewpc-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:0 30%}
-.ewpc .ewpc-day{font-size:clamp(.55rem,2.6cqw,.7rem);letter-spacing:.12em;text-transform:uppercase;opacity:.6;min-height:1em}
-.ewpc .ewpc-time{font-size:clamp(1.5rem,10cqw,2.8rem);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
-.ewpc .ewpc-price{font-size:clamp(.62rem,3cqw,.8rem);opacity:.75;font-variant-numeric:tabular-nums}
-.ewpc .ewpc-act{font-size:clamp(.56rem,2.7cqw,.72rem);margin-top:4px;line-height:1.35;font-weight:600}
-.ewpc .ewpc-now{position:absolute;right:4%;top:2%;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;padding:4px 12px;font:inherit;font-size:.75rem;opacity:.8;cursor:pointer}
+.ewpc .ewpc-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:0 29%}
+.ewpc .ewpc-day{font-size:clamp(.55rem,2.4cqw,.66rem);letter-spacing:.22em;text-transform:uppercase;opacity:.5;min-height:1.1em}
+.ewpc .ewpc-time{font-size:clamp(1.9rem,13cqw,3.3rem);font-weight:300;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.02;margin:2px 0}
+.ewpc .ewpc-price{font-size:clamp(.58rem,2.6cqw,.72rem);letter-spacing:.12em;text-transform:uppercase;opacity:.65;font-variant-numeric:tabular-nums}
+.ewpc .ewpc-act{font-size:clamp(.54rem,2.4cqw,.66rem);letter-spacing:.1em;text-transform:uppercase;margin-top:6px;line-height:1.5;font-weight:600}
+.ewpc .ewpc-now{position:absolute;right:0;top:0;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;padding:3px 11px;font:inherit;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;opacity:.7;cursor:pointer}
 .ewpc .ewpc-now[hidden]{display:none}
-.ewpc-legend{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;font-size:.72rem;opacity:.75;margin-top:6px}
-.ewpc-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
-.ewpc-hint{text-align:center;font-size:.7rem;opacity:.5;margin-top:2px}
-.ewpc .ewpc-pulse{transform-box:fill-box;transform-origin:center;animation:ewpcPulse 1.8s ease-out infinite}
-@keyframes ewpcPulse{0%{opacity:.75;transform:scale(1)}100%{opacity:0;transform:scale(3.2)}}
+.ewpc .ewpc-pulse{transform-box:fill-box;transform-origin:center;animation:ewpcPulse 2s ease-out infinite}
+@keyframes ewpcPulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(3.4)}}
 @media (prefers-reduced-motion:reduce){.ewpc .ewpc-pulse{animation:none;opacity:0}}
-.ewpc .ewpc-hand{cursor:grab}.ewpc.drag .ewpc-hand{cursor:grabbing}`;
+.ewpc .ewpc-hand{cursor:grab}.ewpc.drag .ewpc-hand{cursor:grabbing}
+.ewpc-strip{max-width:520px;margin:14px auto 0;font-variant-numeric:tabular-nums}
+.ewpc-strip .h{display:flex;justify-content:space-between;font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;opacity:.6;margin-bottom:6px}
+.ewpc-strip .h b{opacity:1;font-weight:700;letter-spacing:.06em}
+.ewpc-strip svg{width:100%;height:auto;display:block;cursor:pointer;touch-action:pan-y}
+.ewpc-legend{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:center;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;opacity:.65;margin-top:10px}
+.ewpc-legend i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:6px;vertical-align:2px}`;
     document.head.appendChild(css);
   }
 
@@ -58,7 +61,7 @@
     const cars = (data.cars || []).map((c, k) => ({ id: c.id, name: c.name || c.id, col: COL.car[k % COL.car.length] }));
     const carCol = (id) => (cars.find((c) => c.id === id) || { col: COL.car[0] }).col;
     const carName = (id) => (cars.find((c) => c.id === id) || { name: id }).name;
-    const C = 200, R0 = 112, R1 = 168;                 // stapelns inner- och maxradie
+    const C = 200, R0 = 132, R1 = 158;                 // kvartsstreckens inner- och maxradie
     const prices = slots.map((s) => s.price).filter((v) => v != null);
     const lo = Math.min(...prices), hi = Math.max(...prices), span = Math.max(hi - lo, 1e-6);
     const sunMax = Math.max(1, ...slots.map((s) => s.sun_w || 0));
@@ -67,62 +70,82 @@
     const pt = (a, r) => [C + r * Math.cos(a), C + r * Math.sin(a)];
     const f1 = (n) => n.toFixed(1);
     const level = (p) => (p - lo) / span;
-    const priceCol = (p) => (p == null ? COL.idle : level(p) < 0.33 ? COL.cheap : level(p) < 0.66 ? COL.mid : COL.dear);
+    const act = (s) => (s.bat === "discharge" || s.bat === "export" || s.bat === "charge") ? s.bat
+      : (Object.keys(s.ev || {}).find((k) => (s.ev[k] || 0) > 0.05) ? "car" : null);
     const slotCol = (s) => {
-      if (s.bat === "discharge") return COL.discharge;
-      if (s.bat === "export") return COL.export;
-      if (s.bat === "charge") return COL.charge;
-      const car = Object.keys(s.ev || {}).find((k) => (s.ev[k] || 0) > 0.05);
-      if (car) return carCol(car);
-      return priceCol(s.price);
+      const a = act(s);
+      if (a === "car") return carCol(Object.keys(s.ev).find((k) => (s.ev[k] || 0) > 0.05));
+      return a ? COL[a] : "currentColor";
     };
-    let svg = `<svg viewBox="0 0 400 400" role="slider" tabindex="0" aria-label="${esc(L.drag)}" aria-valuemin="0" aria-valuemax="${slots.length - 1}">`;
-    // Solkransen: en mjuk yta utanför staplarna, tjockare där prognosen är högre
-    let sunPath = "";
-    const sunPts = [];
-    slots.forEach((s) => {
-      const w = s.sun_w || 0;
-      if (w > sunMax * 0.04) sunPts.push([angOf(new Date(s.t)), 6 + 16 * (w / sunMax)]);
-      else if (sunPts.length && sunPts[sunPts.length - 1] !== null) sunPts.push(null);
-    });
+    let svg = `<svg viewBox="0 0 400 400" role="slider" tabindex="0" aria-label="${esc(L.drag)}" aria-valuemin="0" aria-valuemax="${slots.length - 1}">
+      <defs><radialGradient id="ewpcSun" cx="50%" cy="50%" r="50%"><stop offset="78%" stop-color="${COL.sun}" stop-opacity="0"/><stop offset="100%" stop-color="${COL.sun}" stop-opacity=".55"/></radialGradient></defs>`;
+    // Solprognosen: en mjuk krans utanför strecken, bredare där solen ger mer
     const runs = [];
     let cur = [];
-    sunPts.forEach((p) => { if (p === null) { if (cur.length) runs.push(cur); cur = []; } else cur.push(p); });
+    slots.forEach((s) => {
+      const w = s.sun_w || 0;
+      if (w > sunMax * 0.04) cur.push([angOf(new Date(s.t)), 3 + 15 * (w / sunMax)]);
+      else if (cur.length) { runs.push(cur); cur = []; }
+    });
     if (cur.length) runs.push(cur);
     runs.forEach((run) => {
       if (run.length < 2) return;
-      const outer = run.map(([a, h]) => pt(a, R1 + 6 + h)), inner = run.slice().reverse().map(([a]) => pt(a, R1 + 4));
-      sunPath += `<path d="M${outer.map((p) => p.map(f1).join(" ")).join(" L")} L${inner.map((p) => p.map(f1).join(" ")).join(" L")} Z" fill="${COL.sun}" opacity=".28"/>`;
-      sunPath += `<path d="M${outer.map((p) => p.map(f1).join(" ")).join(" L")}" fill="none" stroke="${COL.sun}" stroke-width="1.4" stroke-dasharray="2 3" opacity=".8"/>`;
+      const outer = run.map(([a, h]) => pt(a, R1 + 8 + h)), inner = run.slice().reverse().map(([a]) => pt(a, R1 + 7));
+      svg += `<path d="M${outer.map((p) => p.map(f1).join(" ")).join(" L")} L${inner.map((p) => p.map(f1).join(" ")).join(" L")} Z" fill="${COL.sun}" opacity=".16"/>`;
+      svg += `<path d="M${outer.map((p) => p.map(f1).join(" ")).join(" L")}" fill="none" stroke="${COL.sun}" stroke-width="1" stroke-dasharray="1.5 3" opacity=".85"/>`;
     });
-    svg += sunPath;
-    svg += `<circle cx="${C}" cy="${C}" r="${R0 - 24}" fill="none" stroke="currentColor" stroke-opacity=".08"/>`;
-    // Kvartsstaplarna
+    svg += `<circle cx="${C}" cy="${C}" r="104" fill="none" stroke="currentColor" stroke-opacity=".07"/>`;
+    // Ett tunt streck per kvart: längden efter priset, färg när något händer (batteri, bil), annars dämpat
     slots.forEach((s, i) => {
-      const a = angOf(new Date(s.t)), len = s.price == null ? 6 : 10 + (R1 - R0 - 10) * level(s.price);
-      const [x1, y1] = pt(a, R0), [x2, y2] = pt(a, R0 + len);
-      const strong = s.bat === "charge" || s.bat === "discharge" || s.bat === "export" || Object.values(s.ev || {}).some((v) => v > 0.05);
-      svg += `<line data-i="${i}" x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${slotCol(s)}" stroke-width="${strong ? 4.2 : 3.2}" stroke-linecap="round" opacity="${strong ? 1 : 0.55}"/>`;
+      const a = angOf(new Date(s.t)), len = s.price == null ? 4 : 5 + (R1 - R0 - 5) * level(s.price);
+      const [x1, y1] = pt(a, R0), [x2, y2] = pt(a, R0 + len), on = !!act(s);
+      svg += `<line data-i="${i}" x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${slotCol(s)}" stroke-width="${on ? 2.6 : 2}" stroke-linecap="round" opacity="${on ? 1 : 0.28}"/>`;
     });
-    // Timsiffror
+    // Timmarna: siffror var sjätte timme, prickar däremellan
     for (let h = 0; h < 24; h++) {
-      const a = (h / 24) * 2 * Math.PI - Math.PI / 2, [x, y] = pt(a, R0 - 13), big = h % 6 === 0;
-      svg += `<text x="${f1(x)}" y="${f1(y + 3.5)}" text-anchor="middle" font-size="${big ? 11 : 9}" font-weight="${big ? 700 : 400}" fill="currentColor" opacity="${big ? 0.7 : 0.4}">${String(h).padStart(2, "0")}</text>`;
+      const a = (h / 24) * 2 * Math.PI - Math.PI / 2;
+      if (h % 6 === 0) { const [x, y] = pt(a, R0 - 16); svg += `<text x="${f1(x)}" y="${f1(y + 3.4)}" text-anchor="middle" font-size="10" letter-spacing="1.5" fill="currentColor" opacity=".55">${String(h).padStart(2, "0")}</text>`; }
+      else { const [x, y] = pt(a, R0 - 14); svg += `<circle cx="${f1(x)}" cy="${f1(y)}" r="1" fill="currentColor" opacity=".3"/>`; }
     }
-    // "Nu"-markering (pulserar) och den dragbara visaren
-    const aNow = angOf(t0), [nx, ny] = pt(aNow, R1 + 2);
-    svg += `<circle cx="${f1(nx)}" cy="${f1(ny)}" r="4" fill="currentColor" class="ewpc-pulse"/><circle cx="${f1(nx)}" cy="${f1(ny)}" r="3" fill="currentColor"/>`;
-    svg += `<g class="ewpc-hand"><line class="ewpc-hl" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle class="ewpc-hk" r="9" fill="currentColor" fill-opacity=".15" stroke="currentColor" stroke-width="2"/></g>`;
+    // "Nu" pulserar på kransen; visaren är tunn och går att dra
+    const aNow = angOf(t0), [nx, ny] = pt(aNow, R1 + 4);
+    svg += `<circle cx="${f1(nx)}" cy="${f1(ny)}" r="3.5" fill="currentColor" class="ewpc-pulse"/><circle cx="${f1(nx)}" cy="${f1(ny)}" r="2.5" fill="currentColor"/>`;
+    svg += `<g class="ewpc-hand"><line class="ewpc-hl" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle class="ewpc-hk" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle class="ewpc-hd" r="1.8" fill="currentColor"/></g>`;
     svg += `</svg>`;
-    const legend = [[COL.cheap, L.cheap], [COL.dear, L.dear]].concat([[COL.discharge, L.legend[0]], [COL.charge, L.legend[1]]].filter(() => data.has_battery))
-      .concat(slots.some((s) => s.bat === "export") ? [[COL.export, L.export]] : [])
-      .concat(cars.map((c) => [c.col, c.name])).concat(slots.some((s) => s.sun_w) ? [[COL.sun, L.legend[3]]] : []);
+    // Nästa 12 timmar: åtgärderna som tunna band, priset som staplar (tryck för att flytta visaren dit)
+    const N = Math.min(48, slots.length), W = 480, BH = 46;
+    const sh = slots.slice(0, N), bw = W / N;
+    let strip = `<svg viewBox="0 0 ${W} ${BH + 30}" class="ewpc-sv">`;
+    let k = 0;
+    while (k < N) {                                         // band: sammanhängande pass med samma åtgärd
+      const a = act(sh[k]);
+      let j = k;
+      while (j + 1 < N && act(sh[j + 1]) === a && (a !== "car" || slotCol(sh[j + 1]) === slotCol(sh[k]))) j++;
+      if (a) strip += `<rect x="${f1(k * bw + 1)}" y="2" width="${f1((j - k + 1) * bw - 2)}" height="4" rx="2" fill="${slotCol(sh[k])}"/>`;
+      k = j + 1;
+    }
+    sh.forEach((s, i) => {
+      const h = s.price == null ? 2 : 4 + (BH - 8) * level(s.price), on = !!act(s);
+      strip += `<rect data-i="${i}" x="${f1(i * bw + 0.8)}" y="${f1(12 + BH - h)}" width="${f1(bw - 1.6)}" height="${f1(h)}" rx="1" fill="${on ? slotCol(s) : "currentColor"}" opacity="${on ? 0.9 : i === 0 ? 0.55 : 0.22}"/>`;
+    });
+    for (let i = 0; i < N; i += 12) {
+      const d = new Date(sh[i].t);
+      strip += `<text x="${f1(i * bw + 1)}" y="${BH + 26}" font-size="10" letter-spacing="1" fill="currentColor" opacity=".5">${i === 0 ? esc(L.now.toUpperCase()) : String(d.getHours()).padStart(2, "0")}</text>`;
+    }
+    strip += `<rect class="ewpc-sel" y="10" width="${f1(bw)}" height="${BH + 4}" fill="none" stroke="currentColor" stroke-width="1" rx="2"/></svg>`;
+    const legend = [].concat(data.has_battery ? [[COL.charge, L.legend[1]], [COL.discharge, L.legend[0]]] : [])
+      .concat(slots.some((s) => s.bat === "export") ? [[COL.export, L.legExport]] : [])
+      .concat(cars.filter((c) => slots.some((s) => (s.ev || {})[c.id] > 0.05)).map((c) => [c.col, c.name]))
+      .concat(slots.some((s) => s.sun_w) ? [[COL.sun, L.legend[3]]] : []);
     el.innerHTML = `<div class="ewpc">${svg}<div class="ewpc-mid"><div class="ewpc-day"></div><div class="ewpc-time"></div><div class="ewpc-price"></div><div class="ewpc-act"></div></div>
       <button class="ewpc-now" type="button" hidden>${esc(L.now)}</button></div>
-      <div class="ewpc-legend">${legend.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join("")}</div><div class="ewpc-hint">${esc(L.drag)}</div>`;
+      <div class="ewpc-strip"><div class="h"><span>${esc(L.next12)}</span><b class="ewpc-pnow"></b></div>${strip}</div>
+      <div class="ewpc-legend">${legend.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join("")}</div>`;
     const root = el.querySelector(".ewpc"), svgEl = root.querySelector("svg"), hl = root.querySelector(".ewpc-hl"), hk = root.querySelector(".ewpc-hk");
     const mid = { day: root.querySelector(".ewpc-day"), time: root.querySelector(".ewpc-time"), price: root.querySelector(".ewpc-price"), act: root.querySelector(".ewpc-act") };
-    const nowBtn = root.querySelector(".ewpc-now");
+    const nowBtn = root.querySelector(".ewpc-now"), hd = root.querySelector(".ewpc-hd");
+    const stripEl = el.querySelector(".ewpc-sv"), sel = el.querySelector(".ewpc-sel");
+    const pnow = el.querySelector(".ewpc-pnow");
     let idx = 0;
     const fmtPrice = (p) => (p == null ? "–" : unit === "öre" ? `${Math.round(p * 100)} öre/kWh` : `${p.toFixed(2).replace(".", opts.lang === "en" ? "." : ",")} ${unit}/kWh`);
     function show(i, fromUser) {
@@ -130,17 +153,21 @@
       if (i === idx && fromUser) return;
       idx = i;
       const s = slots[i], d = new Date(s.t), a = angOf(d);
-      const [x1, y1] = pt(a, R0 - 26), [x2, y2] = pt(a, R1 + 2);     // visaren börjar utanför texten i mitten
+      const [x1, y1] = pt(a, 108), [x2, y2] = pt(a, R1 + 4);         // visaren börjar utanför texten i mitten
       hl.setAttribute("x1", f1(x1)); hl.setAttribute("y1", f1(y1)); hl.setAttribute("x2", f1(x2)); hl.setAttribute("y2", f1(y2));
       hk.setAttribute("cx", f1(x2)); hk.setAttribute("cy", f1(y2));
+      hd.setAttribute("cx", f1(x2)); hd.setAttribute("cy", f1(y2));
+      if (sel) { sel.style.display = i < N ? "" : "none"; sel.setAttribute("x", f1(Math.min(i, N - 1) * bw)); }
       svgEl.setAttribute("aria-valuenow", i);
       const sameDay = d.toDateString() === t0.toDateString();
       mid.day.textContent = i === 0 ? L.now : sameDay ? L.today : L.tomorrow;
-      mid.time.textContent = i === 0 ? t0.toTimeString().slice(0, 5) : d.toTimeString().slice(0, 5);
+      mid.time.textContent = (i === 0 ? new Date() : d).toTimeString().slice(0, 5);
       mid.price.textContent = fmtPrice(s.price);
       const acts = [];
       if (s.bat && T.sv[s.bat] !== undefined) {
-        let t = L[s.bat] || s.bat;
+        let j = i; while (j + 1 < slots.length && slots[j + 1].bat === s.bat) j++;      // passets slut: "laddar ur till 09:45"
+        const end = new Date(new Date(slots[j].t).getTime() + 15 * 60e3);
+        let t = (L[s.bat] || s.bat) + ` ${L.until} ${end.toTimeString().slice(0, 5)}`;
         if (s.bat_kw != null && (s.bat === "charge" || s.bat === "discharge" || s.bat === "export")) t += ` · ${Math.abs(s.bat_kw).toFixed(1)} kW`;
         if (s.soc != null) t += ` · ${s.soc} %`;
         acts.push(`<span style="color:${s.bat === "discharge" ? COL.discharge : s.bat === "export" ? COL.export : s.bat === "charge" ? COL.charge : "inherit"}">${esc(t)}</span>`);
@@ -174,6 +201,12 @@
       if (step) { show(idx + step, true); ev.preventDefault(); } else if (ev.key === "Home") { show(0, true); ev.preventDefault(); }
     });
     nowBtn.addEventListener("click", () => show(0, true));
+    if (stripEl) {                                        // tryck/dra i remsan flyttar visaren till den kvarten
+      const pick = (ev) => { const r = stripEl.getBoundingClientRect(); show(Math.floor((ev.clientX - r.left) / r.width * N), true); };
+      stripEl.addEventListener("pointerdown", pick);
+      stripEl.addEventListener("pointermove", (ev) => { if (ev.buttons) pick(ev); });
+    }
+    if (pnow && slots[0].price != null) pnow.textContent = fmtPrice(slots[0].price) + " " + L.now.toLowerCase();
     show(0, false);
     return { show, get index() { return idx; } };
   }

@@ -211,7 +211,7 @@ function pageHem() {
   const s = EN.solar, g = EN.grid, net = g.net_w;
   const clock = window.EWPlanClock && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
   const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
-  return `<div class="page">${alerts}${planNow()}${clock}<div class="grid2">
+  return `<div class="page">${alerts}${clock}${planNow()}<div class="grid2">
   <section class="card tile" data-a="solarsheet"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">idag ${f1(s.today_kwh, 0)} kWh · ${s.limit_pct == null ? "gräns offline" : s.limit_pct >= 99.5 ? "ingen exportgräns" : `export ${Math.round(s.limit_pct)} %`}</div></section>
   <section class="card tile" data-a="insights"><h4>Nät</h4>${gridViz(net)}<div class="v" style="font-size:1.45rem">${net == null ? "–" : net < -50 ? `Säljer ${f1(-net / 1000)} kW` : `Köper ${f1(Math.max(0, net) / 1000)} kW`}</div><div class="note">${g.price != null ? f1(g.price, 2) : "–"} kr/kWh${g.level ? " · " + esc(g.level) : ""}</div></section>
   </div>${svLine()}${ljusRow()}</div>`;
@@ -264,9 +264,12 @@ function chart(title, unit, series, labels, colors, names, key) {
   if (!all.length) return `<section class="card chart"><div class="ch"><b>${title}</b></div>${legend}<div class="note">${series.some((s) => s.some((v) => v != null)) ? "Alla linjer är dolda – tryck på en förklaring ovan" : "Ingen data"}</div></section>`;
   const mn = Math.min(...all), mx = Math.max(...all), rg = mx - mn || 1, W = 300, Hh = 70, n = labels.length;
   const X = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), Y = (v) => Hh - 4 - ((v - mn) / rg) * (Hh - 10);
-  const paths = series.map((s, k) => { if (!vis[k]) return ""; let d = ""; s.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }); return `<path d="${d}" fill="none" stroke="${colors[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`; }).join("");
+  const paths = series.map((s, k) => { if (!vis[k]) return ""; let d = ""; s.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }); return `<path d="${d}" fill="none" stroke="${colors[k]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`; }).join("");
+  // Skala: tre hjälplinjer med värden (min, mitten, max) så att man ser vad kurvan betyder
+  const grid = [0, 0.5, 1].map((q) => { const v = mn + q * rg, y = Y(v); return `<line x1="0" x2="${W}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-opacity=".12" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>`; }).join("");
+  const ylab = [1, 0.5, 0].map((q) => `<span style="position:absolute;right:2px;top:${(((Hh - 4 - q * (Hh - 10)) / Hh) * 100).toFixed(1)}%;transform:translateY(-50%);font-size:.66rem;opacity:.6">${f1(mn + q * rg, unit === "kr" ? 2 : 1)}</span>`).join("");
   const last = series.map((s, k) => vis[k] ? [...s].reverse().find((v) => v != null) : null);
-  return `<section class="card chart"><div class="ch"><b style="color:var(--txt)">${title}</b><span>${last.map((v, k) => v == null ? "" : `<span style="color:${colors[k]}">${f1(v, unit === "kr" ? 2 : 1)}</span>`).filter(Boolean).join(" · ")} ${unit}</span></div>${legend}<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">${paths}</svg><div class="ch"><span>${labels[0] ?? ""}:00</span><span>min ${f1(mn, 1)} · max ${f1(mx, 1)}</span><span>${labels[n - 1] ?? ""}:00</span></div></section>`;
+  return `<section class="card chart"><div class="ch"><b style="color:var(--txt)">${title}</b><span>${last.map((v, k) => v == null ? "" : `<span style="color:${colors[k]}">${f1(v, unit === "kr" ? 2 : 1)}</span>`).filter(Boolean).join(" · ")} ${unit}</span></div>${legend}<div style="position:relative;flex:1;min-height:0"><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" style="color:var(--mut);position:absolute;inset:0;width:100%;height:100%">${grid}${paths}</svg>${ylab}</div><div class="ch"><span>${labels[0] ?? ""}:00</span><span>${labels[Math.floor((n - 1) / 2)] ?? ""}:00</span><span>${labels[n - 1] ?? ""}:00</span></div></section>`;
 }
 // ---- Historik (inspirerat av FTW:s History-vy, egen implementation) ------------------------------------------------------------
 let histView = LS.get("ew_hist_view", "energi");
@@ -278,9 +281,9 @@ function powerSvg(sr) {                                   // nät/sol/hus/batter
   if (sr.battery_kw.some((v) => v != null)) ser.push([sr.battery_kw, HC.battery]);
   const all = ser.flatMap(([s]) => s).filter((v) => v != null), mx = Math.max(0.5, ...all.map(Math.abs)), W = 300, Hh = 100, n = sr.t.length;
   const X = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), Y = (v) => Hh / 2 - (v / mx) * (Hh / 2 - 4);
-  const paths = ser.map(([s, c]) => { let d = ""; s.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }); return `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round"/>`; }).join("");
+  const paths = ser.map(([s, c]) => { let d = ""; s.forEach((v, i) => { if (v != null) d += (d ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }); return `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }).join("");
   const lbl = (x) => sr.range === "24h" ? x.slice(11, 16) : `${x.slice(8, 10)}/${x.slice(5, 7)}`;
-  return `<div class="ch"><span>${f1(mx, 0)} kW in</span><span></span></div><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><line x1="0" x2="${W}" y1="${Hh / 2}" y2="${Hh / 2}" stroke="var(--line)"/>${paths}</svg><div class="ch"><span>${lbl(sr.t[0])}</span><span>${f1(mx, 0)} kW ut</span><span>nu</span></div>`;
+  return `<div class="ch"><span>${f1(mx, 0)} kW in</span><span></span></div><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><line x1="0" x2="${W}" y1="${Hh / 2}" y2="${Hh / 2}" stroke="var(--line)" vector-effect="non-scaling-stroke"/>${paths}</svg><div class="ch"><span>${lbl(sr.t[0])}</span><span>${f1(mx, 0)} kW ut</span><span>nu</span></div>`;
 }
 function pageHistorik() {
   const seg = `<div class="seg">${[["energi", "Energi"], ["temp", "Temperatur"], ["pris", "Elpris"]].map(([k, l]) => `<button data-a="histview" data-v="${k}" class="${histView === k ? "on" : ""}">${l}</button>`).join("")}</div>`;

@@ -867,8 +867,10 @@ def save_schedule_row(car: str, day: int, t: str, enabled: bool, soc: int) -> No
 @app.post("/api/schedule")
 async def set_schedule(request: Request):
     b = await request.json()
-    car, day = b.get("car"), intval(b.get("day"))
-    if car not in CARS or not 0 <= day <= 6:
+    car = b.get("car")
+    days = b.get("days") if isinstance(b.get("days"), list) else [b.get("day")]     # "days": flera dagar på en gång (#142)
+    days = [intval(d) for d in days]
+    if car not in CARS or not days or not all(0 <= d <= 6 for d in days):
         raise HTTPException(400, "Ogiltigt")
     t = str(b.get("time", "07:00"))
     try:
@@ -876,8 +878,9 @@ async def set_schedule(request: Request):
     except ValueError:
         raise HTTPException(400, "Ogiltig tid")
     soc = max(20, min(100, intval(b.get("soc") or 100)))
-    save_schedule_row(car, day, t, bool(b.get("enabled")), soc)
-    logact(request, f"Schema {car} dag {day}: {'på' if b.get('enabled') else 'av'} {t} {soc} %")
+    for day in days:
+        save_schedule_row(car, day, t, bool(b.get("enabled")), soc)
+    logact(request, f"Schema {car} dag {','.join(str(d) for d in days)}: {'på' if b.get('enabled') else 'av'} {t} {soc} %")
     return {"ok": True}
 
 
@@ -1844,6 +1847,8 @@ def _bridge_loop():
 @app.on_event("startup")
 def _start_watch():
     import threading
+    if os.environ.get("EW_NO_WATCH") == "1":         # testkopia: inga bevakningar, inga notiser, ingen HA-brygga
+        return
     threading.Thread(target=_watch_loop, daemon=True, name="ew-watch").start()
     threading.Thread(target=_bridge_loop, daemon=True, name="ew-ha-bridge").start()
 

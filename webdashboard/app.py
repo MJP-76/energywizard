@@ -833,10 +833,12 @@ async def api_car():
         row = _latest_row(c)
         if row is None:
             return {"ok": False, "error": "Ingen data i sensor_log än"}
-        today_dow = time.localtime().tm_wday
-        sched = c.execute(text(
-            "SELECT car_id, target_time, target_soc, enabled FROM ev_charging_schedule WHERE day_of_week = :d"
-        ), {"d": today_dow}).mappings().all()
+        # Hela veckan per bil (#142: förut bara dagens veckodag - planen på kvällen räknar på morgondagens rad)
+        try:
+            sched = c.execute(text("SELECT car_id, day_of_week, target_time, target_soc, enabled FROM ev_charging_schedule")).mappings().all()
+        except Exception:
+            c.rollback()
+            sched = []
         planned = c.execute(text(
             "SELECT car_id, SUM(kw) / 4.0 AS kwh FROM ev_plan_slots WHERE t_slot::date = CURRENT_DATE GROUP BY car_id"   # 15-min-slottar: kW × 0,25 h
         )).mappings().all()
@@ -858,11 +860,21 @@ async def api_car():
                      "climate_temp": _n(c.get("inside")), "climate_state": "heat_cool" if c.get("climate_on") else "off"})
     for car in cars:
         car["planned_kwh_today"] = planned_by_car.get(car["id"])
-    schedule = [{"car_id": s["car_id"], "target_time": str(s["target_time"]) if s["target_time"] else None,
-                 "target_soc": s["target_soc"], "enabled": s["enabled"]} for s in sched]
+    week = {car["id"]: [{"day": d, "time": "07:00", "soc": 100, "enabled": False} for d in range(7)] for car in cars}
+    for s in sched:
+        if s["car_id"] in week and 0 <= int(s["day_of_week"]) <= 6:
+            week[s["car_id"]][int(s["day_of_week"])] = {"day": int(s["day_of_week"]), "enabled": bool(s["enabled"]),
+                                                        "time": s["target_time"].strftime("%H:%M") if s["target_time"] else "07:00",
+                                                        "soc": int(s["target_soc"] or 100)}
+    from datetime import datetime
+    now = datetime.now(zoneinfo.ZoneInfo("Europe/Stockholm"))
+    goals = {g["car"]: g for g in _car_goals([(s["car_id"], int(s["day_of_week"]), s["target_time"], s["target_soc"])
+                                               for s in sched if s["enabled"]], now)}
+    for car in cars:
+        car["next_goal"] = goals.get(car["id"])          # det mål planen räknar med just nu (dag, klockslag, %)
     return {"ok": True, "cars": cars, "session_kwh": _n(row.get("ev_session_kwh")),
             "current_a": _n(row.get("ev_current_a")), "dynamic_limit_a": _n(row.get("ev_dynamic_limit_a")),
-            "current_target_limit": _n(row.get("current_target_limit")), "schedule_today": schedule,
+            "current_target_limit": _n(row.get("current_target_limit")), "schedule": week,
             # Laddplanen per kvart (naiv svensk lokaltid i ev_plan_slots) + elpriset, för grafen
             "plan": [{"car": r[0], "t": r[1].isoformat(), "kw": _n(r[2]), "soc0": _n(r[3]), "soc1": _n(r[4])} for r in slots],
             "plan_prices": [{"t": t.astimezone(zoneinfo.ZoneInfo("Europe/Stockholm")).replace(tzinfo=None).isoformat(), "p": float(p)} for t, p in plan_prices if p is not None]}
@@ -994,11 +1006,12 @@ def _with_plugged(goals):
 
 
 def _car_goals(sched, now):
-    """Nästa mål per bil ur laddschemat: {'car', 'at' (iso), 'soc'} - idag om tiden inte passerat, annars imorgon."""
+    """Nästa mål per bil ur laddschemat: {'car', 'at' (iso), 'soc'} - första påslagna dagen de kommande sju dygnen
+    vars klockslag inte passerat, samma som motorn (decisions.get_car_plan_details, #142)."""
     from datetime import datetime, timedelta
     goals = {}
     for car, dow, tt, soc in sched or []:
-        for add in (0, 1):
+        for add in range(8):
             day = (now + timedelta(days=add)).date()
             if day.weekday() != dow or tt is None:
                 continue
@@ -1237,6 +1250,16 @@ async def proxy_energy_action(what: str, request: Request):
         return JSONResponse({"detail": "Okänd åtgärd"}, status_code=404)
     body = await request.json()
     return await _ewapp_proxy(f"/api/energy/{what}", body)
+
+
+@app.get("/api/schedule")
+async def schedule_get():
+    """Laddschemat för hela veckan per bil (mobilappens /api/schedule)."""
+    try:
+        r = requests.get(f"{EWAPP_URL}/api/schedule", cookies={"ew": _ewapp_cookie()}, timeout=25)
+        return JSONResponse(r.json(), status_code=r.status_code)
+    except Exception as e:
+        return JSONResponse({"detail": f"Nådde inte ewapp: {e}"}, status_code=502)
 
 
 @app.post("/api/schedule")

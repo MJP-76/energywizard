@@ -260,7 +260,7 @@ function planStripHtml(d, now) {
     return `<span style="position:absolute;left:${(h / 12) * 100}%;transform:translateX(${h === 0 ? "0" : h === 12 ? "-100%" : "-50%"})">${h === 0 ? "nu" : hhmm(t)}</span>`;
   }).join("");
   const goals = (d.car_goals || []).map((g) => {
-    const day = new Date(g.at).toDateString() === now.toDateString() ? "" : "imorgon ";
+    const day = new Date(g.at).toDateString() === now.toDateString() ? "" : goalDay(g.at) + " ";
     const off = g.plugged === false;
     return `<div class="stat" style="padding:8px 12px;flex:1;min-width:140px${off ? ";opacity:.6" : ""}"><div class="note">🚗 ${esc(g.car.charAt(0).toUpperCase() + g.car.slice(1))}${off ? " · 🔌 inte ansluten" : ""}</div>
       <div style="font-weight:700">${off ? `Mål ${g.soc != null ? g.soc + " % " : ""}${day}${hhmm(g.at)}` : `${g.soc != null ? g.soc + " % " : ""}klar ${day}${hhmm(g.at)}`}</div>
@@ -551,11 +551,23 @@ function evPlanChart(elId, d) {
   new ResizeObserver(() => chart.resize()).observe(el);
 }
 
+const WD = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+const WD_LONG = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"];
+// "Planen räknar nu med: fredag 07:00 · 100 %" - det mål motorn faktiskt använder (#142)
+function goalDay(at) {
+  const d = new Date(at), now = new Date(), tm = new Date(now.getTime() + 864e5);
+  return d.toDateString() === now.toDateString() ? "idag" : d.toDateString() === tm.toDateString() ? "imorgon" : WD_LONG[(d.getDay() + 6) % 7];
+}
+function goalText(g) {
+  if (!g) return `<span class="note">Inget påslaget schema - planen följer elpriset (och morgongolvet om det är på).</span>`;
+  return `Planen räknar nu med: ${goalDay(g.at)} ${hhmm(new Date(g.at))}${g.soc != null ? " · " + g.soc + " %" : ""}`;
+}
+
 async function renderElbil() {
   const d = await loadPage("api/car", (d) => `
     <div class="grid" style="margin-bottom:16px">
       ${d.cars.map(c => {
-        const s = d.schedule_today.find(s => s.car_id === c.id) || { target_time: "07:00", target_soc: 100, enabled: false };
+        const wk = (d.schedule || {})[c.id] || [];
         return `<div class="card">
         <div style="font-size:1.05rem;font-weight:700">🚗 ${c.name}</div>
         <div class="v" style="margin:10px 0 2px;font-size:1.6rem">${fmt(c.soc, 0, "%")}</div>
@@ -573,13 +585,18 @@ async function renderElbil() {
           <button data-car="${c.id}" data-kind="heat_off">Stoppa värme</button>
         </div>
         <div class="card" style="margin-top:12px;padding:12px">
-          <div class="note">📅 Dagens schema</div>
-          <div class="numfield" style="margin-top:6px">
-            <input type="time" class="sch-time" data-car="${c.id}" value="${s.target_time || "07:00"}">
-            <input type="number" class="sch-soc" data-car="${c.id}" min="20" max="100" value="${s.target_soc || 100}"> %
+          <div class="note">📅 Laddschema - klar till klockslag och nivå, per veckodag</div>
+          <div style="margin:6px 0 8px;font-weight:600">${goalText(c.next_goal)}</div>
+          ${wk.map((x) => `<div class="schrow" style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--line)">
+            <span style="width:34px;font-weight:600">${WD[x.day]}</span>
+            <label class="switch" style="flex:none"><input type="checkbox" class="sch-en" data-car="${c.id}" data-day="${x.day}" ${x.enabled ? "checked" : ""}><span class="slider"></span></label>
+            <input type="time" class="sch-t" data-car="${c.id}" data-day="${x.day}" value="${x.time}" style="flex:1 1 90px;min-width:0">
+            <input type="number" class="sch-s" data-car="${c.id}" data-day="${x.day}" min="20" max="100" value="${x.soc}" style="width:64px"> %
+          </div>`).join("")}
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+            <button class="icobtn sch-save" data-car="${c.id}">Spara veckan</button>
+            <button class="icobtn sch-all" data-car="${c.id}" title="Måndagens rad gäller alla dagar">Samma som måndag alla dagar</button>
           </div>
-          <div class="togglerow"><span>Aktivt idag</span><label class="switch"><input type="checkbox" class="sch-enabled" data-car="${c.id}" ${s.enabled ? "checked" : ""}><span class="slider"></span></label></div>
-          <button class="icobtn sch-save" data-car="${c.id}" style="margin-top:6px">Spara schema</button>
         </div>
       </div>`;
       }).join("")}
@@ -591,12 +608,18 @@ async function renderElbil() {
   if (d.plan && d.plan.length) evPlanChart("evplanchart", d);
   document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => postAction(`api/car/${b.dataset.car}/action`, { kind: b.dataset.kind }).then(renderElbil));
   loadTeslaAccess();
-  document.querySelectorAll(".sch-save").forEach(b => b.onclick = () => {
+  const rowOf = (car, day) => ({ time: document.querySelector(`.sch-t[data-car="${car}"][data-day="${day}"]`).value,
+    soc: parseInt(document.querySelector(`.sch-s[data-car="${car}"][data-day="${day}"]`).value, 10),
+    enabled: document.querySelector(`.sch-en[data-car="${car}"][data-day="${day}"]`).checked });
+  document.querySelectorAll(".sch-save").forEach(b => b.onclick = async () => {        // alla sju dagarna (#142)
     const car = b.dataset.car;
-    const time = document.querySelector(`.sch-time[data-car="${car}"]`).value;
-    const soc = parseInt(document.querySelector(`.sch-soc[data-car="${car}"]`).value, 10);
-    const enabled = document.querySelector(`.sch-enabled[data-car="${car}"]`).checked;
-    postAction("api/schedule", { car, day: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1, time, soc, enabled }, "Schema sparat").then(renderElbil);
+    try { for (let day = 0; day < 7; day++) await postJSON("api/schedule", { car, day, ...rowOf(car, day) }); toast("Schemat sparat för hela veckan"); }
+    catch (e) { toast(e.message); }
+    renderElbil();
+  });
+  document.querySelectorAll(".sch-all").forEach(b => b.onclick = () => {
+    const car = b.dataset.car;
+    postAction("api/schedule", { car, days: [0, 1, 2, 3, 4, 5, 6], ...rowOf(car, 0) }, "Måndagens schema gäller nu alla dagar").then(renderElbil);
   });
 }
 
