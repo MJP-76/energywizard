@@ -1430,6 +1430,7 @@ async function renderInstalls() {
   const prettyDrv = (drv) => {
     if (DRIVER_NAMES[drv]) return DRIVER_NAMES[drv];
     if (drv.startsWith("preset_")) return "förinställning " + drv.slice(7);
+    if (drv.startsWith("ftw-")) return "FTW-drivrutin " + drv.slice(4);
     let m;
     if ((m = drv.match(/^ha_sensors_(\d+)$/))) return `${m[1]} givare i HA`;
     if (drv === "heatpump") return "värmepumpens givare";
