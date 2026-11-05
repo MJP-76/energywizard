@@ -1699,6 +1699,17 @@ async function runDiscovery() {
   if (!d.chargers.length) html += `<div class="note">Inga laddare hittades.</div>`;
   html += `</div>`;
 
+  // Enhet utan Home Assistant-integration: Sourcefuls FTW-drivrutin direkt mot enheten (Modbus/HTTP/MQTT)
+  html += `<div class="card" style="margin-bottom:16px"><h2>🔌 Batteri eller växelriktare utan Home Assistant-integration</h2>
+    <div class="note">Har du t.ex. Pixii, Sungrow, Deye, Sigenergy eller Victron utan integration i Home Assistant kan EnergyWizard läsa den direkt i nätverket med en av Sourcefuls 93 FTW-drivrutiner. Läser bara; styrning slås på först när drivrutinen är provad.</div>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:10px"><span class="note">Drivrutin</span><select id="ftw_drv"><option value="">– ingen –</option></select></label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+      <label style="display:flex;flex-direction:column;gap:4px;flex:2 1 160px"><span class="note">IP-adress</span><input id="ftw_host" placeholder="192.168.1.50"></label>
+      <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 70px"><span class="note">Port</span><input id="ftw_port" type="number" value="502"></label>
+      <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 70px"><span class="note">Enhets-id</span><input id="ftw_unit" type="number" value="1"></label></div>
+    <div style="display:flex;gap:14px;margin-top:8px"><label><input type="checkbox" id="ftw_bat"> som husbatteri</label><label><input type="checkbox" id="ftw_sol"> som solceller</label></div>
+    <div class="note" id="ftw_info" style="margin-top:6px"></div></div>`;
+
   html += `<div class="card" style="margin-bottom:16px"><h2>⚡ Elmätare / Tibber Pulse</h2>
     <div class="note">Krävs för effektvakten, säkringsskyddet och solladdningen. Bäst är en mätare med ström per fas (t.ex. Tibber Pulse); en smartmätare (HAN/P1) med bara effekt fungerar också.</div>
     ${d.power_meter ? `<label style="display:block;margin:8px 0"><input type="checkbox" class="pick" data-cat="Elmätare" checked> Använd ${d.power_meter.driver === "tibber_pulse" ? "Tibber Pulse (spänning + ström per fas)" : "effektsensorn " + esc(d.power_meter.entities.power_w)}</label>` : ""}`;
@@ -1725,6 +1736,17 @@ async function runDiscovery() {
     <div class="note" id="savemsg" style="margin-top:6px"></div>`;
   results.innerHTML = html;
   mountPriceSource("discprice");
+  api("api/ftw-drivers").then((r) => {
+    const s = document.getElementById("ftw_drv"); if (!s || !r.ok) return;
+    const list = r.drivers.filter((x) => x.capabilities.some((c) => ["battery", "pv", "meter"].includes(c)));
+    s.innerHTML += list.map((x) => `<option value="${esc(x.id)}">${esc(x.manufacturer ? x.manufacturer + " – " : "")}${esc(x.name)} (${esc(x.protocol)})</option>`).join("");
+    s.onchange = () => { const x = list.find((y) => y.id === s.value); const info = document.getElementById("ftw_info");
+      if (!x) { info.textContent = ""; return; }
+      document.getElementById("ftw_bat").checked = x.capabilities.includes("battery");
+      document.getElementById("ftw_sol").checked = x.capabilities.includes("pv") && !x.capabilities.includes("battery");
+      document.getElementById("ftw_port").value = x.protocol === "http" ? 80 : x.protocol === "mqtt" ? 1883 : 502;
+      info.textContent = `Kan: ${x.capabilities.join(", ")}${x.verification ? " · " + x.verification : ""}`; };
+  }).catch(() => {});
   document.getElementById("genbtn").onclick = () => generateConfig(false);
   document.getElementById("savebtn").onclick = () => generateConfig(true);
   // Spara direkt bara i installationer där install.sh gjort filen skrivbar; annars bara nedladdning.
@@ -1779,6 +1801,9 @@ async function generateConfig(save) {
     if (cat === "Husbatteri") sel.battery = _discovered.battery;
     if (cat === "Elmätare") sel.power_meter = _discovered.power_meter;
   });
+  const fd = (document.getElementById("ftw_drv") || {}).value;
+  if (fd) sel.ftw = { driver: fd, host: document.getElementById("ftw_host").value.trim(), port: +document.getElementById("ftw_port").value || 502,
+    unit_id: +document.getElementById("ftw_unit").value || 1, battery: document.getElementById("ftw_bat").checked, solar: document.getElementById("ftw_sol").checked };
   const pmMain = (document.getElementById("pm_main") || {}).value, pmSecond = (document.getElementById("pm_second") || {}).value;
   if (pmMain) sel.power_meter = { driver: "power_w", entities: { power_w: pmMain } };
   if (pmSecond) sel.power_meter = { ...(sel.power_meter || { driver: "power_w", entities: {} }), secondary_power_w: pmSecond };

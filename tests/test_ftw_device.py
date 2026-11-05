@@ -75,3 +75,30 @@ def test_okand_drivrutin_ger_tydligt_fel(monkeypatch):
 def test_alla_medfoljande_drivrutiner_finns():
     names = ftw_device.available()
     assert len(names) >= 90 and {"sungrow", "huawei", "pixii", "solax", "victron", "sigenergy", "goodwe"} <= set(names)
+
+
+def test_guiden_skriver_ftw_och_den_gar_att_lasa():
+    import importlib.util, os, sys, tempfile
+    from pathlib import Path
+    import yaml
+    root = Path(__file__).resolve().parent.parent
+    cwd = os.getcwd()
+    os.chdir(root / "webdashboard")
+    try:
+        mod = sys.modules.get("webdashboard_app")
+        if mod is None:
+            spec = importlib.util.spec_from_file_location("webdashboard_app", root / "webdashboard" / "app.py")
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["webdashboard_app"] = mod
+            spec.loader.exec_module(mod)
+        text = mod._build_house_config_yaml({"ftw": {"driver": "pixii", "host": "192.0.2.9", "port": 502, "unit_id": 1,
+                                                     "battery": True, "solar": True}})
+    finally:
+        os.chdir(cwd)
+    d = yaml.safe_load(text)
+    assert d["battery"]["driver"] == "ftw" and d["battery"]["ftw"]["driver"] == "pixii" and d["battery"]["control"] == "samarbete"
+    assert d["solar"]["driver"] == "ftw" and d["solar"]["ftw"]["host"] == "192.0.2.9"
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as f:
+        f.write(text); f.flush()
+        cfg = house_config.load_house_config(f.name)
+    assert house_config.build_battery_driver(cfg).__class__.__name__ == "FtwBatteryDriver"

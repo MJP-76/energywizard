@@ -1475,7 +1475,13 @@ def _build_house_config_yaml(sel: dict) -> str:
     lines.append("")
 
     solar = sel.get("solar")
-    if solar:
+    _ftw = sel.get("ftw") if isinstance(sel.get("ftw"), dict) and re.fullmatch(r"[a-z0-9_\-]{1,40}", str((sel.get("ftw") or {}).get("driver") or "")) else None
+    if _ftw and _ftw.get("solar"):                           # FTW-drivrutin direkt mot växelriktaren
+        lines += ["solar:", "  enabled: true", "  driver: ftw", "  ftw:", f"    driver: {_ftw['driver']}",
+                  f"    host: {str(_ftw.get('host') or '').strip() or '192.168.1.XXX  # FYLL I - växelriktarens IP'}",
+                  f"    port: {int(_ftw.get('port') or 502)}", f"    unit_id: {int(_ftw.get('unit_id') or 1)}", ""]
+        solar = None
+    elif solar:
         lines += ["solar:", "  enabled: true", f"  driver: {solar.get('driver') or 'generic_number'}", "  entities:"]
         solar_entities = (solar.get("entities") or {}).copy()
         if solar.get("pv_power_entity"):
@@ -1499,8 +1505,22 @@ def _build_house_config_yaml(sel: dict) -> str:
         lines += ["spa:", "  enabled: false"]
     lines.append("")
 
+    ftw = sel.get("ftw") if isinstance(sel.get("ftw"), dict) else None
+    if ftw and not re.fullmatch(r"[a-z0-9_\-]{1,40}", str(ftw.get("driver") or "")):
+        ftw = None
+    ftw_block = []
+    if ftw:
+        host = str(ftw.get("host") or "").strip()
+        ftw_block = ["  ftw:", f"    driver: {ftw['driver']}", f"    host: {host or '192.168.1.XXX  # FYLL I - enhetens IP'}",
+                     f"    port: {int(ftw.get('port') or 502)}", f"    unit_id: {int(ftw.get('unit_id') or 1)}",
+                     "  # control_unverified: true   # styrning via FTW-drivrutinen på egen risk (overifierad) - börja i skuggläge"]
     battery = sel.get("battery")
-    if battery:
+    if ftw and ftw.get("battery"):                           # FTW-drivrutin direkt mot batteriet (ingen HA-integration)
+        lines += ["battery:", "  enabled: true", "  driver: ftw", "  capacity_kwh: 10  # FYLL I - batteriets kapacitet i kWh",
+                  "  control: samarbete   # läs bara; styrning kräver en verifierad FTW-drivrutin", "  reserve_soc: 20",
+                  "  priority_soc: 50", "  max_power_w: 5000    # FYLL I"] + ftw_block
+        battery = None
+    elif battery:
         gs = battery.get("generic_suggestion") or {}
         modes = battery.get("modes") or gs.get("modes")
         lines += ["battery:", "  enabled: true", f"  driver: {battery.get('driver') or 'generic'}",
@@ -1563,6 +1583,29 @@ def _build_house_config_yaml(sel: dict) -> str:
             if _indent(nxt) <= _indent(ln):
                 lines[i] = ln.rstrip() + " {}"
     return "\n".join(lines) + "\n"
+
+
+@app.get("/api/ftw-drivers")
+async def ftw_drivers():
+    """Sourcefuls FTW-drivrutiner som följer med (smartbox/ftw_drivers): namn, tillverkare, vad de kan, protokoll."""
+    import re as _re
+    import plan_clock
+    folder = os.path.join(os.path.dirname(plan_clock.__file__), "ftw_drivers")
+    out = []
+    for f in sorted(os.listdir(folder)):
+        if not f.endswith(".lua"):
+            continue
+        try:
+            head = open(os.path.join(folder, f), encoding="utf-8", errors="replace").read(6000)
+        except OSError:
+            continue
+        g = lambda k: (_re.search(k + r'\s*=\s*"([^"]*)"', head) or [None, None])[1]
+        caps = _re.search(r'capabilities\s*=\s*\{([^}]*)\}', head)
+        out.append({"id": f[:-4], "name": g("name") or f[:-4], "manufacturer": g("manufacturer") or "",
+                    "protocol": (_re.search(r'^PROTOCOL\s*=\s*"([^"]+)"', head, _re.M) or [None, ""])[1],
+                    "capabilities": _re.findall(r'"([a-z0-9_-]+)"', caps.group(1)) if caps else [],
+                    "verification": g("verification_status") or ""})
+    return {"ok": True, "drivers": out}
 
 
 @app.post("/api/generate-house-config")
