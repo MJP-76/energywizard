@@ -10,6 +10,11 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 
 ## Att göra (önskemål från Discord och Emil, 2026-11-04)
 
+- **Tillägget använder färdigbyggda images** (`image:` i ha-addon/smartbox/config.yaml, som Sourcefuls tillägg) i
+  stället för att klona och bygga hos användaren: inga gamla cachade byggen, snabbare installation. CI bygger redan
+  images - behöver en arm64-variant (aarch64, Raspberry Pi) och versionstagg per release.
+- **Testa Modbus-drivrutinerna mot srcfl/device-simulator i CI** (Solax, Ferroamp, Thermia, Pixii) - utan hårdvara.
+- **Gästbil och Easees fasväljare** (#131).
 - **Planklockan går att dra i, och finns även i mobilappen.** Man drar visaren till ett klockslag och ser vad som händer
   då: pris, vad batteriet och bilen gör (laddar/laddar ur/vilar, kW) och batteriets nivå. Idag finns klockan bara på
   webben och visar bara nuläget. Inspiration: FTW-appens "Plan ahead" (skärminspelning från Emil). Bygg i vår egen stil,
