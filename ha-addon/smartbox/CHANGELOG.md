@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.41 (2026-11-06)
+- **Tomt batterifält blir inte längre 0**: ett tömt maxnivå-, effekt-, storleks- eller verkningsgradsfält som sparats
+  som 0 eller tomt används som standardvärde. Annars kunde maxnivå 0 stoppa all laddning. (Samma fel som FTW
+  rättade i 0.158.3, hittat genom att bevaka deras ärenden.)
+
 ## 1.2.40 (2026-11-06)
 - **Samma hus räknades två gånger**: motorn, webben och appen skriver i samma inställningsfil, och utan lås kunde
   en av dem skriva tillbaka en gammal bild så att installations-ID:t försvann. Då dök huset upp som ett nytt på

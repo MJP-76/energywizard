@@ -244,11 +244,19 @@ def battery_settings(cfg: dict) -> dict:
     control = str(bat.get("control", "samarbete")).strip().lower()
     if control not in ("styr", "samarbete", "av"):
         control = "samarbete"
-    f = lambda k, d: float(bat.get(k, d)) if bat.get(k) is not None else d
+    def f(k, d, positive=False):
+        """Tomt, ogiltigt eller (för storheter som måste vara > 0) 0 = standardvärdet. FTW 0.158.3 (2026-11-05):
+        ett tömt fält sparades som 0 och blev batteriets laddtak, så batteriet slutade ladda helt."""
+        v = bat.get(k)
+        try:
+            v = float(v) if v is not None and str(v).strip() != "" else None
+        except (TypeError, ValueError):
+            v = None
+        return d if v is None or v != v or (positive and v <= 0) else v
     return {"control": control if bat.get("enabled") else "av", "reserve_soc": f("reserve_soc", 20.0),
-            "priority_soc": f("priority_soc", 50.0), "max_soc": f("max_soc", 100.0),
-            "max_power_w": f("max_power_w", 5000.0), "capacity_kwh": f("capacity_kwh", None),
-            "efficiency": f("efficiency", 0.9),
+            "priority_soc": f("priority_soc", 50.0), "max_soc": f("max_soc", 100.0, True),
+            "max_power_w": f("max_power_w", 5000.0, True), "capacity_kwh": f("capacity_kwh", None, True),
+            "efficiency": f("efficiency", 0.9, True),
             # Batteriets slitage, kr per urladdad kWh: cellernas pris / (kapacitet x antal cykler).
             # T.ex. 40 000 kr / (10 kWh x 6000 cykler) ≈ 0,67 kr; 0,30 kr är ett försiktigt standardvärde.
             "cycle_cost": f("cycle_cost", 0.30),
