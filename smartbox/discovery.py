@@ -203,6 +203,22 @@ def _find(ents, domain, rx):
     return next((x for x in ents if x["e"].startswith(domain + ".") and _has(x.get("n") or x["e"], rx)), None)
 
 
+_CHG_W = re.compile(r"(storage|battery|batteri|batt)\w*[ _](charging|charge|laddning|laddar)[ _]power$|(storage|battery)_charging_power$", re.I)
+_DIS_W = re.compile(r"(storage|battery|batteri|batt)\w*[ _](discharging|discharge|urladdning|laddar[ _]ur)[ _]power$|(storage|battery)_discharging_power$", re.I)
+_NOT_W = re.compile(r"max|limit|rate|setpoint|target|total|energy|kwh", re.I)
+
+
+def _split_battery_power(ents) -> dict:
+    """#139: batterier som har EN givare för laddeffekt och EN för urladdningseffekt (båda positiva, t.ex. Fronius GEN24
+    "Storage charging power"/"Storage discharging power") - då används de i stället för en ensam effektgivare, som
+    annars kan bli fel givare. {} om inte båda finns."""
+    def pick(rx):
+        return next((x["e"] for x in ents if x["e"].startswith("sensor.") and x.get("u") in ("W", "kW")
+                     and rx.search(x["e"]) and not _NOT_W.search(x["e"])), None)
+    chg, dis = pick(_CHG_W), pick(_DIS_W)
+    return {"power_charge": chg, "power_discharge": dis} if chg and dis else {}
+
+
 def _battery_control_preset(ents, all_ents=None):
     """Känner igen batteristyrning från wills106/homeassistant-solax-modbus och föreslår hela
     lägesmappningen (drivers/battery_generic.py). Lägesnamnen är integrationens egna (plugin_solax.py /
@@ -250,6 +266,7 @@ def _battery_control_preset(ents, all_ents=None):
             out["entities"]["charge_power"] = gc["e"]
         if gd:
             out["entities"]["discharge_power"] = gd["e"]
+        out["entities"].update(_split_battery_power(all_ents or ents))       # #139: laddning/urladdning var för sig
         return out
     # HomeWizard Plug-In Battery (HA:s inbyggda homewizard-integration): "Battery group charging strategy" ligger på
     # P1-/kWh-mätaren, inte på batteriet - därför letas den bland alla entiteter (all_ents). Alternativen är HA:s
@@ -693,6 +710,10 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             if power_e:
                 suggested["power"] = power_e["e"]
             battery["generic_suggestion"] = {"driver": "generic", "entities": suggested}
+            split = _split_battery_power(ents)
+            if split:                                       # laddning/urladdning var för sig går före en ensam effekt
+                battery["generic_suggestion"]["entities"].pop("power", None)
+                battery["generic_suggestion"]["entities"].update(split)
             preset = _battery_control_preset(ents, entities)
             if preset:
                 if "power_charge" in preset["entities"]:

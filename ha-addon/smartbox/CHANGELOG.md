@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.36 (2026-11-06)
+- **Batteriet hölls tillbaka av en elbil som inte var inkopplad** (#174): batteriet räknar nu elbilen som laddande först
+  när laddboxen faktiskt drar ström. Manuell tvångsladdning väntar tills kabeln sitter i, och kontaktorskyddet släpper
+  när bilen inte är inkopplad. Laddboxstatusen `not_connected` (Garo m.fl.) känns igen överallt i motorn.
+- **Batteriets effekt med två givare** (#139): batterier med en givare för laddning och en för urladdning (t.ex. Fronius
+  GEN24 "Storage charging/discharging power") väljs av installationsguiden i stället för en ensam, ibland fel, effektgivare.
+
 ## 1.2.35 (2026-11-06)
 - **Ny hemskärm i appen**: planklockan är större och texten i den skalar med klockan (krympte förut med stor text tills
   texten trängdes ut över ringen). Under beslutsraderna finns sex kompakta rutor i stället för två stora: **Inne**

@@ -556,9 +556,22 @@ def _learned_departure_time(car_id, target_day, default="07:00"):
     return default
 
 
+# Laddboxens status som betyder att ingen bil är inkopplad - en lista för hela motorn (#174: fem olika listor, ingen
+# kände igen Garo/generiska laddboxars 'not_connected', så en frånkopplad bil räknades som inkopplad).
+_NOT_PLUGGED = {"disconnected", "not_connected", "notconnected", "unplugged", "available", "offline", "unknown",
+                "unavailable", "error", "none", ""}
+
+
+def charger_connected(charger_data) -> bool:
+    if not charger_data:
+        return False
+    st = charger_data.get("status")
+    return st is not None and str(st).strip().lower().replace(" ", "_") not in _NOT_PLUGGED
+
+
 def update_soc_tracker(car_id, car_data, charger_data, now, schedule):
     state = ev_connection_state[car_id]
-    is_connected = charger_data and charger_data.get('status') not in ['disconnected', 'offline', 'error', None]
+    is_connected = charger_connected(charger_data)
     current_status = charger_data.get('status') if charger_data else None
     
     if is_connected and not state['connected']:
@@ -996,8 +1009,7 @@ while True:
                     spa_reboot_stage = 0
 
             # Handshake och Bilallokering (Steg 4:4 - generisk, se smartbox/ev_handshake.py)
-            _NOT_CONNECTED = ['disconnected', 'offline', 'unknown', 'none', None, '']
-            physical_charger_connected = {p: ((d or {}).get("status") not in _NOT_CONNECTED) for p, d in physical_charger_data.items()}
+            physical_charger_connected = {p: charger_connected(d) for p, d in physical_charger_data.items()}
 
             # FIX: Teslans charging_state är platsoberoende (sant även vid supercharger borta) →
             # grinda plugged på GPS-hemma så en bil som laddar BORTA inte snor en hemma-laddare.
@@ -1134,7 +1146,7 @@ while True:
 
             def handle_car_climate(car_id, sched, c_data, charger_data, climate_entity, outdoor_temp, dist_to_home):
                 if not sched['enabled']: return
-                is_connected = charger_data and charger_data.get('status') not in ['disconnected', 'offline', 'error', None]
+                is_connected = charger_connected(charger_data)
                 is_home = dist_to_home <= 0.5
                 if not is_connected and not is_home: return
                 if away_mode_enabled: return 
@@ -1702,7 +1714,9 @@ while True:
                     solar_data["battery_soc"] = battery_state.get("soc_pct")
                     solar_data["battery_power_w"] = battery_state.get("power_w")
                 if battery_cfg["control"] != "av" and battery_state.get("soc_pct") is not None:
-                    _ev_on = any((v or {}).get("limit_a", 0) >= EV_MIN_CHARGE_AMPS for v in (gpm_actions.get("ev") or {}).values())
+                    # Elbilen räknas som laddande när laddboxarna faktiskt drar ström - inte när ström bara är beordrad
+                    # (#174: ett laddtvång på en frånkopplad Tesla höll batteriet borta från planens urladdning i timmar)
+                    _ev_on = ev_kw_now > 1.0
                     _ev_sol = bool(getattr(gpm_engine, "ev_solar_charge_active", False))
                     _q = now.hour * 4 + now.minute // 15
                     # Dygnsplanen räknas om varje kvart (bara i läget styr, kräver kapacitet)
@@ -1799,7 +1813,7 @@ while True:
                     if not _st or _st["set_at"] != _g.get("set_at"):
                         _st = _guest_state[car_id] = {"kwh": 0.0, "t": time.time(), "set_at": _g.get("set_at"), "seen": False}
                     _cd = car_charger_data.get(car_id) or {}
-                    _conn = _cd.get("status") not in ("disconnected", "offline", "unknown", None)
+                    _conn = charger_connected(_cd)
                     _dt = max(0.0, min(300.0, time.time() - _st["t"]))
                     _st["kwh"] += float(_cd.get("power_kw") or 0.0) * _dt / 3600.0
                     _st["t"] = time.time()
@@ -1848,7 +1862,7 @@ while True:
             for car_id in car_ids:
                 charger_data = car_charger_data.get(car_id)
                 charger_id = car_charger_id.get(car_id)
-                connected = charger_data and charger_data.get("status") not in ["disconnected", "offline", "unknown", None]
+                connected = charger_connected(charger_data)
                 _log_charger_status_if_changed(car_id, charger_data)
                 if connected and (charger_data.get("power_kw") or 0) > 0.5:
                     try:                                # lär bilens faser och egen maxström (ev_limits.py)

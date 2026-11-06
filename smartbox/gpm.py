@@ -984,7 +984,9 @@ class GlobalPriorityManager:
             is_full = soc is not None and soc >= 98
             is_done = state.get(f"{car_id}_charge_completed", False)
 
-            if current_car_limit >= EV_MIN_CHARGE_AMPS:
+            if not state.get(f"{car_id}_connected", True):
+                self.ev_charging_since[car_id] = None      # inte inkopplad (#174): kontaktorskyddet har inget att skydda
+            elif current_car_limit >= EV_MIN_CHARGE_AMPS:
                 if self.ev_charging_since.get(car_id) is None:
                     self.ev_charging_since[car_id] = now
             else: # Car is not charging or charging below min amps
@@ -1002,7 +1004,9 @@ class GlobalPriorityManager:
         # --- Prio 11.5: MANUELL TVÅNGSLADDNING ELBIL ---
         for car_id in car_ids:
             force_amps = state.get(f'{car_id}_force_amps', 0)
-            if force_amps > 0:
+            if force_amps > 0 and not state.get(f"{car_id}_connected", True):
+                actions["log"].append(f"⚡ Prio 11.5 (MANUELL EV): {car_id.capitalize()} är inte inkopplad - tvångsladdningen väntar tills kabeln sitter i.")
+            elif force_amps > 0:
                 actions[f"{car_id}_limit_a"] = force_amps
                 actions["log"].append(f"⚡ Prio 11.5 (MANUELL EV): {car_id.capitalize()} tvingas till {force_amps}A. Ignorerar effektvakt och scheman.")
                 force_phase = state.get(f'{car_id}_force_phases', 0)
