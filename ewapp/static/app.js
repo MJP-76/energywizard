@@ -350,8 +350,9 @@ function overflows(pg) {
 }
 function fit() {                                           // krymper innehållet steg för steg tills inget sticker ut eller överlappar (stora typsnitt, små skärmar)
   const pg = document.querySelector(".page"); if (!pg) return;
-  pg.classList.remove("t1", "t2", "t3", "t4");
+  pg.classList.remove("t1", "t2", "t3", "t4", "tscroll");
   for (let l = 1; l <= 4 && overflows(pg); l++) pg.classList.add("t" + l);
+  if (overflows(pg)) pg.classList.add("tscroll");          // sista utvägen: scrolla hellre än att kort överlappar eller göms
 }
 window.addEventListener("resize", () => fit());
 let APPV = null;

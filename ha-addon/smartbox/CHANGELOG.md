@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.19 (2026-11-06)
+- **Appens hemskärm med stor text**: med förstorad text i telefonen klipptes planklockans staplar av och sol- och
+  nätrutorna kläms ihop bakom besparingsraden. Nu krymper planen stegvis, rutorna har en minsta höjd, och får det
+  ändå inte plats går hemskärmen att scrolla i stället för att något göms. Provat i 411×914, 411×800 och 360×640 med
+  normal och förstorad text, både klocka och Skyline.
+
 ## 1.2.18 (2026-11-06)
 - **Kallt inne räknas först efter 30 minuter**: notisen "Kallt inomhus!" och värmetvånget oavsett elpris kommer
   först när det varit kallt i 30 minuter i följd. En vädring eller öppen dörr nära givarna (t.ex. 21,8 → 14,6 °C

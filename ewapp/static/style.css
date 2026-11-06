@@ -231,4 +231,16 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .page.t3 .ljquick .mini:nth-child(3) { display:none; } .page.t3 .ljquick { grid-template-columns:repeat(3, minmax(0, 1fr)); } .page.t3 .plrow:nth-of-type(n+5) { display:none; }
 .page.t4 .plannow .pnrow:nth-child(2) { display:none; } .page.t4 .plrow:nth-of-type(n+4) { display:none; }
 .pccard .ewpc{max-width:min(270px,64vw)} .pccard .ewpc-strip{margin-top:8px} .pccard .ewpc-legend{margin-top:6px}   /* planklockan på Hem: plats kvar för sol- och nätrutorna */
+/* 2026-11-06: med stor text i telefonen fick inte allt plats - kompaktnivåerna gömde detaljer men planklockan låg kvar
+   i full storlek, och sol-/nätrutorna kläms till höjden noll bakom besparingsraden. Nu krymper planen med nivåerna,
+   rutorna har en minsta höjd, och får det ändå inte plats scrollar sidan (tscroll) i stället för att något göms. */
+.page .grid2 { min-height:7.5rem; }
+.page.t1 .pccard .ewpc{max-width:min(230px,56vw)} .page.t1 .pccard .ewsk svg{max-height:34vh}
+.page.t2 .pccard .ewpc{max-width:min(195px,48vw)} .page.t2 .pccard .ewsk svg{max-height:28vh} .page.t2 .pccard .ewpc-legend, .page.t2 .pccard .ewsk-leg{display:none}
+.page.t3 .pccard .ewpc{max-width:min(165px,42vw)} .page.t3 .pccard .ewsk svg{max-height:23vh}
+.page.t4 .pccard .ewpc{max-width:min(140px,36vw)} .page.t4 .pccard .ewsk svg{max-height:19vh}
+.page.tscroll { overflow-y:auto; overscroll-behavior:contain; } .page.tscroll > * { flex-shrink:0; } .page.tscroll .grid2 { flex:none; }
+/* Scrollar sidan ändå finns ingen anledning att krympa planen - då behåller den läsbar storlek (texten i klockans
+   mitt får plats i ringen) */
+.page.tscroll .pccard .ewpc{max-width:min(250px,62vw)} .page.tscroll .pccard .ewsk svg{max-height:none} .page.tscroll .pccard .ewpc-legend, .page.tscroll .pccard .ewsk-leg{display:flex}
 .pnrow .pnl { flex:0 0 34px; width:34px; text-align:center; overflow:hidden; } .pnrow .pnl-t { font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--acc); font-weight:700; }   /* ikon eller "Sen" i en fast kolumn - texten börjar på samma ställe på alla rader */
