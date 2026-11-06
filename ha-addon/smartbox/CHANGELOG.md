@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.32 (2026-11-06)
+- **Elmätaren hittas** (#171): en Tibber Pulse med bara köp- och säljeffekt (utan spänning och ström per fas) känns igen
+  av installationsguiden. I guiden kan man också välja en egen sensor för **säljeffekt**, så att export syns även när
+  mätarens effektsensor bara visar köp.
+- **Skuggläget** (#172) visar inte längre skrivningar till en Thermia/Husdata-pump som inte har någon adress.
+
 ## 1.2.31 (2026-11-06)
 - **Försäljning visades som köp** (#171): Tibber Pulse med nyare entitetsnamn (efter hemmets namn) hittades bara via
   spänning × ström, som saknar tecken. Nu hittas Pulsens köp- och säljeffekt oavsett namn, och loggen säger vilka

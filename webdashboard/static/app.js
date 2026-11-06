@@ -1806,7 +1806,7 @@ async function runDiscovery(ev, cached) {
 
   html += `<div class="card" style="margin-bottom:16px"><h2>⚡ Elmätare / Tibber Pulse</h2>
     <div class="note">Krävs för effektvakten, säkringsskyddet och solladdningen. Bäst är en mätare med ström per fas (t.ex. Tibber Pulse); en smartmätare (HAN/P1) med bara effekt fungerar också.</div>
-    ${d.power_meter ? `<label style="display:block;margin:8px 0"><input type="checkbox" class="pick" data-cat="Elmätare" checked> Använd ${d.power_meter.driver === "tibber_pulse" ? "Tibber Pulse (spänning + ström per fas)" : "effektsensorn " + esc(d.power_meter.entities.power_w)}</label>` : ""}`;
+    ${d.power_meter ? `<label style="display:block;margin:8px 0"><input type="checkbox" class="pick" data-cat="Elmätare" checked> Använd ${d.power_meter.driver === "tibber_pulse" ? `Tibber Pulse (${[d.power_meter.entities.import_w ? "köp- och säljeffekt" : "", d.power_meter.entities.current_l1 ? "ström per fas" : ""].filter(Boolean).join(" + ")})` : "effektsensorn " + esc(d.power_meter.entities.power_w)}</label>` : ""}`;
   (d.grid_meters || []).forEach(g => {
     html += `<div class="note" style="margin-top:6px">• ${g.kind === "pulse" ? "Tibber Pulse" : "Smartmätare"}: ${g.power_entity} (${g.maker || "okänt märke"})</div>`;
   });
@@ -1817,6 +1817,8 @@ async function runDiscovery(ev, cached) {
   if (ps.length) html += `
     <label style="display:flex;flex-direction:column;gap:4px;margin-top:12px"><span class="note">Elmätare för hela huset (valfri effektsensor, + = köper)</span>
       <select id="pm_main"><option value="">${d.power_meter ? "Förslaget ovan" : "– ingen –"}</option>${opt("")}</select></label>
+    <label style="display:flex;flex-direction:column;gap:4px;margin-top:8px"><span class="note">Säljeffekt (valfri – om mätaren har en egen sensor för export, t.ex. Tibber Pulses "effekt produktion"; då räknas sensorn ovan som köp)</span>
+      <select id="pm_export"><option value="">– ingen –</option>${opt("")}</select></label>
     <label style="display:flex;flex-direction:column;gap:4px;margin-top:8px"><span class="note">Mätare för en annan byggnad (valfri, t.ex. ett annex - visas, styr inte säkringsskyddet)</span>
       <select id="pm_second"><option value="">– ingen –</option>${opt("")}</select></label>`;
   html += `</div>`;
@@ -1899,7 +1901,8 @@ async function generateConfig(save) {
   if (fd) sel.ftw = { driver: fd, host: document.getElementById("ftw_host").value.trim(), port: +document.getElementById("ftw_port").value || 502,
     unit_id: +document.getElementById("ftw_unit").value || 1, battery: document.getElementById("ftw_bat").checked, solar: document.getElementById("ftw_sol").checked };
   const pmMain = (document.getElementById("pm_main") || {}).value, pmSecond = (document.getElementById("pm_second") || {}).value;
-  if (pmMain) sel.power_meter = { driver: "power_w", entities: { power_w: pmMain } };
+  const pmExport = (document.getElementById("pm_export") || {}).value;
+  if (pmMain) sel.power_meter = pmExport ? { driver: "import_export", entities: { import_w: pmMain, export_w: pmExport } } : { driver: "power_w", entities: { power_w: pmMain } };
   if (pmSecond) sel.power_meter = { ...(sel.power_meter || { driver: "power_w", entities: {} }), secondary_power_w: pmSecond };
 
   if (save) {

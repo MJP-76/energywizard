@@ -34,3 +34,27 @@ def test_live_flow_visar_inte_inf():
     d = live_flow.nodes({"battery_power_w": 0, "battery_soc": float("inf"), "net_power": 100, "pv_power_w": 0})
     bat = next(n for n in d["nodes"] if n["key"] == "batteri")
     assert "inf" not in bat["detail"]
+
+
+def test_pulse_utan_fasvarden_men_med_kop_och_salj():
+    e = ha.detect_tibber_pulse([f"{P}_power", f"{P}_power_production", "sensor.easee_power"])
+    assert e == {"import_w": f"{P}_power", "export_w": f"{P}_power_production"}
+
+
+def test_kop_och_salj_som_egna_sensorer_ger_rätt_tecken(monkeypatch):
+    monkeypatch.setattr(ha, "POWER_METER", {"import_w": "sensor.k", "export_w": "sensor.s"})
+    monkeypatch.setattr(ha, "_states_cache", {"sensor.k": {"state": "0", "attributes": {"unit_of_measurement": "W"}},
+                                             "sensor.s": {"state": "6000", "attributes": {"unit_of_measurement": "W"}}})
+    assert ha.read_power_meter()["net_power_w"] == -6000.0
+
+
+def test_skugglaget_loggar_inte_skrivning_till_pump_utan_adress(monkeypatch):
+    import importlib
+    monkeypatch.setenv("PUMP_IP", ""); monkeypatch.setenv("PUMP_IP_FALLBACK", "")
+    import pump
+    pump = importlib.reload(pump)
+    import shadow
+    monkeypatch.setattr(shadow, "active", lambda: True)
+    rec = []
+    monkeypatch.setattr(shadow, "record", lambda *a: rec.append(a))
+    assert pump.set_room_temp(220) is False and rec == []

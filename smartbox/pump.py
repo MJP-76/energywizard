@@ -180,6 +180,8 @@ def read_sensors():
 
 def _write_holding(reg_addr, value, retries=3):
     """Hjälpfunktion för att skriva till ett Modbus Holding-register med retries."""
+    if not PUMP_IPS:                          # ingen pump angiven (#172: skuggläget visade skrivningar till en pump som inte finns)
+        return False
     import shadow
     if shadow.active():                       # skuggläge: pumpen rörs inte, åtgärden loggas
         shadow.record("Thermia (Husdata) register", f"{reg_addr} = {value}")

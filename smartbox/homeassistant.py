@@ -473,6 +473,11 @@ def detect_tibber_pulse(entity_ids) -> dict:
                 e.pop("import_w", None)
                 e.pop("export_w", None)
             return e
+    # #171: många Pulse-installationer har bara köp- och säljeffekt (ingen spänning/ström per fas) - det räcker
+    for prefix in sorted(found):
+        e = found[prefix]
+        if "import_w" in e and "export_w" in e:
+            return {k: v for k, v in e.items() if k in ("import_w", "export_w", "hour_kwh")}
     return {}
 
 
