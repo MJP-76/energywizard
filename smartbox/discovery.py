@@ -383,6 +383,37 @@ def _battery_control_preset(ents, all_ents=None):
                               "discharge": {"service": "huawei_solar.forcible_discharge", "data": data, "power_field": "power"}},
                     "note": "Huawei LUNA2000: styrs med integrationens tjänster (tvångsladdning 30 min i taget). Provad mot "
                             "källkoden, inte på riktig hårdvara - börja i skuggläge."}
+    # --- 2026-11-06: Sonnen, Victron och Kostal (integrationernas källkod lästa samma dag) ---
+    # Sonnen via weltmeyer/ha_sonnenbatterie (services.yaml/service.py): charge_battery/discharge_battery(device_id, power)
+    # skriver API:ets börvärde, som bara gäller i manuellt läge - därför först set_operating_mode manual. Auto = automatic.
+    if any(_has(x.get("m"), re.compile(r"sonnen", re.I)) for x in ents) and ents[0].get("d"):
+        dev = ents[0]["d"]
+        manual = {"service": "sonnenbatterie.set_operating_mode", "data": {"device_id": dev, "mode": "manual"}}
+        return {"name": "sonnenbatterie", "entities": {}, "keepalive_s": 600,
+                "modes": {"auto": {"service": "sonnenbatterie.set_operating_mode", "data": {"device_id": dev, "mode": "automatic"}},
+                          "charge": [manual, {"service": "sonnenbatterie.charge_battery", "data": {"device_id": dev}, "power_field": "power"}],
+                          "discharge": [manual, {"service": "sonnenbatterie.discharge_battery", "data": {"device_id": dev}, "power_field": "power"}]},
+                "note": "Sonnen: styrs med integrationens tjänster (manuellt läge + börvärde). Provad mot källkoden, inte på "
+                        "riktig hårdvara - börja i skuggläge."}
+    # Victron via sfstar/hass-victron (const.py): settings_ess_acpowersetpoint (register 2700, W, + = köp från nätet).
+    # Ladda = börvärde +effekt (batteriet laddas med det huset inte använder), ladda ur = -effekt (matar ut), auto = 0.
+    vsp = next((x["e"] for x in (all_ents or ents) if re.fullmatch(r"number\.victron_settings_ess_acpowersetpoint(_\d+)?", x["e"])), None)
+    if vsp:
+        return {"name": "victron_ess", "entities": {},
+                "modes": {"auto": {"number": vsp, "value": 0}, "charge": {"number": vsp, "sign": 1},
+                          "discharge": {"number": vsp, "sign": -1}},
+                "note": "Victron ESS: styrs med nätets börvärde (ESS-läge 'Optimized'/'Keep charged' i GX). Laddning från nätet = "
+                        "börvärde + effekt minus husets förbrukning. Provad mot källkoden - börja i skuggläge."}
+    # Kostal Plenticore (HA:s inbyggda kostal_plenticore, number.py): "Battery min SoC" (Battery:MinSoc). Integrationen
+    # kan inte tvinga laddning/urladdning - men "håll" går: lägsta laddnivån höjs till nuvarande, så sparas batteriet
+    # till de dyra timmarna. Auto = tillbaka till 5 %.
+    if any(_has(x.get("m"), re.compile(r"kostal", re.I)) for x in ents):
+        ms = _find(all_ents or ents, "number", re.compile(r"battery min soc$", re.I))
+        if ms:
+            return {"name": "kostal_plenticore", "entities": {},
+                    "modes": {"auto": {"number": ms["e"], "value": 5}, "hold": {"number": ms["e"], "value": "soc"}},
+                    "note": "Kostal Plenticore: bara 'håll' (lägsta laddnivå = nuvarande), ingen tvingad laddning/urladdning "
+                            "i integrationen. Auto sätter tillbaka lägsta nivån till 5 %."}
     # Tesla Powerwall via HA:s teslemetry / tesla_fleet (select.py): "Operation mode" med self_consumption / backup /
     # autonomous. backup laddar batteriet fullt (från nätet om nätladdning är tillåten i Tesla-appen). Ingen
     # tvingad urladdning finns i Teslas API.

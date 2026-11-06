@@ -173,22 +173,41 @@ class GenericBatteryDriver(BatteryDriver):
             self._last = (intent, power_w, _t.time() if now is None else now)
         return ok
 
+    def _step(self, step: dict, power_w: float | None) -> bool:
+        p = int(round(abs(power_w))) if power_w is not None else int(self.max_power_w or 2500)
+        if step.get("service"):
+            domain, _, svc = str(step["service"]).partition(".")
+            data = dict(step.get("data") or {})
+            if step.get("power_field"):
+                data[step["power_field"]] = p
+            return bool(domain and svc) and bool(homeassistant.call_service(domain, svc, data))
+        if step.get("number"):
+            v = step.get("value")
+            if v == "soc":                                   # håll: lägsta laddnivå = nuvarande (t.ex. Kostal min SoC)
+                soc = self._soc()
+                if soc is None:
+                    return False
+                v = int(round(soc))
+            elif v is None:
+                v = p * (1 if step.get("sign", 1) >= 0 else -1)
+            return bool(homeassistant.set_number(step["number"], v))
+        return False
+
     def _apply(self, intent: str, power_w: float | None = None) -> bool:
         option = self._modes.get(intent)
-        if not option or (not isinstance(option, dict) and not self._e.get("mode_select")):
+        if not option or (not isinstance(option, (dict, list)) and not self._e.get("mode_select")):
             return False
         ok = True
         if power_w is not None:
             num = self._e.get("charge_power" if intent == "charge" else "discharge_power" if intent == "discharge" else "")
             if num:
                 ok = homeassistant.set_number(num, self._power_value(num, abs(power_w)))
-        if isinstance(option, dict) and option.get("service"):
-            # Tjänsteanrop i stället för ett lägesval (t.ex. huawei_solar.forcible_charge): {service, data, power_field}
-            domain, _, svc = str(option["service"]).partition(".")
-            data = dict(option.get("data") or {})
-            if option.get("power_field"):
-                data[option["power_field"]] = int(round(abs(power_w))) if power_w is not None else int(self.max_power_w or 2500)
-            ok = ok and bool(domain and svc) and bool(homeassistant.call_service(domain, svc, data))
+        if isinstance(option, list) or (isinstance(option, dict) and (option.get("service") or option.get("number"))):
+            # Ett eller flera steg i tur och ordning (2026-11-06): tjänsteanrop {service, data, power_field} (t.ex.
+            # huawei_solar.forcible_charge, eller sonnenbatterie: först manuellt läge, sedan charge_battery) och
+            # nummerfält {number, sign | value} (t.ex. Victrons ESS-börvärde: +effekt = ladda från nätet).
+            for step in (option if isinstance(option, list) else [option]):
+                ok = ok and self._step(step, power_w)
         elif isinstance(option, dict):                   # flera val i tur och ordning (t.ex. Solax)
             for entity, opt in option.items():
                 ok = ok and homeassistant.set_select(entity, opt)

@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.37 (2026-11-06)
+- **Fler batterier kan styras** (ej provade på riktig hårdvara – börja i skuggläge):
+  - **Sonnen** via integrationen sonnenbatterie: manuellt läge och laddning/urladdning med vald effekt.
+  - **Victron ESS** via hass-victron: nätets börvärde (+ laddar från nätet, − laddar ur).
+  - **Kostal Plenticore**: "håll" – lägsta laddnivå sätts till nuvarande så att batteriet sparas till dyra timmar.
+  - **Pixii, Deye och Sigenergy** direkt via Sourcefuls drivrutiner: nytt val i installationsguiden, "Låt EnergyWizard
+    styra batteriet".
+- SMA och Alpha ESS läses fortfarande (styrning kräver SMA:s Modbus-register respektive Alpha ESS molnschema).
+
 ## 1.2.36 (2026-11-06)
 - **Batteriet hölls tillbaka av en elbil som inte var inkopplad** (#174): batteriet räknar nu elbilen som laddande först
   när laddboxen faktiskt drar ström. Manuell tvångsladdning väntar tills kabeln sitter i, och kontaktorskyddet släpper

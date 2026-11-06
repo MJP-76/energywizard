@@ -1702,9 +1702,14 @@ def _build_house_config_yaml(sel: dict) -> str:
                      "  # control_unverified: true   # styrning via FTW-drivrutinen på egen risk (overifierad) - börja i skuggläge"]
     battery = sel.get("battery")
     if ftw and ftw.get("battery"):                           # FTW-drivrutin direkt mot batteriet (ingen HA-integration)
-        lines += ["battery:", "  enabled: true", "  driver: ftw", "  capacity_kwh: 10  # FYLL I - batteriets kapacitet i kWh",
-                  "  control: samarbete   # läs bara; styrning kräver en verifierad FTW-drivrutin", "  reserve_soc: 20",
-                  "  priority_soc: 50", "  max_power_w: 5000    # FYLL I"] + ftw_block
+        if ftw.get("control"):                               # styrning via FTW-drivrutinen, valt i guiden (overifierad)
+            ctl = ["  control: styr        # EnergyWizard laddar billigt och laddar ur dyrt", "  control_unverified: true   # drivrutinen är inte provad på riktig hårdvara - börja i skuggläge"]
+            fb = [x for x in ftw_block if "control_unverified" not in x]
+        else:
+            ctl = ["  control: samarbete   # läs bara; styrning kräver en verifierad FTW-drivrutin"]
+            fb = ftw_block
+        lines += ["battery:", "  enabled: true", "  driver: ftw", "  capacity_kwh: 10  # FYLL I - batteriets kapacitet i kWh"] + ctl + [
+                  "  reserve_soc: 20", "  priority_soc: 50", "  max_power_w: 5000    # FYLL I"] + fb
         battery = None
     elif battery:
         gs = battery.get("generic_suggestion") or {}
@@ -1722,7 +1727,7 @@ def _build_house_config_yaml(sel: dict) -> str:
         if modes:
             lines.append(f"  modes:               # förifyllt för {gs.get('preset') or 'din integration'} - kontrollera mot HA")
             for intent, opt in modes.items():
-                if isinstance(opt, dict) and any(not isinstance(v, str) for v in opt.values()):
+                if isinstance(opt, list) or (isinstance(opt, dict) and any(not isinstance(v, str) for v in opt.values())):
                     lines.append(f"    {intent}: {json.dumps(opt, ensure_ascii=False)}")   # tjänsteanrop (t.ex. Huawei) - JSON är giltig YAML
                 elif isinstance(opt, dict):
                     pairs = ", ".join(f'{k}: "{v}"' for k, v in opt.items())
@@ -1782,15 +1787,19 @@ async def ftw_drivers():
         if not f.endswith(".lua"):
             continue
         try:
-            head = open(os.path.join(folder, f), encoding="utf-8", errors="replace").read(6000)
+            full = open(os.path.join(folder, f), encoding="utf-8", errors="replace").read()
         except OSError:
             continue
+        head = full[:6000]
+        # Batteristyrning: drivrutinen tar emot kommandot "battery" (driver_command), som pixii, deye, sigenergy
+        _cmd = _re.search(r"^function driver_command\b.*?^end", full, _re.M | _re.S)
+        can_control = bool(_cmd and '"battery"' in _cmd.group(0))
         g = lambda k: (_re.search(k + r'\s*=\s*"([^"]*)"', head) or [None, None])[1]
         caps = _re.search(r'capabilities\s*=\s*\{([^}]*)\}', head)
         out.append({"id": f[:-4], "name": g("name") or f[:-4], "manufacturer": g("manufacturer") or "",
                     "protocol": (_re.search(r'^PROTOCOL\s*=\s*"([^"]+)"', head, _re.M) or [None, ""])[1],
                     "capabilities": _re.findall(r'"([a-z0-9_-]+)"', caps.group(1)) if caps else [],
-                    "verification": g("verification_status") or ""})
+                    "verification": g("verification_status") or "", "can_control": can_control})
     return {"ok": True, "drivers": out}
 
 

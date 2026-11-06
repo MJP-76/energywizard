@@ -1,6 +1,6 @@
 # Batterier och växelriktare – vad EnergyWizard kan läsa och styra
 
-Senast genomgången 2026-11-05. De 20 vanligaste husbatterierna och hybridväxelriktarna i Sverige och Norden, och hur
+Senast genomgången 2026-11-06. De 20 vanligaste husbatterierna och hybridväxelriktarna i Sverige och Norden, och hur
 EnergyWizard pratar med var och en. Det finns tre vägar:
 
 - **HA-förinställning**: Home Assistant-integrationen finns redan hos användaren. Installationsguiden känner igen den
@@ -28,14 +28,14 @@ bör köras i skuggläge först.
 | 10 | Solis RHI / S6 hybrid | Pho3niX90/solis_modbus | ✅ | ✅ RC Force Charge/Discharge | `solis`, `solis_string` | Förinställning |
 | 11 | Ferroamp EnergyHub + ESO/ESM | (egen) | ✅ | ✅ egen Modbus-drivrutin | `ferroamp`, `ferroamp_modbus` | Egen drivrutin |
 | 12 | Tesla Powerwall 2/3 | teslemetry / tesla_fleet | ✅ | ⚠️ bara självförbrukning ↔ backup (ingen tvingad urladdning i Teslas API) | – | Ny 2026-11-05 |
-| 13 | Deye / Sunsynk | davidrapan/ha-solarman | ✅ | ⏳ (Work Mode/TOU-program – planeras) | `deye` | Läsning |
-| 14 | SMA Sunny Tripower Smart Energy / Sunny Boy Storage | sma / pysmaplus | ✅ | ⏳ | `sma`, `sma_pv` | Läsning; FTW-vägen kan ge styrning |
-| 15 | Victron (ESS, Cerbo GX) | victron-mqtt / modbus | ✅ | ⏳ | `victron`, `victron_mqtt` | Läsning; FTW-vägen kan ge styrning |
-| 16 | Sigenergy SigenStor | TypQxQ/Sigenergy-Local-Modbus | ✅ | ⏳ (Remote EMS – planeras) | `sigenergy` | Läsning |
-| 17 | Pixii PowerShaper / Home | – (ingen HA-integration) | ✅ via FTW | – | `pixii`, `pixii_pv` | Läsning via `driver: ftw` |
-| 18 | Kostal Plenticore + BYD | HA:s inbyggda kostal_plenticore | ✅ | ⏳ | `kostal` | Läsning |
-| 19 | Alpha ESS SMILE | alphaess (moln) | ✅ | ⏳ | `alphaess` | Läsning |
-| 20 | Sonnen | sonnenbatterie (custom) | ✅ | ⏳ | `sonnen` (HTTP, styrning finns i FTW) | Läsning; FTW-vägen kan ge styrning |
+| 13 | Deye / Sunsynk | davidrapan/ha-solarman | ✅ | – (styrs via FTW-vägen) | `deye` (har styrning) | Styrning via `driver: ftw` (val i guiden), ej verifierad |
+| 14 | SMA Sunny Tripower Smart Energy / Sunny Boy Storage | sma / pysmaplus | ✅ | ⏳ | `sma`, `sma_pv` (ingen styrning) | Läsning – styrning kräver SMA:s Modbus-register, planeras |
+| 15 | Victron (ESS, Cerbo GX) | sfstar/hass-victron | ✅ | ✅ ESS-börvärde för nätet (+ ladda, − ladda ur) | `victron`, `victron_mqtt` | Ny 2026-11-06, ej verifierad |
+| 16 | Sigenergy SigenStor | TypQxQ/Sigenergy-Local-Modbus | ✅ | – (styrs via FTW-vägen) | `sigenergy` (har styrning) | Styrning via `driver: ftw` (val i guiden), ej verifierad |
+| 17 | Pixii PowerShaper / Home | – (ingen HA-integration) | ✅ via FTW | – | `pixii` (har styrning), `pixii_pv` | Styrning via `driver: ftw` (val i guiden), ej verifierad |
+| 18 | Kostal Plenticore + BYD | HA:s inbyggda kostal_plenticore | ✅ | ⚠️ bara håll (lägsta laddnivå = nuvarande) | `kostal` | Ny 2026-11-06, ej verifierad |
+| 19 | Alpha ESS SMILE | alphaess (moln) | ✅ | ⏳ (bara molnschema med anropsgränser) | `alphaess` | Läsning |
+| 20 | Sonnen | weltmeyer/ha_sonnenbatterie | ✅ | ✅ manuellt läge + laddning/urladdning (tjänster) | `sonnen` | Ny 2026-11-06, ej verifierad |
 | – | Enphase IQ Battery | HA:s inbyggda enphase_envoy | ✅ | ⚠️ bara självförbrukning ↔ full backup | – | Ny 2026-11-05 |
 | – | Emaldo | – (ingen integration) | ❌ | ❌ | – | Saknas, väntar på API |
 | – | HomeWizard Plug-In Battery | HA:s inbyggda homewizard | ✅ | ✅ laddstrategi | – | Förinställning |
