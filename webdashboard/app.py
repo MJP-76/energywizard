@@ -570,6 +570,9 @@ async def sensors_set(request: Request):
         e = item.get("entity")
         if not ent_ok(e):
             return JSONResponse({"error": f"Ogiltig givare: {e}"}, status_code=400)
+        if homeassistant.is_outdoor_sensor(e, item.get("label"), body.get("outdoor")):     # issue #149
+            return JSONResponse({"error": f"{item.get('label') or e} är en utegivare och kan inte räknas in i innetemperaturen. "
+                                          "Välj den som utegivare längst ner i stället."}, status_code=400)
         prev = old.get(e, {})
         key = prev.get("key")
         if not key or key in used:                       # behåll nyckeln (loggkolumnen) för givare som redan var valda

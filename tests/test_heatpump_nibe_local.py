@@ -286,3 +286,23 @@ def test_pinned_transport_parses_json_and_closes_connection(monkeypatch):
     monkeypatch.setattr(nibe.http.client, "HTTPSConnection", lambda *a, **kw: conn)
     result = nibe._request("heater.invalid", 8443, hashlib.sha256(b"certificate").hexdigest(), "GET", "/", 1)
     assert result == {"devices": []} and conn.closed
+
+
+@pytest.mark.parametrize("echo_raw,ok", [(None, True), (999, False)])
+def test_s1255_svarar_med_hela_punkten_pa_patch(heater, echo_raw, ok):
+    """#152: en riktig S1255 svarar på PATCH med hela den uppdaterade punkten i stället för "modified". Ekat värde
+    som stämmer = lyckat; ekat värde som inte stämmer = inte bekräftat."""
+    orig = heater.request
+
+    def request(host, port, pin, method, path, timeout, payload=None):
+        r = orig(host, port, pin, method, path, timeout, payload)
+        if method == "PATCH":
+            p = deepcopy(heater.points["3699"])
+            if echo_raw is not None:
+                p["value"]["integerValue"] = echo_raw
+            return {"3699": p}
+        return r
+    nibe._request = request
+    d = driver(control_enabled=True, points={"room_target": binding(variable_id=3699)})
+    assert d.set_room_temp(45) is ok
+    assert heater.points["3699"]["value"]["integerValue"] == 450

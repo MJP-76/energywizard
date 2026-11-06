@@ -239,8 +239,9 @@ if initial_pump_data:
 else:
     print("⚠️ UPPSTARTSKONTROLL: Kunde inte läsa värmepumpen vid uppstart.")
 
-print("🤖 Säkerställer att spabadets smartplug (Shelly) är påslagen...")
-spa_driver.set_plug_power(True)
+if HAS_SPA:                                   # #156: inget spabad -> ingen spa-rad eller -anrop
+    print("🤖 Säkerställer att spabadets smartplug (Shelly) är påslagen...")
+    spa_driver.set_plug_power(True)
 
 # Tillståndsvariabler
 last_minute          = None
@@ -1864,13 +1865,17 @@ while True:
                 actual_pump_setpoint = pump_data.get("room_temp_setpoint") if pump_data else None
                 needs_update = False
                 if actual_pump_setpoint is not None:
-                    if abs(int(actual_pump_setpoint * 10) - current_chosen_temp) >= 5: needs_update = True
+                    # > 5 tiondelar: pumpar som sparar hela grader (Thermia läser tillbaka 16,5 som 16) ska inte få samma
+                    # värde omskrivet varje minut (sett 2026-11-06: 16,5 °C skrevs 07:41-07:51 varje minut)
+                    if abs(round(actual_pump_setpoint * 10) - current_chosen_temp) > 5: needs_update = True
                 elif last_sent_temp != current_chosen_temp:
                     needs_update = True
                 
                 if needs_update:
                     print(f"🔧 Sätter pumpens måltemp till {current_chosen_temp/10.0}°C...")
-                    if heat_pump_driver.set_room_temp(current_chosen_temp): last_sent_temp = current_chosen_temp
+                    # Drivrutinerna tar °C (HeatPumpDriver.set_room_temp); current_chosen_temp är i tiondelar (issue #151:
+                    # NIBE/myUplink/climate fick 200 °C i stället för 20,0). Thermia räknar om till tiondelar själv.
+                    if heat_pump_driver.set_room_temp(current_chosen_temp / 10.0): last_sent_temp = current_chosen_temp
             else:
                 ov_pump_mode = all_overrides.get("pump_operating_mode", "auto")
                 try:
@@ -1917,10 +1922,10 @@ while True:
             actual_spa_target = gecko_data.get("target_temp") if gecko_data else None
             actual_spa_eco = gecko_data.get("economy_mode") == 1.0 if gecko_data else None
 
-            if cfg.get('spa_force_heat', False):
+            if HAS_SPA and cfg.get('spa_force_heat', False):
                 print(f"🔥 [TVÅNGSVÄRME AKTIV] GPM Mål: {new_spa_target}°C, Eco: {new_spa_eco} | Faktiskt i HA: {actual_spa_target}°C")
 
-            if (last_sent_spa_target != new_spa_target or last_sent_spa_eco != new_spa_eco or 
+            if HAS_SPA and (last_sent_spa_target != new_spa_target or last_sent_spa_eco != new_spa_eco or 
                 (actual_spa_target is not None and abs(actual_spa_target - new_spa_target) > 0.1) or
                 (actual_spa_eco is not None and actual_spa_eco != new_spa_eco)):
                 print(f"🛁 => SKICKAR NYA VÄRDEN TILL SPABADET! (Eco: {new_spa_eco}, Target: {new_spa_target}°C)")
@@ -2090,7 +2095,7 @@ while True:
                 print(f"  GPM Master Logic Tree Utvärderad: {now.strftime('%H:%M:%S')}")
                 print(f"{'='*55}")
                 
-                if spa_reboot_stage == 0:
+                if HAS_SPA and spa_reboot_stage == 0:
                     spa_driver.set_plug_power(True)
                 
                 for log_msg in gpm_actions["log"]:
@@ -2185,9 +2190,10 @@ while True:
             # Fas-inlärning: logga per-fas-effekt + spabadets aktiviteter (1/min) → underlag för
             # learnern som lär sig vilken fas som driver värmare/pump/blåsare/…
             try:
-                _spa_act = spa_driver.read_activities()
-                logger.log_spa_phase(spa_power_data.get('phase_a_w'), spa_power_data.get('phase_b_w'),
-                                     spa_power_data.get('phase_c_w'), _spa_act)
+                if HAS_SPA:                                   # #156: inget spabad -> ingen fas-loggning
+                    _spa_act = spa_driver.read_activities()
+                    logger.log_spa_phase(spa_power_data.get('phase_a_w'), spa_power_data.get('phase_b_w'),
+                                         spa_power_data.get('phase_c_w'), _spa_act)
             except Exception as _spe:
                 print(f"spa_phase-logg hoppade över: {_spe}")
 

@@ -16,7 +16,8 @@ class ThermiaHusdataHeatPumpDriver(HeatPumpDriver):
         return pump.read_sensors() or {}
 
     def set_room_temp(self, target_c: float) -> bool:
-        return bool(pump.set_room_temp(target_c))
+        # Husdata-registret vill ha tiondelar (pump.set_room_temp); drivrutinens gränssnitt tar °C (#151)
+        return bool(pump.set_room_temp(int(round(float(target_c) * 10))))
 
     def set_water_stop_temp(self, target_c: float) -> bool:
         return bool(pump.set_water_stop_temp(target_c))

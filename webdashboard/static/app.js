@@ -752,6 +752,8 @@ function phaseBar(name, amps, fuse) {
 
 // ---------- Logg: allt installationen läst, beslutat, skickat och fått för fel (smartbox/ew_journal.py) ----------
 let loggF = { hours: 6, lvl: "", src: "", q: "" };
+let loggTimer = null;                 // #154: Live-uppdatering medan Logg-fliken är öppen
+const loggLive = () => { try { return localStorage.getItem("ewLoggLive") !== "0"; } catch (e) { return true; } };
 const LVL_COL = { fel: "var(--bad, #ef4444)", varning: "var(--warn, #f59e0b)", notis: "#a78bfa", info: "var(--mut)" };
 async function renderLogg() {
   const main = document.getElementById("main");
@@ -764,14 +766,18 @@ async function renderLogg() {
         ${sel("lgl", [["", "Alla nivåer"], ["fel", "Fel"], ["varning", "Varningar"], ["notis", "Notiser"], ["info", "Info"]], loggF.lvl)}
         ${sel("lgs", [["", "Alla delar"], ["motor", "Motorn"], ["app", "Appen"], ["webb", "Webben"]], loggF.src)}
         <input id="lgq" type="search" placeholder="Sök (t.ex. batteri, Easee, ❌)" value="${esc(loggF.q)}" style="flex:1 1 180px;min-width:0">
+        <label style="display:flex;gap:6px;align-items:center;font-size:.85rem;white-space:nowrap"><input type="checkbox" id="lglive"${loggLive() ? " checked" : ""}> Live (10 s)</label>
         <button class="icobtn" id="lgdl">⬇️ Ladda ner (2 dygn)</button>
-      </div></div>
+      </div>
+      <div class="note" id="lgts" style="margin-top:6px;font-size:.8rem"></div></div>
     <div class="card"><div id="lgrows" class="note">Laddar…</div></div>`;
   const load = async () => {
     loggF = { hours: +document.getElementById("lgh").value, lvl: document.getElementById("lgl").value, src: document.getElementById("lgs").value, q: document.getElementById("lgq").value };
     const qs = new URLSearchParams({ hours: loggF.hours, lvl: loggF.lvl, src: loggF.src, q: loggF.q, limit: 800 });
     let d; try { d = await api("api/journal?" + qs); } catch (e) { document.getElementById("lgrows").textContent = e.message; return; }
     const box = document.getElementById("lgrows");
+    if (!box) return;                                  // fliken lämnad medan hämtningen pågick
+    const ts = document.getElementById("lgts"); if (ts) ts.textContent = "Uppdaterad " + new Date().toLocaleTimeString("sv-SE");
     if (!d.rows.length) { box.innerHTML = `<div class="note">Inget i loggen för det urvalet.</div>`; return; }
     box.classList.remove("note");
     box.innerHTML = d.rows.map((r) => `<div style="display:flex;flex-wrap:wrap;column-gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:.85rem">
@@ -784,6 +790,14 @@ async function renderLogg() {
   ["lgh", "lgl", "lgs"].forEach((id) => document.getElementById(id).onchange = load);
   let t = null; document.getElementById("lgq").oninput = () => { clearTimeout(t); t = setTimeout(load, 350); };
   document.getElementById("lgdl").onclick = () => { location.href = "api/journal/download?days=2"; };
+  // Live: hämta om var 10:e sekund så länge Logg-fliken är öppen, webbläsarfliken syns och Live är ikryssat
+  document.getElementById("lglive").onchange = (e) => { try { localStorage.setItem("ewLoggLive", e.target.checked ? "1" : "0"); } catch (_) {} if (e.target.checked) load(); };
+  clearInterval(loggTimer);
+  loggTimer = setInterval(() => {
+    const live = document.getElementById("lglive");
+    if (currentPage !== "logg" || !live) { clearInterval(loggTimer); return; }
+    if (live.checked && !document.hidden) load();
+  }, 10000);
   load();
 }
 
@@ -1221,8 +1235,12 @@ async function mountSensorSettings() {
     const h = d.humidities.find((x) => x.entity.startsWith(base) && /humid|fukt/.test(x.entity)); return h ? h.entity : ""; };
   const anySel = Object.keys(sel).length > 0;
   const rows = d.temperatures.map((t) => {
-    const on = sel[t.entity] || (!anySel && t.suggest_indoor);
     const cur = sel[t.entity] || {};
+    if (t.suggest_outdoor)            // utegivare räknas aldrig in i innetemperaturen (issue #149) - välj den nedan
+      return `<div class="sensrow" data-e="${esc(t.entity)}" data-out="1" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:7px 0;border-top:1px solid var(--line)">
+        <span style="flex:1 1 220px;min-width:0;overflow-wrap:anywhere">🌳 ${esc(t.name)} <span class="note">${num(t.value)}</span>
+        <div class="note">Utegivare – räknas inte in i innetemperaturen. Välj den som utegivare nedan.</div></span></div>`;
+    const on = sel[t.entity] || (!anySel && t.suggest_indoor);
     return `<div class="sensrow" data-e="${esc(t.entity)}" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;padding:7px 0;border-top:1px solid var(--line)">
       <label style="display:flex;gap:8px;align-items:center;flex:1 1 220px;min-width:0"><input type="checkbox" class="senson"${on ? " checked" : ""}>
         <span style="min-width:0;overflow-wrap:anywhere">${t.suggest_indoor ? "⭐ " : ""}${esc(t.name)} <span class="note">${num(t.value)}</span></span></label>
@@ -1242,7 +1260,7 @@ async function mountSensorSettings() {
     body.querySelectorAll(".sensrow").forEach((r) => r.hidden = q && !r.textContent.toLowerCase().includes(q) && !r.dataset.e.includes(q));
   };
   document.getElementById("senssave").onclick = async () => {
-    const indoor = [...body.querySelectorAll(".sensrow")].filter((r) => r.querySelector(".senson").checked).map((r) => {
+    const indoor = [...body.querySelectorAll(".sensrow:not([data-out])")].filter((r) => r.querySelector(".senson").checked).map((r) => {
       const t = d.temperatures.find((x) => x.entity === r.dataset.e);
       return { entity: r.dataset.e, label: (sel[r.dataset.e] || {}).label || t.name, offset: r.querySelector(".sensoff").value, humidity: r.querySelector(".senshum").value };
     });

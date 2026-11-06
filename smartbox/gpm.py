@@ -766,7 +766,7 @@ class GlobalPriorityManager:
         # loggas eller påverka resten (issue #122/#123: användare utan spa såg spabeslut och fick spa-aviseringar).
         if not state.get('has_spa', True):
             actions["spa_solar_boost_active"] = False
-            actions["log"] = [l for l in actions["log"] if "(SPA)" not in l and "Spabad" not in l]
+            actions["log"] = [l for l in actions["log"] if "(SPA)" not in l and "spabad" not in l.lower()]
 
         # --- Prio 4.5: TERMISKT BATTERI (Varmvatten 180L) ---
         if price < 0 or avg_net < -2000:

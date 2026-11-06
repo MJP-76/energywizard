@@ -1,5 +1,18 @@
 # Ändringar
 
+## 1.2.16 (2026-11-06)
+- **Innetemperaturen räknade in utegivaren** (#149): en utegivare som var förkryssad bland innegivarna gav t.ex.
+  (18,2 + 2,4) / 2 = 10,3 °C och larm om kallt hus. Utegivare räknas aldrig in i innetemperaturen. I givarlistan visas
+  de som utegivare utan kryssruta, och de går inte att spara som innegivare.
+- **Rumsbörvärdet till NIBE, myUplink och HA-climate** (#151): skickades i tiondelar (200 i stället för 20,0 °C) och
+  avvisades. Skickas nu i °C. Thermia får exakt samma registervärde som förut.
+- **NIBE lokalt** (#152): en lyckad skrivning rapporterades som misslyckad när pumpen (S1255) svarar med hela punkten.
+  Ett avvisat anrop loggar nu statuskoden (t.ex. HTTP 403 när ändringar inte är tillåtna i pumpens meny 7.5.15).
+- **Utan spabad** (#156): inga spabadsrader i loggen och inga anrop till spadrivrutinen.
+- **Loggen live** (#154): Logg-fliken på webben uppdateras var 10:e sekund (kan stängas av).
+- Pumpar som sparar börvärdet i hela grader (Thermia) fick samma börvärde omskrivet varje minut när det var en halv
+  grad. Avrundningen godtas nu.
+
 ## 1.2.15 (2026-11-06)
 - **Bilvärmen håller temperaturen**: när du startat värmen från appen och bilen själv stängt av klimatet kollar
   EnergyWizard 10 minuter senare. Har kupén svalnat mer än 1 °C under önskad temperatur startas värmen igen

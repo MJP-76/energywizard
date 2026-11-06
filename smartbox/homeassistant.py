@@ -63,9 +63,27 @@ def sensor_config() -> dict:
         return {}
 
 
+# Utegivare i listan över innegivare (issue #149: "F750 Utomhustemperatur" 2,4 °C förkryssad bland innegivarna gav
+# innetemperaturen (18,2 + 2,4) / 2 = 10,3 °C och larm om kallt hus). Samma mönster som webbens givarlista.
+OUTDOOR_HINT = re.compile(r"\bute\b|utomhus|outdoor|outside|(^|[._\s])ute([._\s]|$)", re.I)
+_outdoor_skip_warned: set = set()
+
+
+def is_outdoor_sensor(entity: str | None, label: str | None = None, outdoor_entity: str | None = None) -> bool:
+    if entity and outdoor_entity and entity == outdoor_entity:
+        return True
+    return bool(OUTDOOR_HINT.search(f"{entity or ''} {label or ''}"))
+
+
 def indoor_sensors() -> list:
     out = []
-    for i, s in enumerate(sensor_config().get("indoor") or [], start=1):
+    cfg = sensor_config()
+    for i, s in enumerate(cfg.get("indoor") or [], start=1):
+        if isinstance(s, dict) and s.get("entity") and is_outdoor_sensor(s.get("entity"), s.get("label"), cfg.get("outdoor")):
+            if s["entity"] not in _outdoor_skip_warned:
+                print(f"⚠️ Givaren {s.get('label') or s['entity']} är vald som innegivare men är en utegivare - räknas inte in i innetemperaturen.")
+                _outdoor_skip_warned.add(s["entity"])
+            continue
         if isinstance(s, dict) and (s.get("entity") or s.get("esphome_ip")):
             out.append({**s, "key": str(s.get("key") or f"in_{i}"), "label": s.get("label") or s.get("entity") or f"Givare {i}"})
     return out
