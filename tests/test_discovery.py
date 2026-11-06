@@ -320,12 +320,19 @@ def test_check_configured_heat_pump_ingen_fardsk_rad_ger_none(smartbox):
     assert discovery._check_configured_heat_pump() is None
 
 
-def test_check_configured_heat_pump_fardsk_rad_hittas(smartbox):
+def _husdata_cfg(monkeypatch, tmp_path, driver="thermia_husdata"):
+    cfg = tmp_path / "house.yaml"
+    cfg.write_text(f"heat_pump:\n  enabled: true\n  driver: {driver}\n")
+    monkeypatch.setenv("HOUSE_CONFIG_PATH", str(cfg))
+
+
+def test_check_configured_heat_pump_fardsk_rad_hittas(smartbox, monkeypatch, tmp_path):
+    _husdata_cfg(monkeypatch, tmp_path)
     with smartbox.get_db() as conn, conn.cursor() as cur:
         cur.execute("TRUNCATE sensor_log")
         cur.execute(
-            "INSERT INTO sensor_log (timestamp, indoor_temp) VALUES (%s, %s)",
-            (datetime.now(timezone.utc), 21.3),
+            "INSERT INTO sensor_log (timestamp, indoor_temp, forward_temp) VALUES (%s, %s, %s)",
+            (datetime.now(timezone.utc), 21.3, 35.0),
         )
         conn.commit()
 
@@ -333,6 +340,18 @@ def test_check_configured_heat_pump_fardsk_rad_hittas(smartbox):
     assert result is not None
     assert result["driver"] == "thermia_husdata" and result["driver_known"] is True
     assert result["source"] == "modbus_configured_on_server"
+
+
+def test_innetemp_fran_rumsgivare_ar_ingen_husdata(smartbox, monkeypatch, tmp_path):
+    """#162: en NIBE-ägare med innetemperatur från HA-givare fick "Husdata redan ansluten"."""
+    _husdata_cfg(monkeypatch, tmp_path, driver="ha_entities")
+    with smartbox.get_db() as conn, conn.cursor() as cur:
+        cur.execute("TRUNCATE sensor_log")
+        cur.execute("INSERT INTO sensor_log (timestamp, indoor_temp) VALUES (%s, %s)", (datetime.now(timezone.utc), 18.2))
+        conn.commit()
+    assert discovery._check_configured_heat_pump() is None
+    _husdata_cfg(monkeypatch, tmp_path)                   # Husdata vald men pumpen har inte loggat framledning
+    assert discovery._check_configured_heat_pump() is None
 
 
 def test_check_configured_heat_pump_gammal_rad_raknas_inte(smartbox):

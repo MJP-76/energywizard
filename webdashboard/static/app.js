@@ -1336,6 +1336,7 @@ async function mountPriceSource(slotId, country) {
   slot.innerHTML = `<div class="note">Letar efter prissensorer i Home Assistant…</div>`;
   let d;
   try { d = await api("api/price-entities"); } catch (e) { slot.innerHTML = ""; return; }
+  if (!slot.isConnected) return;                           // fliken byttes medan hämtningen pågick
   const opts = [`<option value="">${country && country !== "SE" ? "Ingen vald" : "Standard: elprisetjustnu.se (Sverige)"}</option>`]
     .concat(d.entities.map((e) => `<option value="${esc(e.entity_id)}"${e.entity_id === d.selected ? " selected" : ""}>${esc(e.name)} · ${esc(e.integration)}${e.unit ? " · " + esc(e.unit) : ""}</option>`));
   slot.innerHTML = `
@@ -1348,8 +1349,8 @@ async function mountPriceSource(slotId, country) {
     <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="psrcvat"${d.includes_vat ? " checked" : ""}>
       Priset i sensorn är redan inklusive moms (Nord Pool och Octopus brukar vara det, ENTSO-e och EPEX inte)</label>
     <button class="icobtn" id="psrcsave" style="margin-top:8px">Använd priskällan</button>`;
-  document.getElementById("psrcsave").onclick = async () => {
-    try { await postJSON("api/price-source", { ha_entity: document.getElementById("psrc").value, includes_vat: document.getElementById("psrcvat").checked });
+  slot.querySelector("#psrcsave").onclick = async () => {
+    try { await postJSON("api/price-source", { ha_entity: slot.querySelector("#psrc").value, includes_vat: slot.querySelector("#psrcvat").checked });
       toast("Priskällan sparad - priserna hämtas om inom en minut"); }
     catch (e) { toast(e.message); }
   };
@@ -1656,6 +1657,14 @@ async function renderInstallningar() {
     <div id="modbusScanResults"></div>
     <div id="discoverResults"></div>`;
   document.getElementById("scanbtn").onclick = runDiscovery;
+  try {
+    const c = JSON.parse(sessionStorage.getItem(DISCO_KEY) || "null");
+    if (c && c.d && Date.now() - c.t < 3600e3) {
+      await runDiscovery(null, c);
+      const r = document.getElementById("discoverResults");
+      if (r) r.insertAdjacentHTML("afterbegin", `<div class="note" style="margin-bottom:8px">Senaste skanningen ${new Date(c.t).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })} – inget är sparat förrän du trycker <b>Spara och starta</b>. Tryck Skanna för att söka igen.</div>`);
+    }
+  } catch (e) {}
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
   mountLangSelect("setlang", true);
   mountBatteryPlanSettings();
@@ -1694,12 +1703,18 @@ async function runModbusScan() {
     `</div>`;
 }
 
-async function runDiscovery() {
+// #163: skanningens resultat sparas i webbläsaren (en timme), så att det finns kvar när man byter flik och kommer
+// tillbaka eller när Home Assistant-appen laddar om sidan. Rensas när man sparar.
+const DISCO_KEY = "ewDiscover";
+async function runDiscovery(ev, cached) {
   const results = document.getElementById("discoverResults");
-  results.innerHTML = `<div class="placeholder">Skannar... (kan ta en liten stund)</div>`;
-  let d;
-  try { d = await api("api/discover", { method: "POST" }); } catch (e) { results.innerHTML = `<div class="placeholder">${e.message}</div>`; return; }
-  if (!d.ok) { results.innerHTML = `<div class="placeholder">${d.error}</div>`; return; }
+  let d = cached ? cached.d : null;
+  if (!d) {
+    results.innerHTML = `<div class="placeholder">Skannar... (kan ta en liten stund)</div>`;
+    try { d = await api("api/discover", { method: "POST" }); } catch (e) { results.innerHTML = `<div class="placeholder">${e.message}</div>`; return; }
+    if (!d.ok) { results.innerHTML = `<div class="placeholder">${d.error}</div>`; return; }
+    try { sessionStorage.setItem(DISCO_KEY, JSON.stringify({ t: Date.now(), d })); } catch (e) {}
+  }
   _discovered = d;
 
   const driverTag = (item, genericKey) => {
@@ -1857,6 +1872,7 @@ async function generateConfig(save) {
     const rs = await fetch("api/save-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });
     const j = await rs.json().catch(() => ({}));
     msg.textContent = rs.ok ? j.message : ("Kunde inte spara: " + (j.error || rs.status));
+    if (rs.ok) { try { sessionStorage.removeItem(DISCO_KEY); } catch (e) {} }
     return;
   }
   const r = await fetch("api/generate-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });

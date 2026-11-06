@@ -130,9 +130,13 @@ def _candidate(e: dict) -> str:
 
 # NIBE:s givarkoder i entiteternas namn - samma på alla språk (myUplink- och nibe_heatpump-integrationerna i HA).
 # \b efter siffran: BT1 får inte matcha BT10/BT11.
-_NIBE_BT = {"outdoor_temp": [r"\bBT1\b"], "forward_temp": [r"\bBT2\b"], "return_temp": [r"\bBT3\b"],
-            "water_temp": [r"\bBT7\b", r"\bBT6\b"], "indoor_temp": [r"\bBT50\b"]}
-_DEGREE_MIN = re.compile(r"degree.?minutes|gradminuter|gradminutter|astemin", re.I)
+# #162: myUplink-entiteter saknar ibland BT-koden men har pumpens parameternummer i namnet ("F750 Cu Utomhustemperatur
+# (40004)"). Samma nummer på alla NIBE-modeller med myUplink (40004 ute, 40008 framledning, 40012 retur, 40013/40014
+# varmvatten, 40033 rum).
+_NIBE_BT = {"outdoor_temp": [r"\bBT1\b", r"[(_]40004\b"], "forward_temp": [r"\bBT2\b", r"[(_]40008\b"],
+            "return_temp": [r"\bBT3\b", r"[(_]40012\b"], "water_temp": [r"\bBT7\b", r"[(_]40013\b", r"\bBT6\b", r"[(_]40014\b"],
+            "indoor_temp": [r"\bBT50\b", r"[(_]40033\b"]}
+_DEGREE_MIN = re.compile(r"degree.?minutes|gradminuter|gradminutter|astemin|[(_](40940|43005)\b", re.I)
 
 
 def _nibe_bt_entities(ents) -> dict:
@@ -162,12 +166,24 @@ def _check_configured_heat_pump() -> dict | None:
     HA alls - main.py anropar redan pump.read_sensors() varje cykel och loggar resultatet
     till sensor_log. Läser BARA den loggen (ingen ny Modbus-anslutning härifrån - en andra,
     parallell anslutning till samma pump skulle riskera att störa den körande styrningen).
-    Returnerar None om ingen färsk rad finns, annars ett fynd i samma form som HA-sökningen."""
+    Returnerar None om ingen färsk rad finns, annars ett fynd i samma form som HA-sökningen.
+
+    #162 (2026-11-06): förut räckte en färsk innetemperatur i sensor_log - men den kommer lika gärna från rumsgivare i
+    HA, så en NIBE-ägare fick "Husdata redan ansluten". Nu krävs att installationen faktiskt kör Husdata-drivrutinen
+    och att pumpen själv loggat framledning de senaste 10 minuterna."""
+    try:
+        import os
+        import house_config
+        hp = (house_config.load_house_config(os.environ.get("HOUSE_CONFIG_PATH", "/house_config.yaml")).get("heat_pump") or {})
+    except Exception:
+        hp = {}
+    if not hp.get("enabled") or hp.get("driver") != "thermia_husdata":
+        return None
     try:
         with get_db() as conn, conn.cursor() as cur:
             cur.execute("""
                 SELECT 1 FROM sensor_log
-                WHERE indoor_temp IS NOT NULL AND timestamp > NOW() - INTERVAL '10 minutes'
+                WHERE forward_temp IS NOT NULL AND timestamp > NOW() - INTERVAL '10 minutes'
                 ORDER BY timestamp DESC LIMIT 1
             """)
             if cur.fetchone() is None:
@@ -554,6 +570,14 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                 if climate_e:
                     heat_pump["generic_suggestion"] = {"driver": "generic_climate", "entities": {"climate": climate_e["e"]}}
             break
+    if heat_pump is None:
+        # #162: NIBE-entiteterna kan ligga på en enhet vars namn/tillverkare inte avslöjar en värmepump - leta givarkoder
+        # och myUplink-parameternummer bland ALLA temperaturgivare innan vi ger upp
+        bt = _nibe_bt_entities([x for x in entities if _is_temperature(x) or x["e"].startswith("number.")])
+        if bt:
+            heat_pump = {"device_name": "NIBE (Home Assistant)", "maker": "NIBE", "driver": "ha_entities",
+                         "driver_known": True, "entities": bt, "entity_count": len(bt),
+                         "note": f"NIBE via Home Assistant. Läser {', '.join(sorted(bt))}. Rumsbörvärdet väljs för hand för att styra."}
     if heat_pump is None:
         # HA-skanningen gav inget, men pumpen kan redan prata Modbus DIREKT med smartbox
         # (husets PUMP_IP, går aldrig via HA) - kolla om den faktiskt svarar innan vi ger

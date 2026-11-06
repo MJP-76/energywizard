@@ -71,3 +71,24 @@ def test_rumsborvarde_skrivs_bara_nar_det_valts(monkeypatch):
     with patch.object(homeassistant, "set_number", return_value=True) as sn:
         assert HaEntitiesHeatPumpDriver({"room_target": "number.f750_rum"}).set_room_temp(20.5)
     sn.assert_called_once_with("number.f750_rum", 20.5)
+
+
+# --- #162: myUplink-namn med bara parameternummer, och ingen falsk "Husdata redan ansluten" ---
+F750_PARAMS = [ent("sensor.f750_cu_utomhustemperatur_40004", "F750 Cu Utomhustemperatur (40004)", "dev_x", "F750 Cu", "Okänd", "temperature", "°C", "2.4"),
+               ent("sensor.f750_cu_rumstemperatur_bt50_40033", "F750 Cu Rumstemperatur (BT50) (40033)", "dev_x", "F750 Cu", "Okänd", "temperature", "°C", "18.2"),
+               ent("sensor.f750_cu_framledning_40008", "F750 Cu Framledning (40008)", "dev_x", "F750 Cu", "Okänd", "temperature", "°C", "31")]
+
+
+def test_parameternummer_rakar_aven_utan_bt_kod_och_utan_varmepumpsnamn():
+    hp = discover_house(F750_PARAMS)["heat_pump"]
+    assert hp["driver"] == "ha_entities"
+    assert hp["entities"]["outdoor_temp"] == "sensor.f750_cu_utomhustemperatur_40004"
+    assert hp["entities"]["indoor_temp"] == "sensor.f750_cu_rumstemperatur_bt50_40033"
+
+
+def test_ingen_falsk_husdata_utan_husdata_i_installationen(monkeypatch, tmp_path):
+    import discovery
+    cfg = tmp_path / "h.yaml"
+    cfg.write_text("heat_pump:\n  enabled: false\n")
+    monkeypatch.setenv("HOUSE_CONFIG_PATH", str(cfg))
+    assert discovery._check_configured_heat_pump() is None

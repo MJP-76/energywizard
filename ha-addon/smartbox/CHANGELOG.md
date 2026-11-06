@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.24 (2026-11-06)
+- **NIBE via myUplink hittas** (#162): entiteter med bara myUplinks parameternummer i namnet (t.ex. "Utomhustemperatur
+  (40004)") känns igen, även när enheten inte heter något med värmepump. Installationsguiden sa felaktigt "Husdata
+  redan ansluten" när innetemperaturen kom från rumsgivare. Det kräver nu att Husdata faktiskt är vald och att pumpen
+  loggar framledning.
+- **Skanningen finns kvar** (#163): resultatet av "Skanna mitt Home Assistant" ligger kvar i en timme när man byter flik
+  eller när Home Assistant-appen laddar om sidan, tills man sparar.
+- Priskällekortet kunde ge ett skriptfel om man bytte flik medan det laddade.
+
 ## 1.2.23 (2026-11-06)
 - **Dolda flikar** (#161): webben döljer flikarna Spabad, Elbil, Värmepump och Solceller när installationen saknar den
   utrustningen (Solceller ligger kvar om det finns ett husbatteri). Egna flikar kan döljas med `ui: hidden_tabs:
