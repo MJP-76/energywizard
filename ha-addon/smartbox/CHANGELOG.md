@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.28 (2026-11-06)
+- **Senaste skanningen visas alltid** (#168): resultatet av "Skanna mitt Home Assistant" sparas i installationen och
+  visas med datum och tid när man kommer tillbaka till Inställningar, även efter att man sparat och även när Home
+  Assistant-appen startat om.
+- README: tydligare om solcellsexporten (#169). Vid minuspris regleras bara exporten ner till noll; över 0 kr exporteras
+  överskottet som vanligt.
+
 ## 1.2.27 (2026-11-06)
 - **Webben hämtar alltid senaste versionen** (#167): app.js och style.css länkas med versionsnummer. Home Assistant-appen
   på iOS kunde visa en gammal, sparad stilmall (t.ex. den grå mobilmenyn) trots att en ny version var installerad.

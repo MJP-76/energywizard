@@ -33,10 +33,20 @@ def test_ci_tar_bilden_innan_versionen_hojs():
     wf = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
     job = wf[wf.index("  tillagg:"):]
     assert "needs: allt-i-ett" in job
-    assert job.index("imagetools create") < job.index("addon_version.py set")
+    assert job.index("imagetools create") < job.index("addon_version.py set \"")
     assert "provenance: false" in wf
 
 
 def test_bilden_byggs_fran_exakt_commit():
     df = (ROOT / "ha-addon" / "smartbox" / "Dockerfile").read_text(encoding="utf-8")
     assert 'git -C /src checkout -q "${ENERGYWIZARD_COMMIT}"' in df
+
+
+def test_aldre_korning_hojer_aldrig_bakat():
+    import subprocess, sys as _s
+    script = str(ROOT / "ha-addon" / "smartbox" / "addon_version.py")
+    assert subprocess.run([_s.executable, script, "newer", "1.2.28", "1.2.26"]).returncode == 0
+    assert subprocess.run([_s.executable, script, "newer", "1.2.26", "1.2.27"]).returncode == 1
+    assert subprocess.run([_s.executable, script, "newer", "1.2.27", "1.2.27"]).returncode == 1
+    wf = (ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8")
+    assert "ref: main" in wf and 'exit 1' in wf and "git show" in wf

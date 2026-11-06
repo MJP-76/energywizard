@@ -20,7 +20,8 @@ instead of inventing new protocol code. Open source, free, no subscription.
 - 🌡️ **Heat pump** - lowers the heat automatically when power is expensive, "charges" the house's
   own thermal mass when it is cheap.
 - 🔋 **Home battery** - a daily plan, quarter by quarter: when to charge, save and discharge.
-- ☀️ **Solar export** - turns export off automatically at negative prices, back on above 0.
+- ☀️ **Solar export** - at negative prices, export is regulated down to zero (the sun still covers the house and
+  charges the battery; only what would be sold is curtailed). Above 0, surplus is exported as usual.
 - 🛁 **Spa** - heats during the cheap hours.
 - ⚡ **Fuse guard** - watches the main fuse so you avoid overloads.
 - 📱 **Own app** (`ewapp`, mobile/PWA) and a **desktop/tablet view** (`webdashboard`) with full control,

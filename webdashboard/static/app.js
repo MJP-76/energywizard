@@ -1667,12 +1667,14 @@ async function renderInstallningar() {
     <div id="modbusScanResults"></div>
     <div id="discoverResults"></div>`;
   document.getElementById("scanbtn").onclick = runDiscovery;
+  // #168: senaste skanningen ligger sparad på servern och visas alltid när man kommer tillbaka (även efter att man
+  // sparat, och även när Home Assistant-appen startat en ny session)
   try {
-    const c = JSON.parse(sessionStorage.getItem(DISCO_KEY) || "null");
-    if (c && c.d && Date.now() - c.t < 3600e3) {
-      await runDiscovery(null, c);
-      const r = document.getElementById("discoverResults");
-      if (r) r.insertAdjacentHTML("afterbegin", `<div class="note" style="margin-bottom:8px">Senaste skanningen ${new Date(c.t).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })} – inget är sparat förrän du trycker <b>Spara och starta</b>. Tryck Skanna för att söka igen.</div>`);
+    const last = await api("api/discover/last");
+    if (last && last.ok && document.getElementById("discoverResults")) {
+      await runDiscovery(null, { d: last });
+      const r = document.getElementById("discoverResults"), at = new Date((last.scanned_at || 0) * 1000);
+      if (r) r.insertAdjacentHTML("afterbegin", `<div class="note" style="margin-bottom:8px">Senaste skanningen ${at.toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. Kryssa i det som stämmer och tryck <b>Spara och starta</b> – det som är sparat är det EnergyWizard använder. Tryck Skanna för att söka igen.</div>`);
     }
   } catch (e) {}
   document.getElementById("scanmodbusbtn").onclick = runModbusScan;
@@ -1713,9 +1715,7 @@ async function runModbusScan() {
     `</div>`;
 }
 
-// #163: skanningens resultat sparas i webbläsaren (en timme), så att det finns kvar när man byter flik och kommer
-// tillbaka eller när Home Assistant-appen laddar om sidan. Rensas när man sparar.
-const DISCO_KEY = "ewDiscover";
+// #163/#168: skanningens resultat sparas på servern (api/discover/last) och visas igen när man kommer tillbaka.
 async function runDiscovery(ev, cached) {
   const results = document.getElementById("discoverResults");
   let d = cached ? cached.d : null;
@@ -1723,7 +1723,6 @@ async function runDiscovery(ev, cached) {
     results.innerHTML = `<div class="placeholder">Skannar... (kan ta en liten stund)</div>`;
     try { d = await api("api/discover", { method: "POST" }); } catch (e) { results.innerHTML = `<div class="placeholder">${e.message}</div>`; return; }
     if (!d.ok) { results.innerHTML = `<div class="placeholder">${d.error}</div>`; return; }
-    try { sessionStorage.setItem(DISCO_KEY, JSON.stringify({ t: Date.now(), d })); } catch (e) {}
   }
   _discovered = d;
 
@@ -1882,7 +1881,6 @@ async function generateConfig(save) {
     const rs = await fetch("api/save-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });
     const j = await rs.json().catch(() => ({}));
     msg.textContent = rs.ok ? j.message : ("Kunde inte spara: " + (j.error || rs.status));
-    if (rs.ok) { try { sessionStorage.removeItem(DISCO_KEY); } catch (e) {} }
     return;
   }
   const r = await fetch("api/generate-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });

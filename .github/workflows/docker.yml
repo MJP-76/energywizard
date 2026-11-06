@@ -87,7 +87,12 @@ jobs:
       group: tillagg-version
       cancel-in-progress: false
     steps:
+      # Senaste main (inte den byggda commiten): när två körningar överlappar ska versionshöjningen göras ovanpå den
+      # andras (2026-11-06: 1.2.27 fick rebase-konflikt mot 1.2.26 och tappades tyst)
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -98,21 +103,27 @@ jobs:
         run: |
           set -eu
           IMG=ghcr.io/murre87/energywizard
-          NEW=$(python3 ha-addon/smartbox/addon_version.py changelog)
-          CUR=$(python3 ha-addon/smartbox/addon_version.py config)
-          echo "CHANGELOG: $NEW, config.yaml: $CUR"
+          # Versionen som den HÄR körningens bild hör till: CHANGELOG i den byggda commiten
+          git show "${{ github.sha }}:ha-addon/smartbox/CHANGELOG.md" > /tmp/changelog.md
+          NEW=$(python3 ha-addon/smartbox/addon_version.py changelog /tmp/changelog.md)
+          echo "Bildens version: $NEW"
           if docker buildx imagetools inspect "$IMG:$NEW" >/dev/null 2>&1; then
             echo "$IMG:$NEW finns redan - skrivs inte om"
           else
             docker buildx imagetools create -t "$IMG:$NEW" "$IMG:${{ github.sha }}"
           fi
           docker buildx imagetools inspect "$IMG:$NEW" | grep -q "linux/arm64"
-          if python3 ha-addon/smartbox/addon_version.py set "$NEW" "$IMG"; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3 4 5; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            CUR=$(python3 ha-addon/smartbox/addon_version.py config)
+            if ! python3 ha-addon/smartbox/addon_version.py newer "$NEW" "$CUR"; then
+              echo "config.yaml har redan $CUR (>= $NEW) - inget att höja"; exit 0
+            fi
+            python3 ha-addon/smartbox/addon_version.py set "$NEW" "$IMG"
             git commit -qam "Tillägg $NEW: färdig bild publicerad ($IMG:$NEW)"
-            for i in 1 2 3 4; do
-              git pull -q --rebase origin main && git push -q origin HEAD:main && break
-              sleep $((2 ** i))
-            done
-          fi
+            if git push -q origin HEAD:main; then echo "config.yaml höjd till $NEW"; exit 0; fi
+            sleep $((2 ** i))
+          done
+          echo "Kunde inte höja config.yaml till $NEW"; exit 1

@@ -21,8 +21,8 @@ hårdvara som redan fungerar där istället för att uppfinna ny protokollkod.
 - 🌡️ **Värmepump** - sänker värmen automatiskt när elen är dyr, "laddar"
   husets egen värmetröghet när den är billig.
 - 🔋 **Husbatteri** - dygnsplan kvart för kvart: när det ska ladda, spara och ladda ur.
-- ☀️ **Solcellsexport** - stänger av exporten automatiskt vid minuspris,
-  släpper den igen när priset går över 0.
+- ☀️ **Solcellsexport** - vid minuspris regleras exporten ner till noll (solen täcker fortfarande huset och
+  laddar batteriet, bara det som skulle säljas stryps). Över 0 kr exporteras överskottet som vanligt.
 - 🛁 **Spabad** - värmer under de billiga timmarna.
 - ⚡ **Effektvakt** - håller koll på huvudsäkringen så du slipper överträdelser.
 - 📱 **Egen app** (`ewapp`, mobil/PWA) och **dator-/surfplattevy**

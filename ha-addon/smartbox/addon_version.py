@@ -1,6 +1,7 @@
 """Tilläggets version (används av CI-jobbet tillagg i .github/workflows/docker.yml och av testerna).
 
-  addon_version.py changelog          -> versionen överst i CHANGELOG.md ("## 1.2.17 (2026-11-06)")
+  addon_version.py changelog [fil]    -> versionen överst i CHANGELOG.md ("## 1.2.17 (2026-11-06)")
+  addon_version.py newer <a> <b>      -> exit 0 om a är nyare än b
   addon_version.py config             -> versionen i config.yaml
   addon_version.py set <ver> <image>  -> skriver version och image i config.yaml; exit 0 om något ändrades, 1 annars
 
@@ -53,7 +54,9 @@ def set_version(text: str, version: str, image: str) -> str:
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "changelog":
-        print(changelog_version())
+        print(changelog_version(open(sys.argv[2], encoding="utf-8").read() if len(sys.argv) > 2 else None))
+    elif cmd == "newer" and len(sys.argv) == 4:
+        sys.exit(0 if _key(sys.argv[2]) > _key(sys.argv[3]) else 1)
     elif cmd == "config":
         print(config_version())
     elif cmd == "set" and len(sys.argv) == 4:

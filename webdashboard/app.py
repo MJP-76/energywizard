@@ -1461,9 +1461,37 @@ async def api_discover():
     efter kandidat-entiteter per kategori. Live-anrop mot HA, bara på knapptryck -
     inte cachat/automatiskt som /api/overview."""
     try:
-        return {"ok": True, **discovery.discover_house()}
+        res = {"ok": True, **discovery.discover_house()}
     except Exception as e:
         return {"ok": False, "error": f"Kunde inte skanna Home Assistant: {e}"}
+    try:                                                   # #168: senaste skanningen visas igen när man kommer tillbaka
+        import json as _json
+        res["scanned_at"] = time.time()
+        tmp = _last_discovery_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(res, f, ensure_ascii=False)
+        os.replace(tmp, _last_discovery_path())
+    except Exception as e:
+        print(f"⚠️ Kunde inte spara senaste skanningen: {e}")
+    return res
+
+
+def _last_discovery_path() -> str:
+    return os.path.join(os.path.dirname(ew_settings.PATH) or ".", "last_discovery.json")
+
+
+@app.get("/api/discover/last")
+async def api_discover_last(request: Request):
+    """Senaste skanningens resultat (sparat på servern, #168) - eller ok: False om ingen skanning gjorts."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    try:
+        import json as _json
+        with open(_last_discovery_path(), encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return {"ok": False}
 
 
 @app.post("/api/discover-modbus")
