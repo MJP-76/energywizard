@@ -36,7 +36,7 @@ jobs:
       - name: Starta en simulerad växelriktare per drivrutin
         run: bash tests/simulator/start_sims.sh "$GITHUB_WORKSPACE/devsim/simulator"
       - name: FTW-drivrutinerna mot simulatorn
-        run: cd tests && python -m pytest -q -rxs simulator/ -p no:cacheprovider --rootdir=. -o pythonpath=../smartbox
+        run: PYTHONPATH=smartbox python -m pytest -q -rxs tests/simulator --noconftest -p no:cacheprovider
       - name: Rapport
         if: always()
         run: cat tests/simulator/out/report.json || true
