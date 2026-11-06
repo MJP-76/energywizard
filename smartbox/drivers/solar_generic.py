@@ -28,14 +28,26 @@ class GenericNumberSolarDriver(SolarDriver):
     def __init__(self, entities: dict | None = None):
         self._e = entities or {}
 
+    def _sum(self, ents):
+        """En entitet eller en lista (eller kommaseparerat). Lista = reserv i tur och ordning (som SolarEdge-drivrutinen:
+        snabb Modbus först, molnet som reserv). Med sum_inverters: true summeras listan i stället - flera
+        växelriktare (roadmap 2026-11-07); en som inte svarar räknas inte, svarar ingen blir det None, inte 0."""
+        if not ents:
+            return None
+        if isinstance(ents, str):
+            ents = [e.strip() for e in ents.split(",")]
+        vals = [homeassistant._get_numeric_state(e) for e in ents if isinstance(e, str) and "." in e]
+        vals = [v for v in vals if isinstance(v, (int, float)) and v == v]
+        if not vals:
+            return None
+        return sum(vals) if self._e.get("sum_inverters") else vals[0]
+
     def read_production(self) -> dict:
-        power_e = self._e.get("pv_power_w")
-        today_e = self._e.get("today_kwh")
         status_e = self._e.get("status")
         return {
-            "pv_power_w": homeassistant._get_numeric_state(power_e) if power_e else None,
-            "today_kwh": homeassistant._get_numeric_state(today_e) if today_e else None,
-            "status": homeassistant._get_raw_state(status_e) if status_e else None,
+            "pv_power_w": self._sum(self._e.get("pv_power_w")),
+            "today_kwh": self._sum(self._e.get("today_kwh")),
+            "status": homeassistant._get_raw_state(status_e) if isinstance(status_e, str) and status_e else None,
         }
 
     def supports_curtailment(self) -> bool:

@@ -129,6 +129,10 @@ Hur batteriet fungerar beroende på dina val, med bilder:
 [Har du ett husbatteri?](https://murre87.github.io/energywizard/kunskapsbank/husbatteri.html) ·
 värmepumparna: [Så styrs värmepumpen](https://murre87.github.io/energywizard/kunskapsbank/styra-varmepump-efter-elpris.html).
 
+**Flera växelriktare?** Med den generiska soldrivrutinen (`driver: generic_number`) kan `pv_power_w` och `today_kwh`
+vara en lista. Lägg till `sum_inverters: true` under `entities` så summeras de. Utan den är listan en reserv i tur och
+ordning, t.ex. samma växelriktare via Modbus först och molnet som reserv.
+
 Saknas ditt märke? De generiska drivrutinerna (`generic_*`) täcker redan de
 flesta fall så länge enheten redan fungerar i Home Assistant - ingen egen
 protokollkod behövs. För riktigt märkesspecifik styrning - se

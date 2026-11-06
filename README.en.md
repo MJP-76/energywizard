@@ -96,6 +96,10 @@ How the battery behaves depending on your choices, with pictures:
 [Do you have a home battery?](https://murre87.github.io/energywizard/en/kunskapsbank/home-battery.html) ·
 heat pumps: [Controlling a heat pump by price](https://murre87.github.io/energywizard/en/kunskapsbank/controlling-a-heat-pump-by-price.html).
 
+**Several inverters?** With the generic solar driver (`driver: generic_number`), `pv_power_w` and `today_kwh` can be a
+list. Add `sum_inverters: true` under `entities` to add them up. Without it the list is a fallback in order, e.g. the
+same inverter over Modbus first and the cloud as backup.
+
 Missing your brand? The generic drivers (`generic_*`) already cover most cases as long as the device works in
 Home Assistant. For brand-specific control, see `smartbox/drivers/*.py` for the interfaces - contributions welcome.
 

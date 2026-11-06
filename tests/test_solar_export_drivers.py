@@ -165,3 +165,22 @@ def test_build_solar_driver_huawei_och_modbus():
     mb = build_solar_driver({"solar": {"enabled": True, "driver": "modbus_register",
                                        "modbus": {"preset": "fronius", "hub": "fronius"}}})
     assert isinstance(mb, ModbusRegisterSolarDriver) and mb.supports_curtailment()
+
+
+def test_flera_vaxelriktare_summeras(monkeypatch):
+    """Roadmap 2026-11-07: solproduktion från flera växelriktare. Lista eller kommaseparerat; en som inte svarar
+    räknas inte, och svarar ingen blir det okänt (None), inte 0."""
+    import homeassistant
+    from drivers.solar_generic import GenericNumberSolarDriver
+    vals = {"sensor.vr1_power": 3000.0, "sensor.vr2_power": 1500.0, "sensor.vr3_power": None,
+            "sensor.vr1_today": 10.0, "sensor.vr2_today": 4.5}
+    monkeypatch.setattr(homeassistant, "_get_numeric_state", lambda e: vals.get(e))
+    d = GenericNumberSolarDriver({"pv_power_w": ["sensor.vr1_power", "sensor.vr2_power", "sensor.vr3_power"],
+                                  "today_kwh": "sensor.vr1_today, sensor.vr2_today", "sum_inverters": True})
+    r = d.read_production()
+    assert r["pv_power_w"] == 4500.0 and r["today_kwh"] == 14.5
+    assert GenericNumberSolarDriver({"pv_power_w": ["sensor.vr3_power"], "sum_inverters": True}).read_production()["pv_power_w"] is None
+    # utan sum_inverters är en lista reserv (samma växelriktare via Modbus och moln): aldrig dubbelräknat
+    d2 = GenericNumberSolarDriver({"pv_power_w": ["sensor.vr3_power", "sensor.vr1_power", "sensor.vr2_power"]})
+    assert d2.read_production()["pv_power_w"] == 3000.0
+    assert GenericNumberSolarDriver({"pv_power_w": "sensor.vr1_power"}).read_production()["pv_power_w"] == 3000.0

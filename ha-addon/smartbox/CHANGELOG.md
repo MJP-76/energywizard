@@ -1,5 +1,9 @@
 # Ändringar
 
+## 1.2.43 (2026-11-07)
+- **Flera växelriktare**: den generiska soldrivrutinen kan summera solproduktionen från flera växelriktare
+  (`sum_inverters: true`, se README).
+
 ## 1.2.42 (2026-11-07)
 - **Ingen falsk sol när batteriet säljer** (#175): korrigeringen för en fastfrusen solgivare räknade all export som
   sol. Nu räknas batteriets urladdning bort först.
