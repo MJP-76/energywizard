@@ -125,7 +125,7 @@ def test_report_error_skickar_bara_tillatna_falt_inte_feltexten(monkeypatch):
     assert payload["error_type"] == "ValueError"
 
 
-def test_report_error_avdubblar_inom_24h(monkeypatch):
+def test_report_error_avdubblar_inom_timmen(monkeypatch):
     t = _reload(monkeypatch, opt_in="true", endpoint="https://telemetri.example.com")
     with patch("telemetry.requests.post") as mock_post:
         t.report_error({"house_id": "h"}, "main_loop", "ValueError")
@@ -229,3 +229,14 @@ def test_ftw_drivrutinens_namn_rapporteras():
     import telemetry
     out = telemetry._driver_summary({"battery": {"enabled": True, "driver": "ftw", "ftw": {"driver": "pixii", "host": "10.0.0.5"}}})
     assert "battery:ftw-pixii" in out and not any("10.0.0.5" in x for x in out)
+
+
+def test_kvarstaende_fel_rapporteras_igen_efter_en_timme(monkeypatch):
+    """Installationer visar bara fel som setts senaste 75 min - ett kvarstående fel måste rapporteras varje timme."""
+    from datetime import datetime, timedelta, timezone
+    t = _reload(monkeypatch, opt_in="true", endpoint="https://telemetri.example.com")
+    with patch("telemetry.requests.post") as mock_post:
+        t.report_error({"house_id": "h"}, "main_loop", "ValueError")
+        t._ERROR_SEEN["main_loop:ValueError"] = datetime.now(timezone.utc) - timedelta(minutes=61)
+        t.report_error({"house_id": "h"}, "main_loop", "ValueError")
+    assert mock_post.call_count == 2

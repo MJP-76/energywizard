@@ -106,3 +106,20 @@ def test_error_groups_grupperar_utan_hus(monkeypatch):
     assert "a" * 16 not in str(g)
     s = c.get("/api/stats", headers={"X-Stats-Token": "hemlig"}).json()
     assert s["houses"][0]["errors"] == ["logger.log_data: UndefinedColumn"] and s["houses"][0]["version"] == "1.50"
+
+
+def test_installationer_visar_bara_fel_som_kvarstar(monkeypatch):
+    """Fel som upphört (inte rapporterat på 75 min) eller hör till en äldre version visas inte."""
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+    c, mod = _client(monkeypatch)
+    h = "c" * 16
+    c.post("/ingest/error", json={"house": h, "version": "1.0", "module": "gammal", "error_type": "RattadISenare"})
+    c.post("/ingest/error", json={"house": h, "version": "2.0", "module": "nu", "error_type": "Kvarstar"})
+    c.post("/ingest/error", json={"house": h, "version": "2.0", "module": "forr", "error_type": "Upphort"})
+    c.post("/ingest/drivers", json={"house": h, "version": "2.0", "drivers": ["battery:generic@Solis"]})
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    with sqlite3.connect(mod.DB_PATH) as db:
+        db.execute("UPDATE errors SET received_at = ? WHERE module = 'forr'", (old,))
+    s = c.get("/api/stats").json()
+    assert s["houses"][0]["errors"] == ["nu: Kvarstar"]

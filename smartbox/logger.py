@@ -233,6 +233,27 @@ def _ensure_car_column(col: str, kind: str) -> None:
         print(f"❌ Kunde inte skapa loggkolumnen {col}: {e}")
 
 
+_bool_columns = None
+
+
+def _coerce_bools(data: dict) -> dict:
+    """True/False till 1/0 för kolumner som inte är boolean i databasen.
+
+    Drivrutiner hos andra hus kan rapportera t.ex. compressor_running som bool; Postgres vägrar då hela raden
+    (DatatypeMismatch: kolumnen är smallint/numeric men uttrycket boolean) och minutloggen går förlorad."""
+    global _bool_columns
+    if _bool_columns is None:
+        try:
+            with get_db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT column_name FROM information_schema.columns "
+                                "WHERE table_name = 'sensor_log' AND data_type = 'boolean'")
+                    _bool_columns = {r[0] for r in cur.fetchall()}
+        except Exception:
+            return {k: (int(v) if isinstance(v, bool) else v) for k, v in data.items()}
+    return {k: (int(v) if isinstance(v, bool) and k not in _bool_columns else v) for k, v in data.items()}
+
+
 def log_status(
     price, indoor, water, target_room, water_mode,
     forward, retur, calc_forward, outdoor,
@@ -422,6 +443,7 @@ def log_status(
             _ensure_car_column(k, m.group(2))
             data[k] = (1 if v else 0) if m.group(2) == "charge_completed" else v
 
+        data = _coerce_bools(data)
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["%s"] * len(data))
         values = tuple(data.values())

@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.14 (2026-11-06)
+- **Minutloggen tappades** hos hus vars drivrutin rapporterar på/av som sant/falskt: databasen vägrade raden
+  (DatatypeMismatch). Sådana värden sparas nu som 1/0.
+- Installationer visar bara fel som **fortfarande uppstår**: ett kvarstående fel rapporteras varje timme, och det som
+  inte setts på 75 minuter eller hör till en äldre version försvinner.
+
 ## 1.2.13 (2026-11-06)
 - **Färre falsklarm**: tillfälliga nätverksfel (Home Assistant eller väderprognosen svarade inte en stund) är
   varningar, och på Installationer visas de grått för sig – bara riktiga fel visas i rött.

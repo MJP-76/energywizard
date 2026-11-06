@@ -269,18 +269,21 @@ def send_driver_snapshot(cfg: dict) -> None:
         print(f"ℹ️ Telemetri (drivrutinsöversikt) kunde inte skickas, fortsätter ändå: {e}")
 
 
+ERROR_REPEAT = timedelta(hours=1)
+
+
 def report_error(cfg: dict, module: str, error_type: str) -> None:
     """module/error_type ska alltid vara korta konstanter (t.ex. modulnamn och
     exceptionens klassnamn via type(e).__name__) - aldrig str(exception) rakt
-    av. Avdubblar en gång/dygn per (modul, feltyp) så en upprepad bugg inte
-    spammar samlaren."""
+    av. Avdubblar en gång/timme per (modul, feltyp): en upprepad bugg spammar inte samlaren, men ett fel som
+    kvarstår rapporteras igen varje timme, så Installationer kan visa bara fel som fortfarande uppstår."""
     if not (OPT_IN and ENDPOINT):
         return
     try:
         key = f"{module}:{error_type}"
         now = datetime.now(timezone.utc)
         last = _ERROR_SEEN.get(key)
-        if last is not None and (now - last) < timedelta(hours=24):
+        if last is not None and (now - last) < ERROR_REPEAT:
             return
         _ERROR_SEEN[key] = now
         payload = {
@@ -299,7 +302,7 @@ def report_error(cfg: dict, module: str, error_type: str) -> None:
 # Motorn skriver fel som "❌ ..." på ett 60-tal ställen (fångade undantag som annars bara syns i loggen, t.ex.
 # databasfel, HA som inte svarar, drivrutiner som inte når pumpen/laddboxen). Kroken rapporterar varje sådan rad
 # som modul.funktion + undantagets typ - kodens egna namn, ALDRIG radens text (den kan innehålla adresser och
-# entitetsnamn). report_error avdubblar en gång per dygn och feltyp. Samlaren gör sedan GitHub-issues av dem.
+# entitetsnamn). report_error avdubblar en gång per timme och feltyp. Samlaren gör sedan GitHub-issues av dem.
 _hook_cfg: dict = {}
 
 

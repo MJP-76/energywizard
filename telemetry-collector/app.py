@@ -192,10 +192,12 @@ async def stats(request: Request, me: str = ""):
         rows = c.execute(
             "SELECT house, version, drivers FROM driver_snapshots WHERE received_at >= ? ORDER BY id", (since,)).fetchall()
         first = {r[0]: r[1] for r in c.execute("SELECT house, first_seen FROM known_houses")}
-        day = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
         errs = {}
-        for h, mod, et in c.execute("SELECT DISTINCT house, module, error_type FROM errors WHERE received_at >= ?", (day,)):
-            errs.setdefault(h, []).append(f"{mod}: {et}")
+        # Bara fel som fortfarande uppstår: motorn rapporterar ett kvarstående fel en gång i timmen
+        # (smartbox/telemetry.py ERROR_REPEAT), så det som inte setts på 75 minuter har upphört
+        recent = (datetime.now(timezone.utc) - timedelta(minutes=75)).isoformat()
+        for h, ver, mod, et in c.execute("SELECT DISTINCT house, version, module, error_type FROM errors WHERE received_at >= ?", (recent,)):
+            errs.setdefault(h, []).append((ver, f"{mod}: {et}"))
     latest = {}
     for house, version, drivers in rows:
         if _is_real_house(house):
@@ -217,7 +219,9 @@ async def stats(request: Request, me: str = ""):
             cat, _, rest = d.partition(":")
             devs.setdefault(cat, []).append(_norm(rest))
         houses.append({"label": f"Hus {i}", "since": (first.get(h) or "")[:10], "mine": bool(me) and h == me, "devices": devs,
-                       "version": latest[h][0], "errors": sorted(errs.get(h, []))})
+                       # Bara fel från husets nuvarande version: ett fel som rättats i en senare version försvinner
+                       # när huset uppdaterats, i stället för att ligga kvar ett dygn
+                       "version": latest[h][0], "errors": sorted({e for v, e in errs.get(h, []) if v == latest[h][0]})})
     week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     return {
         "active": len(latest),
