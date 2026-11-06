@@ -239,7 +239,7 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .page.t2 .pccard .ewpc{max-width:min(195px,48vw)} .page.t2 .pccard .ewsk svg{max-height:28vh} .page.t2 .pccard .ewpc-legend, .page.t2 .pccard .ewsk-leg{display:none}
 .page.t3 .pccard .ewpc{max-width:min(165px,42vw)} .page.t3 .pccard .ewsk svg{max-height:23vh}
 .page.t4 .pccard .ewpc{max-width:min(140px,36vw)} .page.t4 .pccard .ewsk svg{max-height:19vh}
-.page.tscroll { overflow-y:auto; overscroll-behavior:contain; } .page.tscroll > * { flex-shrink:0; } .page.tscroll .grid2 { flex:none; }
+.page.tscroll { overflow-y:auto; overscroll-behavior:contain; } .page.tscroll > * { flex:none; }   /* naturlig höjd: flex:1-delar (planlistan) har annars grundstorlek 0 och blir 18 px */ .page.tscroll .grid2 { flex:none; }
 /* Scrollar sidan ändå finns ingen anledning att krympa planen - då behåller den läsbar storlek (texten i klockans
    mitt får plats i ringen) */
 .page.tscroll .pccard .ewpc{max-width:min(250px,62vw)} .page.tscroll .pccard .ewsk svg{max-height:none} .page.tscroll .pccard .ewpc-legend, .page.tscroll .pccard .ewsk-leg{display:flex}

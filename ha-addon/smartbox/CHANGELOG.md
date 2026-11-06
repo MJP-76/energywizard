@@ -1,5 +1,9 @@
 # Ändringar
 
+## 1.2.20 (2026-11-06)
+- Appen med mycket stor text: när en flik måste scrolla fick planlistan på Plan-fliken bara 18 px höjd. Alla delar
+  får nu sin naturliga höjd när sidan scrollar.
+
 ## 1.2.19 (2026-11-06)
 - **Appens hemskärm med stor text**: med förstorad text i telefonen klipptes planklockans staplar av och sol- och
   nätrutorna kläms ihop bakom besparingsraden. Nu krymper planen stegvis, rutorna har en minsta höjd, och får det
