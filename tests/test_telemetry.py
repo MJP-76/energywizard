@@ -278,13 +278,20 @@ def test_insamlaren_skiljer_livstecken_fran_hus_utan_enheter(monkeypatch, tmp_pa
     spec = importlib.util.spec_from_file_location("collector_app_test", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    from fastapi.testclient import TestClient
-    c = TestClient(mod.app)
-    with c:
-        c.post("/ingest/drivers", json={"house": "a" * 16, "version": "1.2.39", "drivers": [], "ping": True})
-        c.post("/ingest/drivers", json={"house": "b" * 16, "version": "1.2.39", "drivers": []})
-        c.post("/ingest/drivers", json={"house": "c" * 16, "version": "1.2.39", "drivers": ["meter:ha@Tibber"]})
-        s = c.get("/api/stats").json()
+    import asyncio
+
+    class Req:                       # utan TestClient: CI saknar httpx-paketet som den kräver
+        def __init__(self, body=None):
+            self.headers, self._body = {}, body
+
+        async def json(self):
+            return self._body
+
+    for body in ({"house": "a" * 16, "version": "1.2.39", "drivers": [], "ping": True},
+                 {"house": "b" * 16, "version": "1.2.39", "drivers": []},
+                 {"house": "c" * 16, "version": "1.2.39", "drivers": ["meter:ha@Tibber"]}):
+        asyncio.run(mod.ingest_drivers(Req(body)))
+    s = asyncio.run(mod.stats(Req()))
     assert s["active"] == 3 and s["ping_only"] == 1 and s["without_devices"] == 1
     assert [h["ping_only"] for h in s["houses"]] == [True, False, False]
     assert s["houses"][0]["devices"] == {} and s["equipment"] == {"meter": {"ha@Tibber": 1}}
