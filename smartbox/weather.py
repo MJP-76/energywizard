@@ -125,7 +125,7 @@ def update_forecast():
             records.append((dt, temp, cloud_pct, wind, wind_dir, precip_cat, rain_prob, thunder))
 
         if not records:
-            print("❌ Open-Meteo: tom prognos.")
+            print("⚠️ Open-Meteo: tom prognos - försöker igen senare")       # tillfälligt; larm efter två missar i rad
             return False
 
         with get_db() as conn:
@@ -145,6 +145,8 @@ def update_forecast():
             conn.commit()
         print(f"📥 Väderprognos hämtad från Open-Meteo ({len(records)} timmar).")
         return True
+    except (requests.Timeout, requests.ConnectionError) as e:
+        print(f"⚠️ Open-Meteo svarade inte ({type(e).__name__}) - försöker igen senare")
     except Exception as e:
         print(f"❌ Fel vid Open-Meteo väder-API: {e}")
     return False

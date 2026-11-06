@@ -1458,8 +1458,12 @@ async function renderInstalls() {
       return `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${ico}</span>
         <span class="note" style="flex:0 0 120px">${name}</span><span style="flex:1 1 auto;min-width:0">${val}</span></div>`;
     }).join("");
-    const errs = (h.errors || []);
-    const errRow = `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${errs.length ? "⚠️" : "✅"}</span>
+    // Tillfälliga nätverksfel (Home Assistant eller ett moln svarade inte en stund) visas grått - bara riktiga fel rött
+    const TRANSIENT = /(ReadTimeout|ConnectTimeout|Timeout|ConnectionError|HTTPError|RemoteDisconnected|ChunkedEncodingError|SSLError|TimeoutError|OSError)$/;
+    const allErrs = (h.errors || []), errs = allErrs.filter((e) => !TRANSIENT.test(e)), tmp = allErrs.filter((e) => TRANSIENT.test(e));
+    const tmpRow = tmp.length ? `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">🌐</span>
+        <span class="note" style="flex:0 0 120px">Tillfälligt (nätet)</span><span class="note" style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere">${tmp.map(esc).join("<br>")}</span></div>` : "";
+    const errRow = tmpRow + `<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line)"><span style="flex:0 0 26px">${errs.length ? "⚠️" : "✅"}</span>
         <span class="note" style="flex:0 0 120px">Fel senaste dygnet</span><span style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere${errs.length ? ";color:#c0392b" : ""}">${errs.length ? errs.map(esc).join("<br>") : `<span class="note">inga</span>`}</span></div>`;
     const verRow = h.version ? `<div class="note" style="padding-top:6px">Version ${esc(h.version)}</div>` : "";
     return `<div class="card" style="padding:14px${h.mine ? ";border-color:var(--acc)" : ""}${errs.length ? ";box-shadow:0 0 0 2px #e74c3c55" : ""}">
