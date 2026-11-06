@@ -254,20 +254,26 @@ def update_states():
         last_update_ok = False
         _states_cache.clear()
         _ha_fail["n"] += 1
-        # En enstaka timeout (HA upptagen en stund) är en varning; ett fel först när HA inte svarat tre gånger i rad.
-        # Förut blev varje timeout ett ❌ plus hela förloppet, och telemetrin gjorde issues av det.
-        if _ha_fail["n"] < 3 and isinstance(e, (requests.Timeout, requests.ConnectionError)):
+        _ha_fail["at"] = time.time()
+        net = isinstance(e, (requests.RequestException, OSError))   # timeout, nekad anslutning, SSL-handskakning ...
+        # En enstaka timeout (HA upptagen en stund) är en varning; ett fel först när HA inte svarat tre gånger i rad,
+        # och sedan bara var tionde gång (2026-11-06: en omstart av HA gav 75 felrader på en minut). Nätverksfel skrivs
+        # utan förlopp - bara oväntade fel får hela tracebacken.
+        n = _ha_fail["n"]
+        if n < 3 and net:
             print(f"⚠️ HA svarade inte ({type(e).__name__}) - försöker igen")
-        else:
-            print(f"❌ HA: Fel vid update_states ({_ha_fail['n']} i rad): {e}")
-            if not isinstance(e, (requests.Timeout, requests.ConnectionError)):
+        elif n == 3 or n % 10 == 0 or not net:
+            print(f"❌ HA: Fel vid update_states ({n} i rad): {type(e).__name__}: {str(e)[:160]}")
+            if not net:
                 traceback.print_exc()
         return False
 
 
 def _get_raw_state(entity_id):
     """Hämtar rå-strängen från en sensor utan att konvertera den till siffror."""
-    if not _states_cache:
+    # Tom cache: hämta - men inte om HA nyss inte svarade. Annars försöker varje enskild avläsning igen och väntar ut sin
+    # timeout när HA är nere (2026-11-06: dussintals försök i minuten under en omstart av HA).
+    if not _states_cache and time.time() - _ha_fail.get("at", 0) > 30:
         update_states()
     s = _states_cache.get(entity_id)
     if not s:
@@ -734,15 +740,17 @@ def set_solaredge_limit(limit: int, entity: str | None = None):
         print(f"❌ SolarEdge: Fel vid sättning av limit: {e}")
         return False
 
-def press_button(entity_id: str):
+def press_button(entity_id: str, timeout: float = 5):
     """Trycker på en knapp i HA (t.ex. button.tesla_model_y_wake_up). Returnerar True om anropet gick igenom."""
     try:
         r = requests.post(f"{_BASE}/services/button/press", headers=_HEADERS,
-                          json={"entity_id": entity_id}, timeout=5, verify=_VERIFY)
+                          json={"entity_id": entity_id}, timeout=timeout, verify=_VERIFY)
         r.raise_for_status()
         return True
     except requests.exceptions.ReadTimeout:
-        print(f"⚠️ {entity_id}: inget svar från HA inom 5 s (knappen tryckt, bilen kan vara långsam)")      # kommandot hinner oftast fram; ingen upprepning
+        # Knappen är tryckt; HA svarar först när tillverkarens moln svarat (Nissan tar ofta 10-30 s). Normalt - ingen
+        # varning (2026-11-06: en ⚠️ var 30:e minut för Leafens uppdateringsknapp).
+        print(f"ℹ️ {entity_id}: tryckt, svaret från bilens moln dröjer")
         return False
     except Exception as e:
         print(f"❌ Kunde inte trycka på {entity_id}: {e}")

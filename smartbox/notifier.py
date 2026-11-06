@@ -20,7 +20,7 @@ def target():
         except Exception:
             name = ""
     if name:
-        return name.removeprefix("notify.")
+        return name if name.startswith("script.") else name.removeprefix("notify.")
     if time.time() - _auto_target["t"] > 3600:
         _auto_target["t"] = time.time()
         _auto_target["name"] = _find_mobile_app()
@@ -64,14 +64,16 @@ def _init():
 
 
 def _send(target: str, title: str, message: str, data: dict = None):
-    """Skickar en notis (eventuellt med action-knappar) till en specifik HA-mottagare."""
+    """Skickar en notis (eventuellt med action-knappar) till en specifik HA-mottagare: en notify-tjänst (t.ex.
+    mobile_app_pixel_8) eller ett skript ("script.mitt_skript", #170) som får variablerna title, message (och data)."""
     _init()
     payload = {"title": title, "message": message}
     if data:
         payload["data"] = data
+    domain, svc = ("script", target.split(".", 1)[1]) if target.startswith("script.") else ("notify", target)
     try:
         r = requests.post(
-            f"{_ha_base}/services/notify/{target}",
+            f"{_ha_base}/services/{domain}/{svc}",
             headers=_ha_headers,
             json=payload,
             timeout=5,

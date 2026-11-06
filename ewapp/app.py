@@ -1400,7 +1400,7 @@ def logact(request: Request, txt: str) -> None:
 async def clienterr(request: Request):
     try:
         b = await request.json()
-        msg = f"{str(b.get('m'))[:300]} @ {str(b.get('s'))[:120]} | {str(b.get('ua'))[:80]}"
+        msg = f"{str(b.get('m'))[:300]} @ {str(b.get('s'))[:300]} | {str(b.get('ua'))[:80]}"
     except Exception:
         return {"ok": False}
     _role_user = _session(request)[1] or "?"

@@ -245,3 +245,6 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .page.tscroll .pccard .ewpc, .page.tscroll .pccard .ewpc svg{touch-action:pan-y}   /* lodrätt drag på klockan scrollar sidan i stället för att vrida tiden */
 .page.tscroll .pccard .ewpc{max-width:min(250px,62vw)} .page.tscroll .pccard .ewsk svg{max-height:none} .page.tscroll .pccard .ewpc-legend, .page.tscroll .pccard .ewsk-leg{display:flex}
 .pnrow .pnl { flex:0 0 34px; width:34px; text-align:center; overflow:hidden; } .pnrow .pnl-t { font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--acc); font-weight:700; }   /* ikon eller "Sen" i en fast kolumn - texten börjar på samma ställe på alla rader */
+/* Tids-/datumfält i arken (gästbil, schemaläggning): samma formspråk som webbens fält (2026-11-06) */
+.setrow input[type=time], .sheet input[type=time], .sheet input[type=datetime-local] { font:inherit; font-size:16px; min-height:44px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--txt); -webkit-appearance:none; appearance:none; outline:none; }
+.setrow input[type=time]:focus, .sheet input:focus { border-color:var(--acc); box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent); }

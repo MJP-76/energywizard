@@ -130,7 +130,7 @@ function planChart(p, cars) {
     const bars = g.map((x) => `<i style="left:${(Math.max(x.s, t0) - t0) / span * 100}%;width:${(Math.min(x.e, t0 + span) - Math.max(x.s, t0)) / span * 100}%;background:${col}" title="${f1(x.kw / x.n)} kW"></i>`).join("");
     const pa = c.plan_all && c.plan_all.blocks && c.plan_all.blocks.length ? c.plan_all : null;
     const full = c.soc != null && c.soc >= 98;
-    const sunBar = (!pa && !full && sw && hs[sw.a]) ? `<i class="predicted" style="left:${(hs[sw.a].ts - t0) / span * 100}%;width:${((hs[sw.b].ts + H - hs[sw.a].ts)) / span * 100}%;background:${col}" title="Väntad solladdning, ej bekräftad ännu"></i>` : "";
+    const sunBar = (!pa && !full && sw && hs[sw.a] && hs[sw.b]) ? `<i class="predicted" style="left:${(hs[sw.a].ts - t0) / span * 100}%;width:${((hs[sw.b].ts + H - hs[sw.a].ts)) / span * 100}%;background:${col}" title="Väntad solladdning, ej bekräftad ännu"></i>` : "";
     const txt = !c.home ? "inte hemma" : !c.plugged ? "kabeln ej i" : pa ? `${pa.blocks[0].start}–${pa.blocks[pa.blocks.length - 1].end}${pa.summary && pa.summary.soc0 != null ? ` · ${pa.summary.soc0}→${pa.summary.soc1} %` : ""}` : full ? "fulladdad" : sunTxt ? `inget prisschema · solladdning väntas automatiskt ${sunTxt}` : "ingen laddning planerad";
     return `<div class="pc-lane"><span class="pc-name" style="color:${col}">${esc(c.name.split(" ")[0])}</span><div class="pc-track">${bars}${sunBar}</div><button class="pc-txt" data-a="cardata" data-c="${c.key}" title="Tryck för alla data">${esc(txt)}</button></div>`; }).join("");
   const nowAt = hs.length ? (Date.now() - t0) / span * 100 : 0;
@@ -637,7 +637,9 @@ function start() {
 let errN = 0, errT = 0;
 function reportErr(m, s) { const now = Date.now(); if (now - errT > 60000) { errT = now; errN = 0; } if (++errN > 3) return; try { fetch("api/clienterr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ m: String(m), s: String(s || ""), ua: navigator.userAgent }) }); } catch {} }
 window.addEventListener("error", (e) => reportErr(e.message, (e.filename || "").split("/").pop() + ":" + e.lineno));
-window.addEventListener("unhandledrejection", (e) => reportErr("promise: " + (e.reason && e.reason.message || e.reason), ""));
+// Med var felet uppstod (första raderna i förloppet) - 2026-11-06 kom "reading '0'" utan plats och gick inte att spåra
+window.addEventListener("unhandledrejection", (e) => reportErr("promise: " + (e.reason && e.reason.message || e.reason),
+  e.reason && e.reason.stack ? String(e.reason.stack).split("\n").slice(1, 4).join(" | ").replace(/https?:\/\/[^ )]*\//g, "") : ""));
 function scaleFix() {                       // Chrome i "Datoranpassad webbplats" ger telefonen en 980 px bred vy: skala upp gränssnittet så det ser ut som på en telefon (inte som en liten kolumn)
   const de = document.documentElement, desk = matchMedia("(pointer: coarse)").matches && innerWidth >= 900;
   if (desk) { const z = innerWidth / 430; de.style.zoom = z; de.style.setProperty("--u", innerHeight / z / 100 + "px"); }

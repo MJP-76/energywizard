@@ -1,5 +1,16 @@
 # Ändringar
 
+## 1.2.29 (2026-11-06)
+- **Aviseringar till eget skript** (#170): mottagaren av aviseringarna kan vara ett skript i Home Assistant (får
+  variablerna `title` och `message`) eller vilken notify-tjänst som helst, inte bara en telefon.
+- **Nya formulär på webben**: listor, fält och kryssrutor har fått samma formspråk som korten (rundade, egen pil, tydlig
+  fokusring), i ljust och mörkt tema.
+- **Lugnare logg när Home Assistant är nere**: motorn pausar 30 s efter ett misslyckat försök i stället för att varje
+  avläsning försöker igen, felraden skrivs vid tredje försöket och sedan var tionde, och nätverksfel skrivs utan
+  felspår.
+- Bilens uppdateringsknapp (t.ex. Leaf) trycks i bakgrunden; att tillverkarens moln svarar långsamt är ingen varning.
+- Appens felrapporter tar med var felet uppstod.
+
 ## 1.2.28 (2026-11-06)
 - **Senaste skanningen visas alltid** (#168): resultatet av "Skanna mitt Home Assistant" sparas i installationen och
   visas med datum och tid när man kommer tillbaka till Inställningar, även efter att man sparat och även när Home

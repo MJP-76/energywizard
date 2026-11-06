@@ -1623,7 +1623,9 @@ while True:
                         _last = _soc_mem.get(f"{_cid}_poll")
                         if _last is None or (now - _last) > _gap:
                             _soc_mem[f"{_cid}_poll"] = now
-                            homeassistant.press_button(_ents["update_button"])
+                            # I bakgrunden: tillverkarens moln kan ta en halv minut, huvudloopen ska inte vänta på det
+                            threading.Thread(target=homeassistant.press_button, args=(_ents["update_button"], 45),
+                                             daemon=True).start()
                     except Exception as _ne:
                         print(f"⚠️ Uppdatering av {_name}s data misslyckades: {_ne}")
 

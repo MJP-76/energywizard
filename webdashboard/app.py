@@ -394,8 +394,17 @@ async def notify_target_get(request: Request):
     except Exception as e:
         return {"ok": False, "error": f"Kunde inte läsa Home Assistant: {e}"}
     phones = sorted(n for n in svcs if n.startswith("mobile_app_"))
-    return {"ok": True, "phones": phones, "selected": ew_settings.get("notify_target") or "",
-            "env": os.environ.get("NOTIFY_TARGET", "")}
+    # #170: även andra notify-tjänster (grupper, e-post, Telegram ...) och egna skript (får title och message)
+    others = sorted(n for n in svcs if not n.startswith("mobile_app_") and n not in ("notify", "persistent_notification"))
+    scripts = []
+    try:
+        st = requests.get(f"{homeassistant._BASE}/states", headers=homeassistant._HEADERS, timeout=15, verify=homeassistant._VERIFY).json()
+        scripts = sorted(({"id": s["entity_id"], "name": (s.get("attributes") or {}).get("friendly_name") or s["entity_id"]}
+                          for s in st if str(s.get("entity_id", "")).startswith("script.")), key=lambda x: x["name"].lower())
+    except Exception:
+        pass
+    return {"ok": True, "phones": phones, "others": others, "scripts": scripts,
+            "selected": ew_settings.get("notify_target") or "", "env": os.environ.get("NOTIFY_TARGET", "")}
 
 
 @app.post("/api/notify-target")
@@ -404,8 +413,8 @@ async def notify_target_set(request: Request):
     if role != "owner":
         return JSONResponse({"error": "Bara ägaren kan välja telefon"}, status_code=403)
     t = str((await request.json()).get("target") or "").strip()
-    if t and not re.fullmatch(r"mobile_app_[a-z0-9_]+", t):
-        return JSONResponse({"error": "Ogiltig telefon"}, status_code=400)
+    if t and not re.fullmatch(r"(script\.)?[a-z0-9_]+", t):
+        return JSONResponse({"error": "Ogiltig mottagare"}, status_code=400)
     ew_settings.update(notify_target=t or None)
     return {"ok": True, "message": "Sparat - aviseringarna går till " + (t or "den första telefonen i Home Assistant")}
 

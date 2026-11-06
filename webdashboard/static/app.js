@@ -1206,8 +1206,13 @@ async function mountPhoneSetting() {
   card.hidden = false;
   if (!d.ok) { body.innerHTML = `<div class="note">${esc(d.error || "")}</div>`; return; }
   if (d.env) { body.innerHTML = `<div class="note">Styrs av NOTIFY_TARGET i miljön: ${esc(d.env)}</div>`; return; }
+  const opt = (v, label) => `<option value="${esc(v)}"${v === d.selected ? " selected" : ""}>${esc(label)}</option>`;
+  const grp = (label, items) => items.length ? `<optgroup label="${label}">${items.join("")}</optgroup>` : "";
   body.innerHTML = `<select id="phonesel" style="width:100%"><option value="">Första telefonen i Home Assistant${d.phones[0] ? " (" + esc(d.phones[0]) + ")" : ""}</option>
-      ${d.phones.map((p) => `<option value="${esc(p)}"${p === d.selected ? " selected" : ""}>${esc(p.replace(/^mobile_app_/, ""))}</option>`).join("")}</select>
+      ${grp("Telefoner", d.phones.map((p) => opt(p, p.replace(/^mobile_app_/, ""))))}
+      ${grp("Andra notify-tjänster", (d.others || []).map((p) => opt(p, "notify." + p)))}
+      ${grp("Egna skript", (d.scripts || []).map((x) => opt(x.id, x.name)))}</select>
+    <div class="note" style="margin-top:6px">Ett skript anropas med variablerna <code>title</code> (rubrik) och <code>message</code> (texten), t.ex. för att skicka vidare till högtalare, Telegram eller flera telefoner.</div>
     <button class="icobtn" id="phonesave" style="margin-top:10px">Spara</button>`;
   document.getElementById("phonesave").onclick = async () => {
     try { const j = await postJSON("api/notify-target", { target: document.getElementById("phonesel").value }); toast(j.message || "Sparat"); }
@@ -1612,7 +1617,7 @@ async function renderInstallningar() {
     </div>
     <div class="card" style="margin-bottom:16px" id="phonecard" hidden>
       <div style="font-size:1.1rem;font-weight:700">📱 Aviseringar till</div>
-      <div class="note" style="margin-top:4px">Vilken telefon i Home Assistant som får EnergyWizards aviseringar.</div>
+      <div class="note" style="margin-top:4px">Vilken telefon, notify-tjänst eller vilket skript i Home Assistant som får EnergyWizards aviseringar.</div>
       <div id="phonebody" style="margin-top:10px"></div>
     </div>
     <div class="card" style="margin-bottom:16px" id="notifycard" hidden>
