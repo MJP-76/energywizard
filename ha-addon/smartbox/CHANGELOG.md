@@ -1,5 +1,9 @@
 # Ändringar
 
+## 1.2.34 (2026-11-06)
+- **Guiden kommer ihåg alla val** (#173): även elmätarvalen (hela huset, säljeffekt, annan byggnad), kryssrutorna för
+  generisk styrning och direkt anslutning till växelriktare (drivrutin, IP-adress, port, roll) fylls i som du lämnade dem.
+
 ## 1.2.33 (2026-11-06)
 - **Guiden kommer ihåg dina val** (#173): vilka bilar och enheter du kryssat i, bilarnas namn och batteristorlek sparas
   när du sparar (eller laddar ner filen) och fylls i igen nästa gång, även efter en ny skanning. Förut stod guidens

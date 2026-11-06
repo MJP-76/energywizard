@@ -1755,7 +1755,21 @@ function wizardForm() {
   });
   (d.chargers || []).forEach((c, i) => { const cb = document.querySelector(`.charger-pick[data-i="${i}"]`); if (cb) f.chargers[c.device_name || i] = cb.checked; });
   document.querySelectorAll(".pick").forEach((cb) => { f.picks[cb.dataset.cat] = cb.checked; });
+  // Elmätarvalen, generisk styrning och direkt anslutning till växelriktare (samma fel som bilarna)
+  f.selects = {}; ["pm_main", "pm_export", "pm_second"].forEach((id) => { const e = document.getElementById(id); if (e) f.selects[id] = e.value; });
+  f.generic = {}; document.querySelectorAll(".generic-pick").forEach((cb) => { f.generic[cb.dataset.key] = cb.checked; });
+  const v = (id) => { const e = document.getElementById(id); return !e ? undefined : e.type === "checkbox" ? e.checked : e.value; };
+  f.ftw = { drv: v("ftw_drv"), host: v("ftw_host"), port: v("ftw_port"), unit: v("ftw_unit"), bat: v("ftw_bat"), sol: v("ftw_sol") };
   return f;
+}
+let _pendingFtw = null;
+function applyFtwForm() {
+  const f = _pendingFtw, s = document.getElementById("ftw_drv");
+  if (!f || !s || !f.drv || ![...s.options].some((o) => o.value === f.drv)) return;
+  s.value = f.drv;
+  const set = (id, val) => { const e = document.getElementById(id); if (!e || val === undefined) return; if (e.type === "checkbox") e.checked = !!val; else e.value = val; };
+  set("ftw_host", f.host); set("ftw_port", f.port); set("ftw_unit", f.unit); set("ftw_bat", f.bat); set("ftw_sol", f.sol);
+  _pendingFtw = null;
 }
 function applyWizardForm(f) {
   if (!f || !_discovered) return;
@@ -1766,6 +1780,9 @@ function applyWizardForm(f) {
   });
   (_discovered.chargers || []).forEach((c, i) => { const v = (f.chargers || {})[c.device_name || i]; const cb = document.querySelector(`.charger-pick[data-i="${i}"]`); if (cb && v != null) cb.checked = !!v; });
   document.querySelectorAll(".pick").forEach((cb) => { const v = (f.picks || {})[cb.dataset.cat]; if (v != null) cb.checked = !!v; });
+  Object.entries(f.selects || {}).forEach(([id, val]) => { const e = document.getElementById(id); if (e && [...e.options].some((o) => o.value === val)) e.value = val; });
+  document.querySelectorAll(".generic-pick").forEach((cb) => { const v = (f.generic || {})[cb.dataset.key]; if (v != null && cb.checked !== !!v) { cb.checked = !!v; cb.onchange && cb.onchange(); } });
+  _pendingFtw = f.ftw || null; applyFtwForm();
 }
 
 async function runDiscovery(ev, cached) {
@@ -1867,10 +1884,10 @@ async function runDiscovery(ev, cached) {
       document.getElementById("ftw_sol").checked = x.capabilities.includes("pv") && !x.capabilities.includes("battery");
       document.getElementById("ftw_port").value = x.protocol === "http" ? 80 : x.protocol === "mqtt" ? 1883 : 502;
       info.textContent = `Kan: ${x.capabilities.join(", ")}${x.verification ? " · " + x.verification : ""}`; };
+    applyFtwForm();
   }).catch(() => {});
   document.getElementById("genbtn").onclick = () => generateConfig(false);
   document.getElementById("savebtn").onclick = () => generateConfig(true);
-  applyWizardForm(d.form);
   // Spara direkt bara i installationer där install.sh gjort filen skrivbar; annars bara nedladdning.
   fetch("api/house-config-status", { credentials: "same-origin" }).then(r => r.ok ? r.json() : {}).then(st => {
     if (st && st.writable) document.getElementById("savebtn").style.display = "";
@@ -1899,6 +1916,7 @@ async function runDiscovery(ev, cached) {
       }
     };
   });
+  applyWizardForm(d.form);
 }
 
 async function generateConfig(save) {
