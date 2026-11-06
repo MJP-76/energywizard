@@ -6,10 +6,20 @@ except ImportError:                 # pragma: no cover
     ModbusTcpClient = None
  
 # --- INSTÄLLNINGAR FÖR Thermia Diplomat Optimum G3 via Husdata H66 ---
-# FIX: Gör fallback-IP konfigurerbar via env (PUMP_IP_FALLBACK) men behåll
-# nuvarande default (.106) så befintligt beteende är oförändrat om env saknas.
-PUMP_IPS = [os.environ.get("PUMP_IP", "192.168.1.179"), os.environ.get("PUMP_IP_FALLBACK", "192.168.1.106")]
-PUMP_IPS = list(dict.fromkeys(PUMP_IPS)) # Tar bort dubbletter om miljövariabeln är .106
+# Adressen kommer från installationen: PUMP_IP (+ PUMP_IP_FALLBACK) i miljön eller heat_pump.connection.modbus_host
+# i house_config.yaml (configure()). Inga inbyggda standardadresser - de var ett enskilt hus adresser, och en
+# NIBE-ägare som råkat välja Husdata fick "kunde inte ansluta" mot det huset varje minut (#165, 2026-11-06).
+PUMP_IPS = list(dict.fromkeys(ip for ip in (os.environ.get("PUMP_IP", "").strip(), os.environ.get("PUMP_IP_FALLBACK", "").strip()) if ip))
+_no_ip_warned = False
+
+
+def configure(hosts) -> None:
+    """Pumpens adress(er) ur installationen (heat_pump.connection.modbus_host, sträng eller lista). Miljön går före."""
+    global PUMP_IPS
+    if PUMP_IPS:
+        return
+    hs = [hosts] if isinstance(hosts, str) else list(hosts or [])
+    PUMP_IPS = list(dict.fromkeys(str(h).strip() for h in hs if str(h or "").strip() and "XXX" not in str(h)))
 PORT = 502
 TIMEOUT = int(os.environ.get("PUMP_TIMEOUT", 5))
 DEVICE_ID = 1
@@ -19,6 +29,9 @@ _active_ip_index = 0
 def _get_client():
     """Försöker ansluta till Husdata. Byter automatiskt IP om den primära är nere."""
     global _active_ip_index
+    if not PUMP_IPS:
+        return None
+    _active_ip_index = min(_active_ip_index, len(PUMP_IPS) - 1)
     client = ModbusTcpClient(PUMP_IPS[_active_ip_index], port=PORT, timeout=TIMEOUT)
     if client.connect():
         return client
@@ -48,6 +61,13 @@ def read_sensors():
     Läser in sensordata direkt från Husdata via Modbus TCP.
     Returnerar en dict med alla värden, eller None vid fel.
     """
+    global _no_ip_warned
+    if not PUMP_IPS:
+        if not _no_ip_warned:
+            print("⚠️ Husdata: ingen adress till värmepumpen angiven (PUMP_IP eller heat_pump.connection.modbus_host) - "
+                  "läser inte pumpen. Har du inte Thermia/Husdata: välj din värmepump i installationsguiden.")
+            _no_ip_warned = True
+        return None
     try:
         client = _get_client()
         if not client:

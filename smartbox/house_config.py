@@ -214,6 +214,10 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
     if driver_cls is HeishaMonHeatPumpDriver:
         return HeishaMonHeatPumpDriver(host=hp.get("host"), base_shift=hp.get("base_shift", 0),
                                        indoor_from_z1=hp.get("indoor_from_z1", False))
+    if driver_cls is ThermiaHusdataHeatPumpDriver:
+        import pump
+        pump.configure((hp.get("connection") or {}).get("modbus_host"))
+        return ThermiaHusdataHeatPumpDriver()
     if driver_cls is HaEntitiesHeatPumpDriver:
         return HaEntitiesHeatPumpDriver(entities=(hp.get("entities") or {}))
     if driver_cls is ThermIQHeatPumpDriver:
@@ -307,7 +311,7 @@ def build_battery_driver(cfg: dict) -> BatteryDriver:
     driver_cls = BATTERY_DRIVER_REGISTRY.get(bat.get("driver"), NullBatteryDriver)
     if driver_cls is GenericBatteryDriver:
         return GenericBatteryDriver(capacity_kwh=bat.get("capacity_kwh"), entities=(bat.get("entities") or {}),
-                                    modes=(bat.get("modes") or {}), power_invert=bat.get("power_invert", False),
+                                    modes=(bat.get("modes") or {}), power_invert=bat.get("power_invert"),
                                     keepalive_s=bat.get("keepalive_s"), max_power_w=bat.get("max_power_w"))
     if driver_cls is FerroampBatteryDriver:
         return FerroampBatteryDriver(modbus=bat.get("modbus"),

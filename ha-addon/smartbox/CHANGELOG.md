@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.25 (2026-11-06)
+- **Inga inbyggda pumpadresser** (#165): Thermia/Husdata läses bara när pumpens adress är angiven (PUMP_IP eller
+  `heat_pump.connection.modbus_host`). Förut försökte motorn mot två fasta adresser och skrev ett fel varje minut hos
+  den som inte har Husdata.
+- **Batteriets tecken** (#166, #139): räknas husets förbrukning negativ men går ihop med omvänt tecken på batteriets
+  effekt, föreslår Översikt "Vänd tecknet på batteriets effekt". Ändringen gäller direkt, utan omstart.
+- **Mobilmenyn** (#164): den utfällda menyn på webben har tät bakgrund och full textfärg - var grå och svårläst i ljust tema.
+
 ## 1.2.24 (2026-11-06)
 - **NIBE via myUplink hittas** (#162): entiteter med bara myUplinks parameternummer i namnet (t.ex. "Utomhustemperatur
   (40004)") känns igen, även när enheten inte heter något med värmepump. Installationsguiden sa felaktigt "Husdata

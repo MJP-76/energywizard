@@ -1112,7 +1112,36 @@ async def api_flow():
         return {"ok": False, "error": "Ingen data i sensor_log än"}
     cars, has_spa, _has_heat = _house_parts()
     d = live_flow.nodes(row, _json_list(row.get("decision_summary")), cars=cars, has_spa=has_spa)
-    return {"ok": True, "ts": str(row.get("sthlm_time"))[:16], **d}
+    return {"ok": True, "ts": str(row.get("sthlm_time"))[:16], "battery_sign": _battery_sign_hint(row), **d}
+
+
+def _battery_sign_hint(row):
+    """#166/#139: huset = sol + nät - batteri (+ = laddar). Blir det kraftigt negativt men går ihop med omvänt tecken
+    har batterisensorn troligen motsatt tecken. Då föreslår Översikt "Vänd tecknet" (bara om det inte är låst i
+    house_config.yaml med battery.power_invert). None = inget att föreslå."""
+    pv, net, bat = (_n(row.get(k)) for k in ("pv_power_w", "net_power", "battery_power_w"))
+    if bat is None or net is None or abs(bat) < 200:
+        return None
+    raw, flipped = (pv or 0) + net - bat, (pv or 0) + net + bat
+    if raw > -300 or flipped < -100:
+        return None
+    try:
+        locked = "power_invert" in (house_config.load_house_config(HOUSE_CONFIG_FILE).get("battery") or {})
+    except Exception:
+        locked = False
+    return {"house_w": round(raw), "house_w_flipped": round(flipped), "locked": locked,
+            "inverted": bool(ew_settings.get("battery_power_invert", False))}
+
+
+@app.post("/api/battery-invert")
+async def battery_invert(request: Request):
+    """Vänder tecknet på batteriets effekt (ew_settings, gäller om house_config.yaml inte anger power_invert)."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra batteriets inställningar"}, status_code=403)
+    new = not bool(ew_settings.get("battery_power_invert", False))
+    ew_settings.update(battery_power_invert=new)
+    return {"ok": True, "inverted": new}
 
 
 def _house_parts():

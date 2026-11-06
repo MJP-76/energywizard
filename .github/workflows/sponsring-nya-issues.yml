@@ -1,0 +1,37 @@
+name: sponsring-nya-issues
+# Varje nytt issue från någon annan än projektägaren får ett tack och en önskan om sponsring (beslut 2026-11-06).
+# Språk efter issuets text: svenska om den ser svensk ut, annars engelska. Automatiska felrapporter (skapade av
+# projektägarens konto) och issues från bottar får ingen kommentar.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  tack:
+    if: github.event.issue.user.login != 'murre87' && github.event.issue.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const text = `${issue.title}\n${issue.body || ""}`;
+            const sv = (text.match(/[åäöÅÄÖ]|\b(och|jag|har|med|för|inte|kör|värmepump|hej)\b/gi) || []).length;
+            const en = (text.match(/\b(the|and|with|have|my|is|for|which|hello|hi)\b/gi) || []).length;
+            const body = sv >= en
+              ? `Tack för att du hör av dig! Vi tittar på det här så snart vi kan.\n\n` +
+                `EnergyWizard är gratis och delas med alla, men utvecklingen kostar en hel del: AI-verktygen (Claude) som ` +
+                `används för att bygga, granska och testa EnergyWizard har kostat runt 1 000 € de senaste veckorna. ` +
+                `Vill och kan du bidra blir Emil, som driver projektet, väldigt tacksam för en sponsring: ` +
+                `https://github.com/sponsors/murre87\n\nIngen press – det är lika mycket värt att du testar och rapporterar fel.`
+              : `Thank you for reaching out! We will look at this as soon as we can.\n\n` +
+                `EnergyWizard is free and shared with everyone, but development costs quite a lot: the AI tools (Claude) ` +
+                `used to build, review and test EnergyWizard have cost around €1,000 over the past few weeks. ` +
+                `If you would like to and can contribute, Emil, who runs the project, would be very grateful for a ` +
+                `sponsorship: https://github.com/sponsors/murre87\n\nNo pressure – it is just as valuable that you test and report bugs.`;
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: issue.number, body });

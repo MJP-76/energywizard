@@ -59,7 +59,7 @@ class GenericBatteryDriver(BatteryDriver):
     """Default för batterier utan egen drivrutin. Alla entiteter valfria - supports_control()
     är bara True om en mode_select-entitet OCH minst en lägesmappning finns."""
     def __init__(self, capacity_kwh: float | None = None, entities: dict | None = None, modes: dict | None = None,
-                 power_invert: bool = False, keepalive_s: float | None = None, max_power_w: float | None = None):
+                 power_invert: bool | None = None, keepalive_s: float | None = None, max_power_w: float | None = None):
         self.capacity_kwh = capacity_kwh
         self.max_power_w = max_power_w
         # battery.keepalive_s: växelriktare vars tvångsladdning släpper efter en tidsgräns (Solis RC Timeout,
@@ -67,7 +67,9 @@ class GenericBatteryDriver(BatteryDriver):
         # släpper växelriktaren själv - det är det säkra hållet.
         self._keepalive = float(keepalive_s) if keepalive_s else None
         self._last = None                       # (avsikt, effekt, tid) för senaste lyckade skrivning
-        self._invert = bool(power_invert)       # battery.power_invert: true om sensorn visar + vid URladdning
+        # battery.power_invert: true om sensorn visar + vid URladdning. Saknas den i house_config.yaml gäller valet
+        # "Vänd tecknet" i webben (ew_settings battery_power_invert, #166) - läses vid varje avläsning, ingen omstart.
+        self._invert_cfg = power_invert
         self._e = entities or {}
         self._modes = {k: v for k, v in (modes or {}).items() if k in INTENTS and v}
 
@@ -98,6 +100,16 @@ class GenericBatteryDriver(BatteryDriver):
         vals = [read(e) for e in ents]
         vals = [v for v in vals if v is not None]
         return sum(vals) if vals else None
+
+    @property
+    def _invert(self) -> bool:
+        if self._invert_cfg is not None:
+            return bool(self._invert_cfg)
+        try:
+            import ew_settings
+            return bool(ew_settings.get("battery_power_invert", False))
+        except Exception:
+            return False
 
     def read_state(self) -> dict:
         mode_e = self._e.get("mode_select")
