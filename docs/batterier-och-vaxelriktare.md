@@ -40,6 +40,23 @@ bör köras i skuggläge först.
 | – | Emaldo | – (ingen integration) | ❌ | ❌ | – | Saknas, väntar på API |
 | – | HomeWizard Plug-In Battery | HA:s inbyggda homewizard | ✅ | ✅ laddstrategi | – | Förinställning |
 
+## FTW-drivrutinerna mot Sourcefuls simulator (GitHub Actions, `simulator.yml`)
+
+Varje push som rör FTW-delarna kör drivrutinerna genom vår Lua-brygga mot srcfl/device-simulator (simulerat hus:
+sol 3 kW, batteri 10 kWh på 50 %). Resultat 2026-11-06:
+
+| Drivrutin | Läsning | Styrning (ladda 2 kW / ladda ur 2 kW) |
+|---|---|---|
+| sungrow | ✅ | ✅ följer båda |
+| huawei | ✅ | – avstängd i FTW:s drivrutin (avsiktligt) |
+| solaredge | ✅ (sol) | – inget batteri i simulatorns modell |
+| solis, deye, pixii | ✅ | ⏳ kommandot godtas, men urladdningen syns inte inom 45 s – utreds |
+| sma | ✅ | ❌ kommandot avvisas |
+| fronius | ❌ solen läses som 0 W (känd avvikelse) | ❌ |
+
+Simulatorverifiering räcker inte för att slå på styrning hos användare – det kräver fortfarande en riktig enhet –
+men Sungrow är nu först i kön för `FTW_CONTROL_VERIFIED`.
+
 ## Så kommer vi vidare
 
 1. **Verifiering**: varje "ej verifierad" behöver en användare som kör i skuggläge några dygn och sedan slår på
