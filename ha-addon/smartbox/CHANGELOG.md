@@ -1,5 +1,17 @@
 # Ändringar
 
+## 1.2.42 (2026-11-07)
+- **Ingen falsk sol när batteriet säljer** (#175): korrigeringen för en fastfrusen solgivare räknade all export som
+  sol. Nu räknas batteriets urladdning bort först.
+- **Flödesbilden** (#177): prickarna till värmepump, varmvatten, elbil och spabad går nu ut från huset.
+- **Uppmätt värmepumpseffekt** (#178): "Vad drar strömmen" och COP använder pumpens egen mätning (NIBE lokal,
+  HeishaMon) i stället för en uppskattning ur framledningen.
+- **Värmepumpen räknar med tidstariffen** (#179): billiga och dyra kvartar rangordnas och jämförs på spotpris plus
+  tidstariff, så att kvarten före 22 inte räknas lika billig som kvarten efter.
+- **Effekttariffens höglasttid går att ställa in** (#180): den var hårdkodad till ett nätbolags tider. Välj egna tider,
+  tidstariffens tider eller ingen höglasttid under Inställningar → Elpris och avgifter. Raden "Aktuell effekttariff"
+  visas bara för den som har en tariff inställd.
+
 ## 1.2.41 (2026-11-06)
 - **Tomt batterifält blir inte längre 0**: ett tömt maxnivå-, effekt-, storleks- eller verkningsgradsfält som sparats
   som 0 eller tomt används som standardvärde. Annars kunde maxnivå 0 stoppa all laddning. (Samma fel som FTW

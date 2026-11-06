@@ -343,7 +343,13 @@ async def price_settings_get():
     import nordpool
     c = nordpool.cost_settings()
     c = {**c, "tou_hours": f"{c['tou_hours'][0]}-{c['tou_hours'][1]}", "tou_months": f"{c['tou_months'][0]}-{c['tou_months'][1]}"}
-    return {"ok": True, **c, "source": nordpool.price_source(), "ha_entity": ew_settings.get("price_ha_entity") or "sensor.nordpool",
+    w = nordpool.high_load_window()
+    # Effekttariffens höglasttid (#180): "egen" / "av" / "tidstariff" / "standard" (inget valt)
+    power_high = {"choice": w["source"], "hours": f"{w['hours'][0]}-{w['hours'][1]}" if w["source"] == "egen" else "7-20",
+                  "months": f"{w['months'][0]}-{w['months'][1]}" if w["source"] == "egen" else "11-3",
+                  "weekdays": w["weekdays"] if w["source"] == "egen" else True}
+    return {"ok": True, **c, "power_high": power_high, "source": nordpool.price_source(),
+            "ha_entity": ew_settings.get("price_ha_entity") or "sensor.nordpool",
             "countries": {k: {"name": v["name"], "vat_pct": v["vat_pct"], "currency": v["currency"], "areas": v["areas"]}
                           for k, v in nordpool.COUNTRIES.items()},
             # Räkneexempel för spotpris 1,00 exkl. moms: samma formel som nordpool.full_buy_cost/full_sell_income
@@ -669,6 +675,22 @@ async def price_settings_set(request: Request):
                 return JSONResponse({"error": f"Ogiltigt intervall: {field} (t.ex. {'6-22' if field == 'tou_hours' else '11-3'})"}, status_code=400)
             upd[key] = f"{int(m.group(1))}-{int(m.group(2))}"
         upd["price_tou_weekdays"] = bool(body.get("tou_weekdays", True))
+    if "power_high" in body:                         # #180: effekttariffens höglasttid
+        ph = body.get("power_high") or {}
+        choice = str(ph.get("choice") or "")
+        if choice == "egen":
+            for key, field, lo, hi in (("power_high_hours", "hours", 0, 24), ("power_high_months", "months", 1, 12)):
+                raw = str(ph.get(field) or "").replace("–", "-").replace(" ", "")
+                m = re.fullmatch(r"(\d{1,2})-(\d{1,2})", raw)
+                if not m or not all(lo <= int(x) <= hi for x in m.groups()):
+                    return JSONResponse({"error": f"Ogiltigt intervall för effekttariffen: {field} (t.ex. {'7-20' if field == 'hours' else '11-3'})"}, status_code=400)
+                upd[key] = f"{int(m.group(1))}-{int(m.group(2))}"
+            upd["power_high_enabled"] = True
+            upd["power_high_weekdays"] = bool(ph.get("weekdays", True))
+        elif choice == "av":
+            upd["power_high_enabled"] = False
+        else:                                        # tidstariffens tider / standard: inget eget val sparat
+            upd.update(power_high_enabled=None, power_high_hours=None, power_high_months=None, power_high_weekdays=None)
     if "ha_entity" in body:
         ent = str(body.get("ha_entity") or "").strip()
         upd["price_ha_entity"] = ent if re.fullmatch(r"(sensor|event)\.[a-z0-9_]+", ent) else None
@@ -726,9 +748,9 @@ def _n(v, default=None):
 
 
 def _is_high_load_time(dt):
-    """Samma regel som smartbox/settings.py:is_high_load_time - inlinad här hellre än att
-    dra in hela settings.py:s tunga importkedja (pandas/psycopg_pool/...) för en rad logik."""
-    return dt.month in (11, 12, 1, 2, 3) and dt.weekday() <= 4 and 7 <= dt.hour < 20
+    """Effekttariffens höglasttid ur inställningarna (#180), samma som motorn (nordpool.is_high_load_time)."""
+    import nordpool
+    return nordpool.is_high_load_time(dt)
 
 
 def _temp_target(conn, mode: str) -> float:
@@ -776,6 +798,8 @@ async def overview(request: Request):
         ov = _overrides(c, ("heat", "hotwater"))
         cfg = _settings_row(c, ("temp_cheap", "temp_expensive"))
     is_high_load = _is_high_load_time(row["sthlm_time"])
+    import nordpool
+    high_load_source = nordpool.high_load_window()["source"]
 
     return {
         "ok": True,
@@ -797,6 +821,8 @@ async def overview(request: Request):
         "ev_power_kw": (None if row.get("ev_power_kw") is None and row.get("ev_carport_power_kw") is None
                         else round((_n(row.get("ev_power_kw")) or 0) + (_n(row.get("ev_carport_power_kw")) or 0), 2)),
         "is_high_load": is_high_load,
+        # Visas bara för den som har en effekt- eller tidstariff inställd (#180: alla såg Jönköpings tider)
+        "high_load_source": high_load_source,
         "sthlm_time": str(row["sthlm_time"]),
         "price_24h": [{"t": r[0].isoformat(), "p": float(r[1])} for r in price_hist],
         "heat_battery": _heat_battery(row),

@@ -1,7 +1,7 @@
 import os
 import requests
 import psycopg
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 import zoneinfo
 
@@ -152,6 +152,47 @@ def prices_include_vat() -> bool:
     if price_source() != "ha_nordpool":
         return False
     return str(_setting("price_includes_vat", "PRICE_INCLUDES_VAT", "true")).lower() not in ("0", "false", "nej", "no")
+
+
+def high_load_window() -> dict:
+    """Effekttariffens höglasttid (#180). Tidigare hårdkodad till Jönköping Energi (vardagar 07-20, nov-mars).
+      - power_high_enabled = true: egna tider (power_high_hours / _months / _weekdays), source "egen"
+      - power_high_enabled = false: ingen höglasttid alls, source "av"
+      - inte satt + tidstariff inställd: tidstariffens tider (nätbolagets höglast), source "tidstariff"
+      - inte satt alls: den klassiska svenska höglasttiden 07-20 vardagar nov-mars, source "standard" (visas inte
+        på Översikt, men effektvaktens bas/höglastgränser fungerar som förut för befintliga installationer)."""
+    en = _setting("power_high_enabled", "POWER_HIGH_ENABLED")
+    if en is not None and str(en).lower() in ("0", "false", "no", "nej"):
+        return {"source": "av", "hours": (0, 0), "months": (1, 12), "weekdays": True}
+    if en is not None:
+        return {"source": "egen",
+                "hours": _span_setting(_setting("power_high_hours", "POWER_HIGH_HOURS", "7-20"), (7, 20), 0, 24),
+                "months": _span_setting(_setting("power_high_months", "POWER_HIGH_MONTHS", "11-3"), (11, 3), 1, 12),
+                "weekdays": str(_setting("power_high_weekdays", "POWER_HIGH_WEEKDAYS", "true")).lower() not in ("0", "false", "no")}
+    c = cost_settings()
+    if c.get("tou_extra"):
+        return {"source": "tidstariff", "hours": c["tou_hours"], "months": c["tou_months"], "weekdays": c["tou_weekdays"]}
+    return {"source": "standard", "hours": (7, 20), "months": (11, 3), "weekdays": True}
+
+
+def is_high_load_time(dt, w=None) -> bool:
+    """Är timmen dt (svensk tid) höglasttid för effekttariffen? Se high_load_window()."""
+    w = w or high_load_window()
+    if w["source"] == "av" or dt is None:
+        return False
+    lt = dt.astimezone(SWE_TZ) if getattr(dt, "tzinfo", None) else dt
+    if w["weekdays"] and lt.weekday() >= 5:
+        return False
+    return _in_span(lt.month, w["months"], True) and _in_span(lt.hour, w["hours"], False)
+
+
+def tou_spot_extra(t, c=None) -> float:
+    """Tidstariffens tillägg uttryckt i spotprisets bas (samma enhet som elpriser-tabellen), så att det kan läggas
+    på spotpriset när kvartar rangordnas och jämförs (#179). Tariffen anges inklusive moms."""
+    extra = tou_extra_at(t, c)
+    if not extra:
+        return 0.0
+    return extra if prices_include_vat() else extra / _vat_factor()
 
 
 def full_buy_cost(spot: float, t=None) -> float:
@@ -620,7 +661,15 @@ def get_price_info(cheap_hours_count=8):
                     idx = now.hour * 4 + now.minute // 15
                     current_price = all_prices[idx] if idx < len(all_prices) else all_prices[-1]
 
-        strategy = calculate_day_strategy(all_prices, cheap_hours_count)
+        # Tidstariffen (#179): värmepumpens billiga kvartar rangordnas på spot + tariff, inte bara spot. Kvart i
+        # räknas i UTC från midnatt så att sommartidsdygnen (92/100 kvartar) hamnar rätt. Utan tariff: samma lista.
+        c = cost_settings()
+        prices_tou = all_prices
+        if c.get("tou_extra") and all_prices:
+            t0 = today_start.astimezone(timezone.utc)
+            prices_tou = [p + tou_spot_extra(t0 + timedelta(minutes=15 * i), c) for i, p in enumerate(all_prices)]
+        strategy = calculate_day_strategy(prices_tou, cheap_hours_count)
+        strategy["prices_tou"] = prices_tou
         strategy["price_fallback"] = price_fallback  # main.py notiserar (deduppat) vid fallback
         dynamic_limit = strategy.get("dynamic_limit")
         return current_price, dynamic_limit, strategy, all_prices

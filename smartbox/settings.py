@@ -25,11 +25,10 @@ def get_db():
         yield conn
 
 def is_high_load_time(dt):
-    """
-    Standardiserad kontroll för Jönköping Energis Höglasttariff.
-    Gäller vardagar (Mån-Fre) kl 07:00-19:59 under månaderna Nov-Mar.
-    """
-    return dt.month in [11, 12, 1, 2, 3] and dt.weekday() <= 4 and 7 <= dt.hour < 20
+    """Effekttariffens höglasttid, ur inställningarna (#180, se nordpool.high_load_window). Var hårdkodad till
+    Jönköping Energi (vardagar 07-20, nov-mars), som fortfarande är standard när inget är inställt."""
+    import nordpool
+    return nordpool.is_high_load_time(dt)
 
 def init_settings_db():
     """Skapar inställningstabellen och lägger in standardvärden om den är tom."""

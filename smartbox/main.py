@@ -15,6 +15,7 @@ import settings  # Hanterar konfigurationsinställningar
 import weather   # Hämtar och cachelagrar väderprognos inkl. solprognos
 import homeassistant    # Hämtar data från Home Assistant (temperaturer + Easee-laddare)
 import notifier         # Skickar push-notiser till Emil
+import energy_balance   # Husets energibalans (solgolv ur exporten, rimlig batterieffekt)
 import telemetry        # Strikt opt-in: fel + aktiva drivrutinkategorier, se telemetry.py
 from urllib.parse import urlsplit, urlunsplit
 import decisions        # Besluts- och styrlogik för pump och radiatorer
@@ -1080,11 +1081,19 @@ while True:
             # (t.ex. 5876 W minuter i rad) medan huset exporterar mer än så. Produktionen kan ALDRIG
             # vara mindre än nätexporten (fysik). Korrigera pv uppåt till minst exporten → räddar
             # house_consumption_w OCH den loggade pv:n (Ekonomi-sol-siffror). net från Tibber (U×I) är pålitlig.
+            # Batteriet läses här (inte först vid husets förbrukning nedan): ett batteri som säljer till nätet står för
+            # en del av exporten, och den får inte räknas som sol (#175: 7,7 kW "sol" mitt i natten).
+            try:
+                _battery_early = battery_driver.read_state() or {}
+            except Exception:
+                _battery_early = {}
             if solar_data is not None:
                 _raw_pv = solar_data.get('pv_power_w') or 0
-                _grid_export_w = max(0.0, -avg_net)
-                if _raw_pv < _grid_export_w:
-                    solar_data['pv_power_w'] = _grid_export_w
+                _bat_pre = energy_balance.plausible_battery_w(_battery_early.get("power_w"),
+                                                              getattr(battery_driver, "max_power_w", None))
+                _pv_floor = energy_balance.pv_floor_from_export(_raw_pv, avg_net, _bat_pre)
+                if _raw_pv < _pv_floor:
+                    solar_data['pv_power_w'] = _pv_floor
             solar_prod_w = (solar_data.get('pv_power_w') or 0) if solar_data else 0  # pv kan vara None → 0
             solar_is_shaky = False
             
@@ -1345,10 +1354,7 @@ while True:
                 outdoor_temp = ha_temps["ute"]            # vald utegivare när pumpen saknar egen (#128)
             # Huset = sol + nät - batteriets effekt (+ = laddar): laddar batteriet går en del av solen/nätet dit, laddar
             # det ur får huset mer än sol + nät (issue #125: översikten och historiken visade fel med batteri).
-            try:
-                _battery_early = battery_driver.read_state() or {}
-            except Exception:
-                _battery_early = {}
+            # (_battery_early lästes före solkorrigeringen ovan, samma varv)
             # Orimlig batterieffekt (mer än 1,5 × batteriets max, standard 15 kW) räknas inte in: troligen fel givare,
             # t.ex. energi i kWh eller växelriktarens totala effekt (#139: 18,2 kW "urladdning" gav huset 0)
             _bat_w = _battery_early.get("power_w") or 0.0
@@ -1682,6 +1688,7 @@ while True:
                 'outdoor_temp': outdoor_temp,              # FIX: saknades → Prio 9-watchdog antog alltid "kallt ute"
                 'heat_stop_outdoor': (pump_data.get('heat_stop_outdoor') if pump_data else None),  # pumpens egen värmestopp-tröskel (reg 19) → GPM samverkar i stället för hårdkodad gräns
                 'hysteresis': strategy.get("hysteresis", 0.10), 'dynamic_limit': dynamic_limit if dynamic_limit else 99.0,
+                'all_prices_tou': strategy.get("prices_tou"),    # spot + tidstariff per kvart (#179), för pumpens prisval
                 'max_fuse_a': cfg.get('fuse_size_a', decisions.MAX_FUSE_A), 'house_load_a': house_load_excluding_ev_a, 'ev_actual_a': 0,
                 'ev_fuse_cap_a': ev_fuse_cap_a,
                 'current_solar_limit_pct': current_solar_limit_pct, 'current_target_limit': current_target_limit,
@@ -2103,16 +2110,15 @@ while True:
 
             # COP Estimering
             cop = None
+            avg_tot = energy_balance.pump_el_w(pump_data, _estimate_pump_el_w)   # uppmätt när pumpen ger det (#178)
             if pump_data and pump_data.get("compressor_running") == 1:
                 forward = pump_data.get("forward_temp") or 45.0
-                avg_tot = _estimate_pump_el_w(pump_data.get("forward_temp"))
                 brine = pump_data.get("brine_in_temp") or 0.0
                 delta_t = max(5.0, forward - brine)
                 carnot_efficiency = 0.60 - (forward * 0.0025)
                 cop = round(max(1.5, min(6.5, ((forward + 273.15) / delta_t) * carnot_efficiency)), 2)
                 pump_data["compressor_power_kw"] = round((avg_tot / 1000.0) * cop, 2)
             else:
-                avg_tot = 0.0
                 if pump_data: pump_data["compressor_power_kw"] = 0.0
 
             # ============================================================

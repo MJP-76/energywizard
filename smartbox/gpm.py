@@ -253,9 +253,13 @@ class GlobalPriorityManager:
         if not hasattr(self, 'last_price_mode'):
             self.last_price_mode = "EXPENSIVE"
             
-        if price <= (dyn_limit - hysteresis):
+        # Tidstariffen räknas in (#179): dynamic_limit är rangordnad på spot + tariff, så priset jämförs likadant.
+        # Utan tidstariff är tillägget 0 och allt är som förut.
+        tou_now = nordpool.tou_spot_extra(now) if price is not None else 0.0
+        price_cmp = (price if price is not None else 0.0) + tou_now if tou_now else (price if price is not None else 0.0)
+        if price_cmp <= (dyn_limit - hysteresis):
             self.last_price_mode = "CHEAP"
-        elif price >= (dyn_limit + hysteresis):
+        elif price_cmp >= (dyn_limit + hysteresis):
             self.last_price_mode = "EXPENSIVE"
             
         base_pump_mode = self.last_price_mode
@@ -280,12 +284,13 @@ class GlobalPriorityManager:
             actions[f"{cid}_limit_a"] = 0
             actions[f"{cid}_set_phases"] = None
         
+        _pt = f"{price_cmp:.2f} kr" + (f" inkl. tidstariff {tou_now:.2f}" if tou_now else "")
         if base_pump_mode == "CHEAP":
-            actions["log"].append(f"🟢 Grundläge: Billig el ({price:.2f} kr <= {dyn_limit - hysteresis:.2f} kr). Värmepump och Varmvatten i normaldrift.")
-        elif price < (dyn_limit + hysteresis):
-            actions["log"].append(f"⏸️ Grundläge: Gråzon ({price:.2f} kr). Ligger kvar i läge '{base_pump_mode}'.")
+            actions["log"].append(f"🟢 Grundläge: Billig el ({_pt} <= {dyn_limit - hysteresis:.2f} kr). Värmepump och Varmvatten i normaldrift.")
+        elif price_cmp < (dyn_limit + hysteresis):
+            actions["log"].append(f"⏸️ Grundläge: Gråzon ({_pt}). Ligger kvar i läge '{base_pump_mode}'.")
         else:
-            actions["log"].append(f"🔴 Grundläge: Dyr el ({price:.2f} kr >= {dyn_limit + hysteresis:.2f} kr). Värmepump styrs ner till sparläge.")
+            actions["log"].append(f"🔴 Grundläge: Dyr el ({_pt} >= {dyn_limit + hysteresis:.2f} kr). Värmepump styrs ner till sparläge.")
 
         self.avg_net_history.append(avg_net)
         if len(self.avg_net_history) > 5:
@@ -741,7 +746,7 @@ class GlobalPriorityManager:
                 actions["log"].append("🛁 Prio 4 (SPA): Schema aktivt -> Avvaktar billigare/mer soliga timmar. Badet vilar i Economy Mode för att spara el.")
         else:
             # NYTT: Normaldrift och Prisspiks-skydd (Imiterar decisions.py logik)
-            all_p = state.get('all_prices')
+            all_p = state.get('all_prices_tou') or state.get('all_prices')   # spot + tidstariff (#179)
             is_prisspik = False
             if price > 0 and all_p:
                 # ML/data-förbättring #1: spread-adaptiv spik via dagens percentiler i stället
@@ -749,7 +754,7 @@ class GlobalPriorityManager:
                 # OCH dagen faktiskt har spridning (annars är "spiken" bara brus på en platt dag).
                 day_p85 = _percentile(all_p, 85)
                 day_p50 = _percentile(all_p, 50)
-                if day_p85 is not None and day_p50 is not None and price >= day_p85 and day_p85 > day_p50 * 1.10:
+                if day_p85 is not None and day_p50 is not None and price_cmp >= day_p85 and day_p85 > day_p50 * 1.10:
                     is_prisspik = True
                     
             if is_prisspik:
@@ -864,7 +869,7 @@ class GlobalPriorityManager:
                         target_t = target_t - 0.5
                     # PREDIKTIV ÖVERLADDNING: Om priset är billigt nu, men en extrem prisspik är på väg de närmaste 6 timmarna, 
                     # trycker vi in extra värme i huset (upp till max-gränsen) så kompressorn kan vila helt genom toppen.
-                    all_p = state.get('all_prices')
+                    all_p = state.get('all_prices_tou') or state.get('all_prices')   # spot + tidstariff (#179)
                     if all_p:
                         current_idx = now.hour * 4 + (now.minute // 15)
                         future_prices = all_p[current_idx : current_idx + 24] # Kommande 6 timmarna
@@ -877,7 +882,7 @@ class GlobalPriorityManager:
                             day_p85 = _percentile(all_p, 85)
                             day_p50 = _percentile(all_p, 50)
                             if (not sunny_ahead and day_p85 is not None and day_p50 is not None
-                                    and max_future_price >= day_p85 and price <= day_p50
+                                    and max_future_price >= day_p85 and price_cmp <= day_p50
                                     and day_p85 > day_p50 * 1.10):
                                 target_t = min(target_t + 1.0, indoor_max)
                                 actions["log"].append(f"🔋 Prio 5 (HUS): Prediktiv överladdning! Priset stiger snart till {max_future_price:.2f} kr (dygnets topp). Boostar innetempen (+1°C) i förväg för att bygga termiskt batteri.")

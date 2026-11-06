@@ -105,6 +105,7 @@ class HeishaMonHeatPumpDriver(HeatPumpDriver):
             "degree_minutes": None,
             "compressor_running": None if freq is None else freq > 0,
             "compressor_power_kw": round(sum(use) / 1000, 3) if use else None,
+            "compressor_power_w": round(sum(use)) if use else None,    # uppmätt el (#178: används i lastnedbrytningen)
             # operating_mode är Thermias koder i main.py/loggen (0 = av, SMALLINT); Panasonics koder betyder annat
             # (0 = värme), så fältet lämnas tomt. Läget finns i read_state()["mode"].
             "operating_mode": None,

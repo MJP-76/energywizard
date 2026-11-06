@@ -332,11 +332,11 @@ function flowSvg(d) {
     if (n.active && motion && n.w != null) {
       const kw = Math.abs(n.w) / 1000, dur = Math.max(0.7, 3.4 - kw * 0.35).toFixed(2), cnt = kw > 4 ? 4 : kw > 1.5 ? 3 : 2;
       for (let k = 0; k < cnt; k++) {
-        const kp = inward === (n.x < hub.x) ? "0;1" : "1;0";
+        const kp = inward ? "0;1" : "1;0";      // banan går alltid kort -> hus (#177: förbrukarna gick in mot huset)
         dots += `<circle r="${(3.5 + Math.min(3, kw / 2)).toFixed(1)}" fill="${c}"><animateMotion dur="${dur}s" begin="${(-k * dur / cnt).toFixed(2)}s" repeatCount="indefinite" keyPoints="${kp}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
       }
     } else if (n.active && motion && n.w == null) {
-      dots += `<circle r="5" fill="${c}" opacity=".8"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#${id}"/></animateMotion></circle>`;
+      dots += `<circle r="5" fill="${c}" opacity=".8"><animateMotion dur="2.4s" repeatCount="indefinite" keyPoints="${n.role === "load" ? "1;0" : "0;1"}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
     }
     const why = d.why[n.key] || (n.key === "nat" || n.key === "sol" ? "" : "");
     cards += `<g class="fnode${n.active ? " on" : ""}" data-page="${n.page}" transform="translate(${n.x - 90},${n.y - 34})" style="cursor:pointer">
@@ -469,7 +469,9 @@ async function renderOversikt() {
   }
   const emoji = d.mode === "CHEAP" ? "🟢" : d.mode === "EXPENSIVE" ? "🔴" : "⏸️";
   const netLabel = d.net_power_w != null && d.net_power_w < 0 ? "☀️ Netto (Säljer!)" : "🔌 Netto (Köper)";
-  const tariff = d.is_high_load ? "🔴 Höglast" : "🟢 Baslast";
+  // #180: bara för den som har en effekttariff (egna tider) eller tidstariff inställd - inte standardtiderna
+  const tariffRow = d.high_load_source === "egen" ? `⚡ Aktuell effekttariff: ${d.is_high_load ? "🔴 Höglast" : "🟢 Baslast"}`
+    : d.high_load_source === "tidstariff" ? `⚡ Tidstariff just nu: ${d.is_high_load ? "🔴 Höglast" : "🟢 Låglast"}` : "";
   main.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:1.15rem;font-weight:700">${emoji} ${d.decision}</div>
@@ -478,7 +480,7 @@ async function renderOversikt() {
     <div id="flowslot" style="margin-bottom:16px"></div>
     <div id="planslot" style="margin-bottom:16px"></div>
     <div id="savingsslot" style="margin-bottom:16px"></div>
-    <div class="card" style="margin-bottom:16px"><span class="note">⚡ Aktuell effekttariff: ${tariff}</span></div>
+    ${tariffRow ? `<div class="card" style="margin-bottom:16px"><span class="note">${tariffRow}</span></div>` : ""}
     <div class="grid" style="margin-bottom:16px">
       ${metricCard("⚡", "Elpris just nu", fmtKrOre(d.price) + "/kWh")}
       ${metricCard("🌡️", "Inne", fmt(d.indoor_temp, 1, "°C"), `Mål ${d.indoor_target.toFixed(0)}°C${d.indoor_humidity != null ? " · 💧 " + d.indoor_humidity.toFixed(0) + "%" : ""}`)}
@@ -1334,6 +1336,22 @@ async function mountPriceSettings() {
         <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="ptouwd"${d.tou_weekdays ? " checked" : ""}> Bara vardagar</label>
         <div class="note" style="margin-top:6px">Står på elräkningen eller nätbolagets sida (t.ex. Ellevio, E.ON, Vattenfall). Batteriplanen, planklockan och kostnaderna räknar med den.</div>
       </details>
+      <details style="margin-top:12px"${["egen", "av"].includes((d.power_high || {}).choice) ? " open" : ""}><summary><b>Effekttariff</b> <span class="note">(höglasttid för effektvaktens gränser)</span></summary>
+        <label style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-width:420px"><span class="note">Höglasttid</span>
+          <select id="phchoice">
+            <option value="tidstariff"${!["egen", "av"].includes((d.power_high || {}).choice) ? " selected" : ""}>Samma tider som tidstariffen (eller 07–20 vardagar nov–mars)</option>
+            <option value="egen"${(d.power_high || {}).choice === "egen" ? " selected" : ""}>Egna tider</option>
+            <option value="av"${(d.power_high || {}).choice === "av" ? " selected" : ""}>Ingen höglasttid</option>
+          </select></label>
+        <div id="phown" style="display:${(d.power_high || {}).choice === "egen" ? "block" : "none"}">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+            ${field("phh", "Timmar", (d.power_high || {}).hours || "7-20", "T.ex. 7-20 = 07:00–19:59", "text")}
+            ${field("phm", "Månader", (d.power_high || {}).months || "11-3", "T.ex. 11-3 = november–mars", "text")}
+          </div>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="phwd"${(d.power_high || {}).weekdays !== false ? " checked" : ""}> Bara vardagar</label>
+        </div>
+        <div class="note" style="margin-top:6px">Effektavgift tas efter din högsta timme under höglasttid. Står på nätbolagets sida.</div>
+      </details>
       <div id="pricesrc" style="margin-top:12px"></div>
       <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card2);line-height:1.5">
         Exempel: spotpris 1,00 ${sym} (exkl. moms) blir <b>${kr(d.example.buy)} ${sym}/kWh</b> att köpa och <b>${kr(d.example.sell)} ${sym}/kWh</b> att sälja.</div>
@@ -1344,12 +1362,14 @@ async function mountPriceSettings() {
         buy_extra: k === "SE" ? 0.62675 : 0, sell_extra: k === "SE" ? 0.02125 : 0 });
       draw();
     };
+    document.getElementById("phchoice").onchange = (e) => { document.getElementById("phown").style.display = e.target.value === "egen" ? "block" : "none"; };
     document.getElementById("psave").onclick = async () => {
       const v = (id) => (document.getElementById(id) || {}).value;
       try {
         await postJSON("api/price-settings", { country: v("pcountry"), area: v("parea"), vat_pct: v("pvat"), buy_extra: v("pbuy"),
           sell_extra: v("psell"), sell_vat: document.getElementById("psellvat").checked,
-          tou_extra: v("ptou"), tou_hours: v("ptouh"), tou_months: v("ptoum"), tou_weekdays: document.getElementById("ptouwd").checked });
+          tou_extra: v("ptou"), tou_hours: v("ptouh"), tou_months: v("ptoum"), tou_weekdays: document.getElementById("ptouwd").checked,
+          power_high: { choice: v("phchoice"), hours: v("phh"), months: v("phm"), weekdays: document.getElementById("phwd").checked } });
         toast("Sparat - priser och kostnader räknas om inom en minut");
         mountPriceSettings();
       } catch (e) { toast(e.message); }
