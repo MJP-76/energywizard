@@ -13,14 +13,13 @@ tydligt vad som redan är beslutat och vad som väntar på mer underlag.
 - **FTW-drivrutiner: verifierad styrning.** Läsning fungerar sedan 2026-11-05 (`driver: ftw`, alla 93 medföljer). Kvar:
   prova styrning (driver_command) på riktig hårdvara drivrutin för drivrutin och lägga in dem i `FTW_CONTROL_VERIFIED`
   – Sungrow, Sonnen, Victron och SMA först. Installationsguiden ska kunna föreslå `driver: ftw` (idag skrivs den för hand).
-- **Tillägget använder färdigbyggda images** (`image: ghcr.io/murre87/energywizard` i ha-addon/smartbox/config.yaml).
-  Imagen finns redan (publik, amd64+arm64, byggs av CI). Kvar (analys 2026-11-05): HA ser en ny version i samma
-  ögonblick som config.yaml pushas, men imagen tar ~25 min att bygga – då misslyckas alla uppdateringar under tiden.
-  Lösning: CI taggar imagen med tilläggets version och bumpar `version` i config.yaml först när imagen är pushad
-  (eget steg/commit), eller ett separat tilläggsrepo som bara uppdateras efter bygget.
+- **Tillägget använder färdigbyggda images** – klart 2026-11-06: CI-jobbet `tillagg` taggar imagen med tilläggets
+  version och höjer `version` i config.yaml först när imagen är pushad (ny version = ny rubrik i CHANGELOG.md).
 - **Testa Modbus-drivrutinerna mot srcfl/device-simulator i CI** (Solax, Ferroamp, Thermia, Pixii) - utan hårdvara.
-- **Max laddström och faser känns av själv** per bil och laddbox (laddboxens och bilens egna gränser, och mätning:
-  enfasbil om bara en fas drar ström), visas i startguiden och går att ändra. Idag `max_a`/`phases` i installationen.
+  (Kollat 2026-11-07: simulatorn byggs från Go-källkod och har profiler för Sungrow, SolarEdge, Fronius, Huawei, SMA,
+  Solis, Deye och Pixii, men inte för Solax, Ferroamp eller Thermia. Mest värde för FTW-drivrutinerna.)
+- **Max laddström och faser känns av själv** – klart (`ev_limits.py`): lärs av laddboxens fasströmmar där
+  installationen inte anger `phases`/`max_a`. Kvar: visa det inlärda i startguiden.
 - **Drivrutiner från evcc** ([evcc-io/evcc](https://github.com/evcc-io/evcc), MIT, får användas i AGPL med upphovsrättsraden
   kvar). evcc har YAML-mallar för 211 laddboxar, 251 mätare, växelriktare och batterier och 72 bilar, som pratar direkt
   med enheten via Modbus, HTTP eller MQTT. Mest värde ger det där Home Assistant bara kan läsa men inte styra:

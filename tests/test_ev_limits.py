@@ -28,3 +28,17 @@ def test_brus_ger_inget():
     l = LimitLearner()
     l.observe("x", [0.3, 0.2, 0.1], 16)
     assert l.phases("x") is None and l.max_a("x") is None
+
+
+def test_webben_visar_installerat_inlart_eller_standard():
+    import sys
+    sys.path.insert(0, "webdashboard")
+    import importlib
+    src = open("webdashboard/app.py", encoding="utf-8").read()
+    i = src.index("def _car_limits"); j = src.index("\n\n\n", i)
+    ns = {}
+    exec(src[i:j], ns)
+    f = ns["_car_limits"]
+    assert f({"phases": 1, "max_a": 10}, {"phases": "3", "max_a": 13}) == {"phases": "1", "phases_src": "installation", "max_a": 10, "max_a_src": "installation"}
+    assert f({}, {"phases": "1", "max_a": 13}) == {"phases": "1", "phases_src": "inlärt", "max_a": 13, "max_a_src": "inlärt"}
+    assert f({}, {"phases": None, "max_a": None}) == {"phases": "auto", "phases_src": "standard", "max_a": 16, "max_a_src": "standard"}

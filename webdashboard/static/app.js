@@ -592,6 +592,7 @@ async function renderElbil() {
         <div class="v" style="margin:10px 0 2px;font-size:1.6rem">${fmt(c.soc, 0, "%")}</div>
         <div class="note">${c.stale ? badge("warn", "⚠️ gammalt värde") : badge("on", "live")} ${c.status ? "· " + c.status : ""}</div>
         <div class="note" style="margin-top:6px">⚡ ${fmt(c.power_kw, 1, " kW")} just nu${c.planned_kwh_today != null ? ` · 📅 ${c.planned_kwh_today.toFixed(1)} kWh planerat idag` : ""}</div>
+        ${c.limits ? `<div class="note">🔌 ${c.limits.phases === "auto" ? "Faser: auto" : c.limits.phases + "-fas"}${c.limits.phases_src === "inlärt" ? " (inlärt)" : ""} · max ${c.limits.max_a} A${c.limits.max_a_src === "inlärt" ? " (inlärt av laddningarna)" : c.limits.max_a_src === "standard" ? " (standard)" : ""}</div>` : ""}
         ${c.climate_state ? `<div class="note">🌡️ Klimat: ${c.climate_state}${c.climate_temp != null ? " (" + c.climate_temp.toFixed(0) + "°C)" : ""}</div>` : ""}
         <div class="seg" style="margin-top:12px;flex-wrap:wrap">
           <button data-car="${c.id}" data-kind="start">Ladda nu</button>

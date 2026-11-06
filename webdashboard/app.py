@@ -939,6 +939,24 @@ def _ewapp_cars() -> list:
         return []
 
 
+def _car_limits(charger: dict, learned: dict) -> dict:
+    """{"phases": "1"/"3"/"auto", "phases_src", "max_a", "max_a_src"} - src: installation / inlärt / standard."""
+    out = {}
+    if "phases" in charger:
+        out.update(phases=str(charger["phases"]), phases_src="installation")
+    elif learned.get("phases") in (1, 3, "1", "3"):
+        out.update(phases=str(learned["phases"]), phases_src="inlärt")
+    else:
+        out.update(phases="auto", phases_src="standard")
+    if charger.get("max_a"):
+        out.update(max_a=int(charger["max_a"]), max_a_src="installation")
+    elif isinstance(learned.get("max_a"), (int, float)) and learned["max_a"] > 0:
+        out.update(max_a=int(learned["max_a"]), max_a_src="inlärt")
+    else:
+        out.update(max_a=16, max_a_src="standard")
+    return out
+
+
 @app.get("/api/car")
 async def api_car():
     """Elbil-sidan: SoC/laddstatus för båda bilarna + dagens schema (ev_charging_schedule)
@@ -973,8 +991,18 @@ async def api_car():
         cars.append({"id": c.get("key"), "name": c.get("name"), "soc": _n(c.get("soc")), "stale": bool(c.get("soc_stale")),
                      "power_kw": _n(c.get("power_kw")), "status": c.get("status"),
                      "climate_temp": _n(c.get("inside")), "climate_state": "heat_cool" if c.get("climate_on") else "off"})
+    # Faser och maxström per bil (roadmap): installationens värde, annars det motorn lärt sig av laddningarna
+    # (ev_limits.py, "learned_ev"), annars standard (auto, 16 A)
+    try:
+        _evs = {e.get("id"): (e.get("charger") or {}) for e in (house_config.load_house_config(HOUSE_CONFIG_FILE).get("evs") or [])}
+    except Exception:
+        _evs = {}
+    import ev_limits
+    _learner = ev_limits.LimitLearner(ew_settings.get("learned_ev"))
     for car in cars:
         car["planned_kwh_today"] = planned_by_car.get(car["id"])
+        car["limits"] = _car_limits(_evs.get(car["id"]) or {},
+                                    {"phases": _learner.phases(car["id"]), "max_a": _learner.max_a(car["id"])})
     week = {car["id"]: [{"day": d, "time": "07:00", "soc": 100, "enabled": False} for d in range(7)] for car in cars}
     for s in sched:
         if s["car_id"] in week and 0 <= int(s["day_of_week"]) <= 6:
