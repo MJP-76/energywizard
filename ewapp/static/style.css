@@ -230,21 +230,40 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .page.t2 .plrow .note, .page.t2 .latest { display:none; } .page.t2 .svline h4 { display:none; }
 .page.t3 .ljquick .mini:nth-child(3) { display:none; } .page.t3 .ljquick { grid-template-columns:repeat(3, minmax(0, 1fr)); } .page.t3 .plrow:nth-of-type(n+5) { display:none; }
 .page.t4 .plannow .pnrow:nth-child(2) { display:none; } .page.t4 .plrow:nth-of-type(n+4) { display:none; }
-.pccard .ewpc{max-width:min(270px,64vw)} .pccard .ewpc-strip{margin-top:8px} .pccard .ewpc-legend{margin-top:6px}   /* planklockan på Hem: plats kvar för sol- och nätrutorna */
+.pccard .ewpc{max-width:min(300px,72vw,28dvh)} .pccard .ewpc-strip{margin-top:8px} .pccard .ewpc-legend{margin-top:6px}
+/* 2026-11-06: klockan krympte med kompaktnivåerna och texten i mitten hade minsta storlekar i rem (som växer med
+   telefonens textstorlek) - den blev liten och texten trängdes ut över ringen. Nu: storlek efter skärmens bredd och
+   höjd, och texten i mitten helt proportionell mot klockan (cqw), oberoende av textstorleken. */
+.pccard .ewpc .ewpc-mid{padding:0 24%}
+.pccard .ewpc .ewpc-day{font-size:3.2cqw} .pccard .ewpc .ewpc-time{font-size:15cqw} .pccard .ewpc .ewpc-price{font-size:3.6cqw;white-space:nowrap}
+.pccard .ewpc .ewpc-act{font-size:3.3cqw;margin-top:1.5cqw} .pccard .ewpc .ewpc-now{font-size:3cqw}
 /* 2026-11-06: med stor text i telefonen fick inte allt plats - kompaktnivåerna gömde detaljer men planklockan låg kvar
    i full storlek, och sol-/nätrutorna kläms till höjden noll bakom besparingsraden. Nu krymper planen med nivåerna,
    rutorna har en minsta höjd, och får det ändå inte plats scrollar sidan (tscroll) i stället för att något göms. */
 .page .grid2 { min-height:7.5rem; }
-.page.t1 .pccard .ewpc{max-width:min(230px,56vw)} .page.t1 .pccard .ewsk svg{max-height:34vh}
-.page.t2 .pccard .ewpc{max-width:min(195px,48vw)} .page.t2 .pccard .ewsk svg{max-height:28vh} .page.t2 .pccard .ewpc-legend, .page.t2 .pccard .ewsk-leg{display:none}
-.page.t3 .pccard .ewpc{max-width:min(165px,42vw)} .page.t3 .pccard .ewsk svg{max-height:23vh}
-.page.t4 .pccard .ewpc{max-width:min(140px,36vw)} .page.t4 .pccard .ewsk svg{max-height:19vh}
+.page.t1 .pccard .ewsk svg{max-height:34vh}
+.page.t2 .pccard .ewsk svg{max-height:28vh} .page.t2 .pccard .ewpc-strip .h{display:none}   /* legenden förklarar markeringarna - den göms inte, rubriken gör */
+.page.t3 .pccard .ewsk svg{max-height:23vh} .page.t3 .pccard .ewsk-leg{display:none}
+.page.t4 .pccard .ewsk svg{max-height:19vh}
 .page.tscroll { overflow-y:auto; overscroll-behavior:contain; } .page.tscroll > * { flex:none; }   /* naturlig höjd: flex:1-delar (planlistan) har annars grundstorlek 0 och blir 18 px */ .page.tscroll .grid2 { flex:none; }
 /* Scrollar sidan ändå finns ingen anledning att krympa planen - då behåller den läsbar storlek (texten i klockans
    mitt får plats i ringen) */
 .page.tscroll .pccard .ewpc, .page.tscroll .pccard .ewpc svg{touch-action:pan-y}   /* lodrätt drag på klockan scrollar sidan i stället för att vrida tiden */
-.page.tscroll .pccard .ewpc{max-width:min(250px,62vw)} .page.tscroll .pccard .ewsk svg{max-height:none} .page.tscroll .pccard .ewpc-legend, .page.tscroll .pccard .ewsk-leg{display:flex}
+.page.tscroll .pccard .ewsk svg{max-height:none} .page.tscroll .pccard .ewpc-legend, .page.tscroll .pccard .ewsk-leg{display:flex}
 .pnrow .pnl { flex:0 0 34px; width:34px; text-align:center; overflow:hidden; } .pnrow .pnl-t { font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--acc); font-weight:700; }   /* ikon eller "Sen" i en fast kolumn - texten börjar på samma ställe på alla rader */
 /* Tids-/datumfält i arken (gästbil, schemaläggning): samma formspråk som webbens fält (2026-11-06) */
 .setrow input[type=time], .sheet input[type=time], .sheet input[type=datetime-local] { font:inherit; font-size:16px; min-height:44px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--txt); -webkit-appearance:none; appearance:none; outline:none; }
 .setrow input[type=time]:focus, .sheet input:focus { border-color:var(--acc); box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent); }
+/* Hemskärmens kompakta rutor och bilrad (2026-11-06) */
+.qgrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; flex:none; }
+.qt { padding:8px 12px; display:flex; flex-direction:column; gap:2px; cursor:pointer; min-width:0; }
+.qt h4 { margin:0; font-size:.78rem; color:var(--mut); font-weight:600; letter-spacing:.02em; }
+.qt .qv { font-size:1.4rem; font-weight:750; line-height:1.1; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.qt .qv small { font-size:.62em; color:var(--mut); font-weight:600; margin-left:2px; }
+.qt .qs { font-size:.78rem; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.carsrow { flex:none; display:flex; gap:8px; padding:7px 12px; cursor:pointer; }
+.carsrow .cr { flex:1 1 0; min-width:0; display:grid; grid-template-columns:auto 1fr; column-gap:8px; align-items:baseline; }
+.carsrow .cr b { font-size:.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .carsrow .crs { font-weight:750; font-variant-numeric:tabular-nums; text-align:right; }
+.carsrow .cr .note { grid-column:1 / -1; font-size:.74rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* trångt: först förklaringsrader och legend, aldrig rutornas undertext (köper/säljer, pris) */
+.page.t2 .carsrow .cr .note { display:none; } .page.t3 .qt .qv { font-size:1.25rem; } .page.t3 .qt { padding:6px 11px; } .page.t4 .pccard .ewpc-strip .h { display:none; }

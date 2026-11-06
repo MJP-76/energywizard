@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.35 (2026-11-06)
+- **Ny hemskärm i appen**: planklockan är större och texten i den skalar med klockan (krympte förut med stor text tills
+  texten trängdes ut över ringen). Under beslutsraderna finns sex kompakta rutor i stället för två stora: **Inne**
+  (temperatur, mål, värmepumpens läge), **Nät** (köper/säljer, pris), **Sol** på dagen eller **Varmvatten** på natten,
+  **Batteri** (om du har ett) eller **Billigast** härnäst, **Sparat** (tryck för idag/7 d/månad) och **Idag** (förbrukat).
+  Bilarnas laddnivå visas på en rad. Allt ryms utan scroll på en vanlig telefon.
+
 ## 1.2.34 (2026-11-06)
 - **Guiden kommer ihåg alla val** (#173): även elmätarvalen (hela huset, säljeffekt, annan byggnad), kryssrutorna för
   generisk styrning och direkt anslutning till växelriktare (drivrutin, IP-adress, port, roll) fylls i som du lämnade dem.

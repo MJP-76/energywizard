@@ -228,15 +228,52 @@ function ljusRow() {
   if (!can("lights") || !LJ || !LJ.configured) return "";       // inga valda lampor -> inga lampknappar (#134)
   return `<div class="ljquick">${LJ.has_windows ? `<button class="mini" data-a="lights" data-v="windows_on">Tänd fönster</button><button class="mini" data-a="lights" data-v="windows_off">Släck fönster</button>` : ""}${LJ.has_up ? `<button class="mini" data-a="lights" data-v="up_on">Tänd uppe</button><button class="mini night" data-a="lights" data-v="goodnight">Godnatt</button>` : ""}</div>`;
 }
+// ---- Hemskärmens rutor (2026-11-06): fyra kompakta rutor i stället för två stora (sol/nät), så att det man oftast
+// vill veta syns direkt: inne och värmepump, nätet, sol eller varmvatten, och batteri eller nästa billiga timme. ----
+const MODE_TXT = { CHEAP: "värmer", COMFORT: "normal", EXPENSIVE: "sänkt", SOLAR: "solvärme" };
+function nextCheap() {                                      // billigaste hela timmen de närmaste 12 h, ur planens priser
+  const sl = (PC && PC.slots) || [], now = Date.now(); let best = null;
+  for (let i = 0; i + 3 < sl.length; i++) {
+    const t = Date.parse(sl[i].t); if (t < now - 15 * 60e3 || t > now + 12 * 3600e3) continue;
+    const ps = sl.slice(i, i + 4).map((x) => x.price); if (ps.some((x) => x == null)) continue;
+    const avg = ps.reduce((a, b) => a + b, 0) / 4; if (!best || avg < best.avg) best = { avg, t };
+  }
+  return best;
+}
+const qt = (a, label, value, sub, extra = "") => `<section class="card qt" ${a}><h4>${label}</h4><div class="qv">${value}</div><div class="qs">${sub || "&nbsp;"}</div>${extra}</section>`;
+function quickGrid(s, g, net) {
+  const h = (EN && EN.house) || {}, b = EN && EN.battery, hh = (t) => new Date(t).toTimeString().slice(0, 5);
+  const tiles = [];
+  tiles.push(qt('data-a="tab" data-v="hus"', "Inne", h.inside != null ? `${f1(h.inside)}<small>°C</small>` : "–",
+    [h.target != null ? `mål ${f1(h.target, 0)}°` : "", h.mode ? (MODE_TXT[h.mode] || h.mode.toLowerCase()) : ""].filter(Boolean).join(" · ")));
+  tiles.push(qt('data-a="insights"', "Nät", net == null ? "–" : `${net < -50 ? "−" : ""}${f1(Math.abs(net) / 1000)}<small> kW</small>`,
+    `${net == null ? "" : net < -50 ? "säljer" : "köper"}${g.price != null ? ` · ${f1(g.price, 2)} kr` : ""}`));
+  const sunUp = (s.w != null && s.w > 50) || (s.forecast_w != null && s.forecast_w > 100);
+  if (sunUp || h.water == null) tiles.push(qt('data-a="solarsheet"', "Sol", s.w != null ? `${f1(s.w / 1000)}<small> kW</small>` : "–", s.today_kwh != null ? `idag ${f1(s.today_kwh, 0)} kWh` : ""));
+  else tiles.push(qt('data-a="tab" data-v="hus"', "Varmvatten", `${f1(h.water, 0)}<small>°C</small>`, h.running ? "pumpen går" : "pumpen vilar"));
+  if (b && b.soc != null) tiles.push(qt('data-a="insights"', "Batteri", `${b.soc}<small> %</small>`, b.w == null ? "" : b.w > 30 ? `laddar ${f1(b.w / 1000)} kW` : b.w < -30 ? `laddar ur ${f1(-b.w / 1000)} kW` : "vilar"));
+  else { const c = nextCheap(); tiles.push(qt('data-a="tab" data-v="plan"', "Billigast", c ? `${hh(c.t)}` : "–", c ? `${f1(c.avg, 2)} kr/kWh` : "")); }
+  if (SV && SV.ok) {                                      // besparingen som ruta; tryck = nästa period (idag → 7 d → månad)
+    const ks = SVP.map(([k]) => k), i = Math.max(0, ks.indexOf(svPeriod)), p = SV.periods[svPeriod] || SV.periods.week, nxt = ks[(i + 1) % ks.length];
+    const lbl = (SVP.find(([k]) => k === svPeriod) || [, ""])[1];
+    tiles.push(qt(`data-a="svp" data-v="${nxt}"`, `Sparat · ${lbl}`, `<span style="color:${p.saved_kr >= 0 ? "var(--acc)" : "var(--bad)"}">${p.saved_kr > 0 ? "+" : p.saved_kr < 0 ? "−" : ""}${f1(Math.abs(p.saved_kr), 0)}</span><small> kr</small>`,
+      p.pct != null ? `${p.pct > 0 ? "+" : ""}${f1(p.pct, 0)} % billigare` : ""));
+  }
+  if (EN && EN.today_kwh != null) tiles.push(qt('data-a="tab" data-v="historik"', "Idag", `${f1(EN.today_kwh, 0)}<small> kWh</small>`, "förbrukat hittills"));
+  return `<div class="qgrid">${tiles.join("")}</div>`;
+}
+function carsRow() {                                        // bilarnas laddnivå på en rad (tryck = Bil-fliken)
+  const cars = (S && S.cars) || []; if (!cars.length) return "";
+  return `<section class="card carsrow" data-a="tab" data-v="bil">${cars.map((c) => `<div class="cr"><b>${esc(c.name.split(" ")[0])}</b>
+    <span class="crs">${c.soc != null ? c.soc + " %" : "–"}</span><span class="note">${c.charging ? `laddar ${f1(c.power_kw)} kW` : !c.home ? "borta" : c.plugged ? "inkopplad" : "hemma"}</span></div>`).join("")}</section>`;
+}
+
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
   const clock = window.EWPlanView && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
   const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
-  return `<div class="page">${alerts}${clock}${planNow()}<div class="grid2">
-  <section class="card tile" data-a="solarsheet"><h4>Solel</h4>${sunViz(s.w, s.forecast_w)}<div class="v">${s.w != null ? f1(s.w / 1000) : "–"}<small> kW</small></div><div class="note">idag ${f1(s.today_kwh, 0)} kWh · ${s.limit_pct == null ? "gräns offline" : s.limit_pct >= 99.5 ? "ingen exportgräns" : `export ${Math.round(s.limit_pct)} %`}</div></section>
-  <section class="card tile" data-a="insights"><h4>Nät</h4>${gridViz(net)}<div class="v" style="font-size:1.45rem">${net == null ? "–" : net < -50 ? `Säljer ${f1(-net / 1000)} kW` : `Köper ${f1(Math.max(0, net) / 1000)} kW`}</div><div class="note">${g.price != null ? f1(g.price, 2) : "–"} kr/kWh${g.level ? " · " + esc(g.level) : ""}</div></section>
-  </div>${svLine()}${ljusRow()}</div>`;
+  return `<div class="page">${alerts}${clock}${planNow()}${quickGrid(s, g, net)}${carsRow()}${ljusRow()}</div>`;
 }
 function solarSheet() {                                    // exportgränsen (förut på Energi-sidan) – nu ett blad från Hem
   const s = EN.solar, lim = s.limit_pct, limTxt = lim == null ? "offline" : lim >= 99.5 ? "ingen begränsning" : `${Math.round(lim)} %`;
@@ -387,7 +424,8 @@ async function load() {
     if (page === "bil") S = await api("state"); else if (!S) S = await api("state");
     ROLE = (S && S.role) || ROLE; ME = (S && S.user) || ME; document.body.classList.toggle("guest", ROLE === "guest");
     if (page === "hus") H = await api("home");
-    if (page === "hem") { [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
+    if (page === "hem") { if (!S || Date.now() - (S._t || 0) > 30000) { S = await api("state").catch(() => S); if (S) S._t = Date.now(); }
+      [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
     if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); await loadClock(); }
     if (page === "historik") { if (histView === "energi") HX = await api("energyhistory?range=" + hxRange); else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();

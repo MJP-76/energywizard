@@ -1223,14 +1223,21 @@ def energy():
     raw_lim = val(st, SOLAR["limit"]) if SOLAR["limit"] else None
     # Motorns egna loggade värden (från vilken soldrivrutin som helst) - reserv när solentiteterna saknas
     # (märken som läses via Modbus eller tjänsteanrop i stället för entiteter).
-    now_items, sl = [], {}
+    now_items, sl, house, battery = [], {}, None, None
     try:
         with ENGINE.connect() as c:
-            r = c.execute(text("SELECT decision_summary, pv_power_w, solar_limit_pct, solar_today_kwh FROM sensor_log "
+            r = c.execute(text("SELECT decision_summary, pv_power_w, solar_limit_pct, solar_today_kwh, indoor_temp, target_room_temp, "
+                               "water_temp, active_mode, compressor_running, battery_power_w, battery_soc FROM sensor_log "
                                "WHERE timestamp > now() - interval '10 minutes' ORDER BY timestamp DESC LIMIT 1")).fetchone()
         if r:
             now_items = json.loads(r[0]) if r[0] else []
             sl = {"w": r[1], "limit": r[2], "today": r[3]}
+            # Hemskärmens rutor (2026-11-06): inne, värmepump, varmvatten och husbatteri ur motorns senaste minut
+            fl = lambda v: None if v is None else round(float(v), 1)
+            house = {"inside": fl(r[4]), "target": fl(r[5]), "water": fl(r[6]), "mode": r[7],
+                     "running": None if r[8] is None else bool(float(r[8]))}
+            if r[9] is not None or r[10] is not None:
+                battery = {"w": None if r[9] is None else round(float(r[9])), "soc": None if r[10] is None else round(float(r[10]))}
     except Exception:
         pass
     fb = lambda v, k: v if v is not None else (float(sl[k]) if sl.get(k) is not None else None)
@@ -1241,7 +1248,7 @@ def energy():
             "grid": {"net_w": net_now(), "price": pr.get("now"), "level": pr.get("level")},
             "peaks": month_peaks(), "today_kwh": num(st, "sensor.smartbox_forbrukning_idag"), "saving_today": num(st, "sensor.smartbox_besparing_idag"), "decision": val(st, "sensor.smartbox_beslut"),
             "solar_ev_kwh": num(st, "sensor.smartbox_elbil_solel"), "insights": safe_insights(st, ov, pr), "log": val(st, "sensor.smartbox_beslut"),
-            "alerts": control_alerts(ov)}
+            "alerts": control_alerts(ov), "house": house, "battery": battery}
 
 
 def control_alerts(ov: dict) -> list:
