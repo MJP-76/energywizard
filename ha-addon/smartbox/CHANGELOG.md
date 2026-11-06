@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.38 (2026-11-06)
+- **Hemskärmen putsad**: lugnare rutor utan tunga ramar, enheten direkt efter siffran, bilarna som brickor med
+  laddstapel, beslutsraderna på två rader i stället för att klippas, och Skyline/Klocka-knapparna i kortets hörn.
+  Med stor text i telefonen finns ett extra kompakt steg, så att allt ryms utan scroll på en vanlig telefon.
+
 ## 1.2.37 (2026-11-06)
 - **Fler batterier kan styras** (ej provade på riktig hårdvara – börja i skuggläge):
   - **Sonnen** via integrationen sonnenbatterie: manuellt läge och laddning/urladdning med vald effekt.

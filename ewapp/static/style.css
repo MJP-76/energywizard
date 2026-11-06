@@ -229,7 +229,7 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 .page.t1 .hxsum, .page.t1 .plnote, .page.t1 .tile .note { display:none; }
 .page.t2 .plrow .note, .page.t2 .latest { display:none; } .page.t2 .svline h4 { display:none; }
 .page.t3 .ljquick .mini:nth-child(3) { display:none; } .page.t3 .ljquick { grid-template-columns:repeat(3, minmax(0, 1fr)); } .page.t3 .plrow:nth-of-type(n+5) { display:none; }
-.page.t4 .plannow .pnrow:nth-child(2) { display:none; } .page.t4 .plrow:nth-of-type(n+4) { display:none; }
+.page.t4 .plannow .pnrow:nth-child(n+3) { display:none; }   /* två beslutsrader står kvar (nu + nästa) */ .page.t4 .plrow:nth-of-type(n+4) { display:none; }
 .pccard .ewpc{max-width:min(300px,72vw,28dvh)} .pccard .ewpc-strip{margin-top:8px} .pccard .ewpc-legend{margin-top:6px}
 /* 2026-11-06: klockan krympte med kompaktnivåerna och texten i mitten hade minsta storlekar i rem (som växer med
    telefonens textstorlek) - den blev liten och texten trängdes ut över ringen. Nu: storlek efter skärmens bredd och
@@ -254,16 +254,42 @@ html[data-ambient][data-tod=night] body { background: radial-gradient(900px 520p
 /* Tids-/datumfält i arken (gästbil, schemaläggning): samma formspråk som webbens fält (2026-11-06) */
 .setrow input[type=time], .sheet input[type=time], .sheet input[type=datetime-local] { font:inherit; font-size:16px; min-height:44px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--txt); -webkit-appearance:none; appearance:none; outline:none; }
 .setrow input[type=time]:focus, .sheet input:focus { border-color:var(--acc); box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent); }
-/* Hemskärmens kompakta rutor och bilrad (2026-11-06) */
+/* Hemskärmens kompakta rutor och bilbrickor (2026-11-06): lugna ytor utan ramar, enheten direkt efter siffran på
+   samma baslinje, och ett extra steg (t5) för stor text innan sidan börjar scrolla. */
 .qgrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; flex:none; }
-.qt { padding:8px 12px; display:flex; flex-direction:column; gap:2px; cursor:pointer; min-width:0; }
-.qt h4 { margin:0; font-size:.78rem; color:var(--mut); font-weight:600; letter-spacing:.02em; }
-.qt .qv { font-size:1.4rem; font-weight:750; line-height:1.1; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.qt .qv small { font-size:.62em; color:var(--mut); font-weight:600; margin-left:2px; }
-.qt .qs { font-size:.78rem; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.carsrow { flex:none; display:flex; gap:8px; padding:7px 12px; cursor:pointer; }
-.carsrow .cr { flex:1 1 0; min-width:0; display:grid; grid-template-columns:auto 1fr; column-gap:8px; align-items:baseline; }
-.carsrow .cr b { font-size:.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .carsrow .crs { font-weight:750; font-variant-numeric:tabular-nums; text-align:right; }
-.carsrow .cr .note { grid-column:1 / -1; font-size:.74rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-/* trångt: först förklaringsrader och legend, aldrig rutornas undertext (köper/säljer, pris) */
-.page.t2 .carsrow .cr .note { display:none; } .page.t3 .qt .qv { font-size:1.25rem; } .page.t3 .qt { padding:6px 11px; } .page.t4 .pccard .ewpc-strip .h { display:none; }
+.card.qt { border-color:transparent; box-shadow:none; background:color-mix(in srgb, var(--card) 85%, transparent); }
+.qt { padding:9px 12px 8px; display:flex; flex-direction:column; gap:1px; cursor:pointer; min-width:0; }
+.qt h4 { margin:0; font-size:.7rem; color:var(--mut); font-weight:600; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qt .qv { font-size:1.45rem; font-weight:700; line-height:1.15; font-variant-numeric:tabular-nums; white-space:nowrap; letter-spacing:-.01em; }
+.qt .qv small { font-size:.52em; color:var(--mut); font-weight:600; margin-left:1px; vertical-align:baseline; letter-spacing:0; }
+.qt .qs { font-size:.74rem; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.carsrow { flex:none; display:grid; grid-template-columns:repeat(auto-fit, minmax(0, 1fr)); gap:8px; cursor:pointer; }
+.card.cr { border-color:transparent; box-shadow:none; background:color-mix(in srgb, var(--card) 85%, transparent); padding:8px 12px; min-width:0; }
+.cr .crh { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.cr .crh b { font-size:.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cr .crs { font-weight:700; font-variant-numeric:tabular-nums; } .cr .crs small { font-size:.7em; color:var(--mut); margin-left:1px; }
+.crbar { height:4px; border-radius:99px; background:rgba(127,127,127,.22); margin:6px 0 4px; overflow:hidden; }
+.crbar i { display:block; height:100%; border-radius:99px; background:var(--mut); } .cr.on .crbar i { background:linear-gradient(90deg, var(--acc), var(--acc2)); }
+.cr .crn { font-size:.72rem; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .cr.on .crn { color:var(--acc); }
+/* beslutsraderna: två rader i stället för att klippas mitt i en mening */
+.pnrow > span:last-child { white-space:normal !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.3; }
+.page.t3 .pnrow > span:last-child { -webkit-line-clamp:1; }
+.page.t2 .cr .crn { display:none; } .page.t3 .crbar { margin:5px 0 0; }
+.page.t3 .qt .qv { font-size:1.3rem; } .page.t3 .qt { padding:7px 11px 6px; }
+.page.t4 .pccard .ewpc-strip .h { display:none; }
+/* t5 (stor text): mindre klocka och legend, bara två beslutsrader, lägre knappar - innan sidan får scrolla */
+.page.t5 .pccard .ewpc { max-width:min(220px,58vw,20.5dvh); } .page.t5 .pccard .ewsk svg { max-height:15.5vh; }
+.page.t5 .pccard .ewpc-legend, .page.t5 .pccard .ewsk-leg { display:none; }
+.page.t5 .plannow .pnrow:nth-child(n+3) { display:none; } .page.t5 .ljquick .mini { min-height:36px; }
+.page.t5 .qt .qs { font-size:.68rem; }
+.page.t5 { gap:7px; } .page.t5 .qgrid, .page.t5 .carsrow { gap:7px; } .page.t5 .plannow { padding:8px 12px; gap:4px; }
+.page.t5 .pccard { padding:10px 12px; }
+/* glasläget: rutorna och bilbrickorna lugnare än korten (ingen skugga, nästan ingen ram) */
+html[data-glass] .card.qt, html[data-glass] .card.cr { border-color:rgba(255,255,255,.06); box-shadow:none; background:rgba(255,255,255,.05); }
+:root[data-theme=light][data-glass] .card.qt, :root[data-theme=light][data-glass] .card.cr { border-color:rgba(255,255,255,.55); box-shadow:none; background:rgba(255,255,255,.42); }
+@media (prefers-color-scheme: light) { :root:not([data-theme])[data-glass] .card.qt, :root:not([data-theme])[data-glass] .card.cr { border-color:rgba(255,255,255,.55); box-shadow:none; background:rgba(255,255,255,.42); } }
+.page.t5 .pccard .ewpc-strip { margin-top:4px; } .page.t5 .qt { padding:6px 10px 5px; } .page.t5 .card.cr { padding:6px 11px; }
+/* Skyline/Klocka-knapparna i kortets övre hörn i stället för på en egen rad (sparar ~40 px, 2026-11-06) */
+.pccard { position:relative; }
+.pccard .ewpv-seg { position:absolute; top:10px; right:12px; z-index:2; margin:0; }
+.pccard .ewpv-seg button { padding:4px 10px; font-size:.72rem; }

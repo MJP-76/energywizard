@@ -264,8 +264,10 @@ function quickGrid(s, g, net) {
 }
 function carsRow() {                                        // bilarnas laddnivå på en rad (tryck = Bil-fliken)
   const cars = (S && S.cars) || []; if (!cars.length) return "";
-  return `<section class="card carsrow" data-a="tab" data-v="bil">${cars.map((c) => `<div class="cr"><b>${esc(c.name.split(" ")[0])}</b>
-    <span class="crs">${c.soc != null ? c.soc + " %" : "–"}</span><span class="note">${c.charging ? `laddar ${f1(c.power_kw)} kW` : !c.home ? "borta" : c.plugged ? "inkopplad" : "hemma"}</span></div>`).join("")}</section>`;
+  // en bricka per bil: namn, laddnivå och en tunn laddstapel (grön när den laddar)
+  return `<div class="carsrow" data-a="tab" data-v="bil">${cars.map((c) => `<div class="card cr${c.charging ? " on" : ""}"><div class="crh"><b>${esc(c.name.split(" ")[0])}</b>
+    <span class="crs">${c.soc != null ? c.soc + "<small>%</small>" : "–"}</span></div><div class="crbar"><i style="width:${Math.max(0, Math.min(100, c.soc || 0))}%"></i></div>
+    <div class="crn">${c.charging ? `laddar ${f1(c.power_kw)} kW` : !c.home ? "borta" : c.plugged ? "inkopplad" : "hemma"}</div></div>`).join("")}</div>`;
 }
 
 function pageHem() {
@@ -394,7 +396,7 @@ function fit() {                                           // krymper innehålle
   const pg = document.querySelector(".page"); if (!pg) return;
   const st = pg.scrollTop;                                 // omräkningen får inte nollställa scrollen
   pg.classList.remove("t1", "t2", "t3", "t4", "tscroll");
-  for (let l = 1; l <= 4 && overflows(pg); l++) pg.classList.add("t" + l);
+  for (let l = 1; l <= 5 && overflows(pg); l++) pg.classList.add("t" + l);     // t5: hemskärmens extra steg för stor text
   if (overflows(pg)) pg.classList.add("tscroll");          // sista utvägen: scrolla hellre än att kort överlappar eller göms
   if (st) pg.scrollTop = st;
 }
