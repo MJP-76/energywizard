@@ -1336,7 +1336,17 @@ while True:
                 _battery_early = battery_driver.read_state() or {}
             except Exception:
                 _battery_early = {}
-            house_consumption_w = solar_prod_w + avg_net - (_battery_early.get("power_w") or 0.0)
+            # Orimlig batterieffekt (mer än 1,5 × batteriets max, standard 15 kW) räknas inte in: troligen fel givare,
+            # t.ex. energi i kWh eller växelriktarens totala effekt (#139: 18,2 kW "urladdning" gav huset 0)
+            _bat_w = _battery_early.get("power_w") or 0.0
+            _bat_max = max(float(getattr(battery_driver, "max_power_w", None) or 0), 10000.0) * 1.5
+            if abs(_bat_w) > _bat_max:
+                if last_house_neg_warn is None or (now - last_house_neg_warn) > timedelta(hours=1):
+                    print(f"⚠️ Batteriets effekt {_bat_w / 1000:.1f} kW är orimlig för ett husbatteri - räknas inte in i husets "
+                          f"förbrukning. Kontrollera batteriets effektgivare i installationen.", flush=True)
+                    last_house_neg_warn = now
+                _bat_w = 0.0
+            house_consumption_w = solar_prod_w + avg_net - _bat_w
             # Ett hus kan inte producera el: kraftigt negativt betyder att någon givare har fel tecken eller enhet (#139).
             # Logga delarna (högst en gång i timmen) och visa 0 i stället för t.ex. -17 kW.
             if house_consumption_w < -300:

@@ -367,8 +367,9 @@ async function mountFlow(slotId) {
     const bs = d.battery_sign, kw = (w) => (w / 1000).toFixed(1).replace(".", ",");
     const parts = bs ? `Sol ${kw(bs.pv_w)} + nät ${kw(bs.net_w)}${bs.battery_w != null ? ` − batteri ${kw(bs.battery_w)}` : ""} = ${kw(bs.house_w)} kW.` : "";
     const signBox = !bs ? "" : `<div class="note" style="margin-top:10px;padding:10px 12px;border:1px solid var(--warn);border-radius:12px;line-height:1.45">
-        ⚠️ Husets förbrukning blir ${kw(bs.house_w)} kW, vilket inte går, så den visas som 0. ${parts}
-        ${bs.flip_ok ? ` Batteriets effekt verkar ha omvänt tecken: vänt blir huset ${kw(bs.house_w_flipped)} kW.
+        ${bs.battery_implausible ? `⚠️ Batteriets effekt visar ${kw(bs.battery_w)} kW, vilket är orimligt för ett husbatteri. Troligen har fel givare valts (t.ex. energi i kWh eller växelriktarens totala effekt), så den räknas inte in i husets förbrukning. Välj batteriets <b>effekt</b> (W eller kW, + när det laddar) under Inställningar → Skanna mitt Home Assistant.`
+        : `⚠️ Husets förbrukning blir ${kw(bs.house_w)} kW, vilket inte går, så den visas som 0. ${parts}`}
+        ${bs.battery_implausible ? "" : bs.flip_ok ? ` Batteriets effekt verkar ha omvänt tecken: vänt blir huset ${kw(bs.house_w_flipped)} kW.
           ${bs.locked ? "Tecknet är låst i house_config.yaml (battery.power_invert) - ändra det där." : `<br><button class="icobtn" id="batinv" style="margin-top:8px">Vänd tecknet på batteriets effekt</button>`}`
         : ` Någon av givarna visar fel: kontrollera att nätets effekt är + när du köper och − när du säljer, att solcellerna visar produktionen${bs.battery_w != null ? " och att batteriet är + när det laddar" : ""}, och att enheten (W eller kW) stämmer.`}</div>`;
     slot.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0">⚡ Just nu</h2><span class="note">${esc(d.ts || "")}</span></div>${flowSvg(d)}${signBox}${whyRows ? `<div style="display:grid;gap:8px;margin-top:6px">${whyRows}</div>` : ""}</div>`;

@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.30 (2026-11-06)
+- **Orimlig batterieffekt** (#139): visar batteriets effektgivare mer än ett husbatteri kan (t.ex. 18,2 kW) räknas den
+  inte in i husets förbrukning, och Översikt säger att troligen fel givare valts (t.ex. energi i kWh) och var man
+  väljer rätt.
+
 ## 1.2.29 (2026-11-06)
 - **Aviseringar till eget skript** (#170): mottagaren av aviseringarna kan vara ett skript i Home Assistant (får
   variablerna `title` och `message`) eller vilken notify-tjänst som helst, inte bara en telefon.

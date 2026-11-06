@@ -56,3 +56,17 @@ def test_valet_i_webben_galler_direkt_om_yaml_inte_last(monkeypatch, tmp_path):
         assert d.read_state()["power_w"] == -1000.0
         locked = GenericBatteryDriver(entities={"power": "sensor.bat_w"}, power_invert=False)
         assert locked.read_state()["power_w"] == 1000.0                     # låst i house_config.yaml
+
+
+def test_orimlig_batterieffekt_ar_fel_givare_inte_fel_tecken():
+    """#139: batteriet visar 18,2 kW - fel givare. Ingen vänd-knapp, tydlig text."""
+    h = _wd()._battery_sign_hint({"pv_power_w": 200, "net_power": 400, "battery_power_w": 18200})
+    assert h and h["battery_implausible"] and not h["flip_ok"]
+    h2 = _wd()._battery_sign_hint({"pv_power_w": 200, "net_power": 400, "battery_power_w": -18200})   # även "urladdning"
+    assert h2 and h2["battery_implausible"]
+
+
+def test_motorn_raknar_inte_in_orimlig_batterieffekt():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "smartbox" / "main.py").read_text(encoding="utf-8")
+    assert "_bat_max = max(" in src and "house_consumption_w = solar_prod_w + avg_net - _bat_w" in src

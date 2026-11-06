@@ -1131,17 +1131,20 @@ def _battery_sign_hint(row):
     pv, net, bat = (_n(row.get(k)) for k in ("pv_power_w", "net_power", "battery_power_w"))
     if net is None:
         return None
+    # #139: orimlig batterieffekt (över 15 kW) är fel givare, inte fel tecken
+    implausible = bat is not None and abs(bat) > 15000
     raw = (pv or 0) + net - (bat or 0)
-    if raw > -300:
+    if raw > -300 and not implausible:
         return None
     # #139: visa alltid delarna när huset blir negativt; knappen bara när ett omvänt batteritecken får det att gå ihop
     flipped = (pv or 0) + net + (bat or 0)
-    flip_ok = bat is not None and abs(bat) >= 200 and flipped >= -100
+    flip_ok = bat is not None and abs(bat) >= 200 and flipped >= -100 and not implausible
     try:
         locked = "power_invert" in (house_config.load_house_config(HOUSE_CONFIG_FILE).get("battery") or {})
     except Exception:
         locked = False
     return {"house_w": round(raw), "house_w_flipped": round(flipped), "locked": locked, "flip_ok": flip_ok,
+            "battery_implausible": implausible,
             "pv_w": round(pv or 0), "net_w": round(net), "battery_w": None if bat is None else round(bat),
             "inverted": bool(ew_settings.get("battery_power_invert", False))}
 
