@@ -1508,6 +1508,7 @@ async def api_discover():
         res = {"ok": True, **discovery.discover_house()}
     except Exception as e:
         return {"ok": False, "error": f"Kunde inte skanna Home Assistant: {e}"}
+    res["form"] = _wizard_form()                          # #173: tidigare sparade val fylls i även efter ny skanning
     try:                                                   # #168: senaste skanningen visas igen när man kommer tillbaka
         import json as _json
         res["scanned_at"] = time.time()
@@ -1524,6 +1525,36 @@ def _last_discovery_path() -> str:
     return os.path.join(os.path.dirname(ew_settings.PATH) or ".", "last_discovery.json")
 
 
+def _wizard_form_path() -> str:
+    return os.path.join(os.path.dirname(ew_settings.PATH) or ".", "wizard_form.json")
+
+
+def _wizard_form():
+    try:
+        import json as _json
+        with open(_wizard_form_path(), encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return None
+
+
+@app.post("/api/discover/form")
+async def api_discover_form(request: Request):
+    """#173: guidens val (ikryssat, bilnamn, batteristorlek) sparas när man sparar installationen."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    body = await request.json()
+    if not isinstance(body, dict) or len(str(body)) > 20000:
+        return JSONResponse({"error": "Ogiltigt"}, status_code=400)
+    import json as _json
+    tmp = _wizard_form_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        _json.dump(body, f, ensure_ascii=False)
+    os.replace(tmp, _wizard_form_path())
+    return {"ok": True}
+
+
 @app.get("/api/discover/last")
 async def api_discover_last(request: Request):
     """Senaste skanningens resultat (sparat på servern, #168) - eller ok: False om ingen skanning gjorts."""
@@ -1533,9 +1564,11 @@ async def api_discover_last(request: Request):
     try:
         import json as _json
         with open(_last_discovery_path(), encoding="utf-8") as f:
-            return _json.load(f)
+            res = _json.load(f)
     except Exception:
         return {"ok": False}
+    res["form"] = _wizard_form()
+    return res
 
 
 @app.post("/api/discover-modbus")

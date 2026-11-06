@@ -1743,6 +1743,31 @@ async function runModbusScan() {
 }
 
 // #163/#168: skanningens resultat sparas på servern (api/discover/last) och visas igen när man kommer tillbaka.
+// #173: det man valt i guiden (vilka bilar/enheter som är ikryssade, bilarnas namn och batteristorlek) sparas när man
+// sparar och fylls i igen när skanningen visas - förut stod guidens förval där (alla ikryssade, gissade namn).
+// Nyckeln är enhetens egen entitet/namn, så valen hittar rätt även efter en ny skanning i annan ordning.
+const _carKey = (c) => c.soc_entity || c.device_name || "";
+function wizardForm() {
+  const d = _discovered || {}, f = { cars: {}, chargers: {}, picks: {} };
+  (d.cars || []).forEach((c, i) => {
+    const on = document.querySelector(`.car-pick[data-i="${i}"]`), id = document.querySelector(`.car-id[data-i="${i}"]`), kwh = document.querySelector(`.car-kwh[data-i="${i}"]`);
+    if (on) f.cars[_carKey(c)] = { on: on.checked, id: id ? id.value : "", kwh: kwh ? kwh.value : "" };
+  });
+  (d.chargers || []).forEach((c, i) => { const cb = document.querySelector(`.charger-pick[data-i="${i}"]`); if (cb) f.chargers[c.device_name || i] = cb.checked; });
+  document.querySelectorAll(".pick").forEach((cb) => { f.picks[cb.dataset.cat] = cb.checked; });
+  return f;
+}
+function applyWizardForm(f) {
+  if (!f || !_discovered) return;
+  (_discovered.cars || []).forEach((c, i) => {
+    const s = (f.cars || {})[_carKey(c)]; if (!s) return;
+    const on = document.querySelector(`.car-pick[data-i="${i}"]`), id = document.querySelector(`.car-id[data-i="${i}"]`), kwh = document.querySelector(`.car-kwh[data-i="${i}"]`);
+    if (on) on.checked = !!s.on; if (id && s.id) id.value = s.id; if (kwh && s.kwh) kwh.value = s.kwh;
+  });
+  (_discovered.chargers || []).forEach((c, i) => { const v = (f.chargers || {})[c.device_name || i]; const cb = document.querySelector(`.charger-pick[data-i="${i}"]`); if (cb && v != null) cb.checked = !!v; });
+  document.querySelectorAll(".pick").forEach((cb) => { const v = (f.picks || {})[cb.dataset.cat]; if (v != null) cb.checked = !!v; });
+}
+
 async function runDiscovery(ev, cached) {
   const results = document.getElementById("discoverResults");
   let d = cached ? cached.d : null;
@@ -1845,6 +1870,7 @@ async function runDiscovery(ev, cached) {
   }).catch(() => {});
   document.getElementById("genbtn").onclick = () => generateConfig(false);
   document.getElementById("savebtn").onclick = () => generateConfig(true);
+  applyWizardForm(d.form);
   // Spara direkt bara i installationer där install.sh gjort filen skrivbar; annars bara nedladdning.
   fetch("api/house-config-status", { credentials: "same-origin" }).then(r => r.ok ? r.json() : {}).then(st => {
     if (st && st.writable) document.getElementById("savebtn").style.display = "";
@@ -1911,9 +1937,11 @@ async function generateConfig(save) {
     const rs = await fetch("api/save-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });
     const j = await rs.json().catch(() => ({}));
     msg.textContent = rs.ok ? j.message : ("Kunde inte spara: " + (j.error || rs.status));
+    if (rs.ok) postJSON("api/discover/form", wizardForm()).catch(() => {});      // #173: valen visas igen nästa gång
     return;
   }
   const r = await fetch("api/generate-house-config", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sel) });
+  if (r.ok) postJSON("api/discover/form", wizardForm()).catch(() => {});
   if (!r.ok) { alert("Kunde inte generera filen: " + (await r.json().catch(() => ({}))).error); return; }
   const blob = await r.blob();
   const url = URL.createObjectURL(blob);

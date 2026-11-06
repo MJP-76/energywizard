@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.33 (2026-11-06)
+- **Guiden kommer ihåg dina val** (#173): vilka bilar och enheter du kryssat i, bilarnas namn och batteristorlek sparas
+  när du sparar (eller laddar ner filen) och fylls i igen nästa gång, även efter en ny skanning. Förut stod guidens
+  förval där igen (alla ikryssade, gissade namn).
+
 ## 1.2.32 (2026-11-06)
 - **Elmätaren hittas** (#171): en Tibber Pulse med bara köp- och säljeffekt (utan spänning och ström per fas) känns igen
   av installationsguiden. I guiden kan man också välja en egen sensor för **säljeffekt**, så att export syns även när

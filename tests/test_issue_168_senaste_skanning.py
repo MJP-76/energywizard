@@ -32,3 +32,13 @@ def test_skanningen_sparas_pa_servern(monkeypatch, tmp_path):
     assert res["ok"] and res["scanned_at"] > 0
     saved = json.loads((tmp_path / "last_discovery.json").read_text())
     assert saved["heat_pump"]["driver"] == "ha_entities" and saved["ok"]
+
+
+def test_guidens_val_sparas_och_foljer_med_skanningen(monkeypatch, tmp_path):
+    """#173: valen (ikryssat, bilnamn, batteristorlek) visas igen - inte guidens förval."""
+    wd = _wd()
+    monkeypatch.setattr(wd.ew_settings, "PATH", str(tmp_path / "energywizard.json"))
+    (tmp_path / "wizard_form.json").write_text(json.dumps({"cars": {"sensor.leaf_soc": {"on": True, "id": "leaf", "kwh": "40"}}}))
+    monkeypatch.setattr(wd.discovery, "discover_house", lambda: {"cars": [{"soc_entity": "sensor.leaf_soc"}]})
+    res = asyncio.run(wd.api_discover())
+    assert res["form"]["cars"]["sensor.leaf_soc"]["id"] == "leaf"
