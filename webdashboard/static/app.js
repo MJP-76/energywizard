@@ -1516,7 +1516,7 @@ async function renderInstalls() {
   const big = (n, t) => `<div><div style="font-size:2rem;font-weight:800">${n}</div><div class="note">${t}</div></div>`;
   const summary = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
     <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px">${big(d.active, `aktiva (hörda senaste ${d.active_days} dygnen)`)}${big(d.total_known, "totalt sedan start")}${big(d.new_last_7d, "nya senaste veckan")}</div>
-    <div class="note" style="margin-top:10px">Ett kort per användare, anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte.</div></div>`;
+    <div class="note" style="margin-top:10px">Ett kort per användare, anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var. Utan telemetri syns installationen ändå via ett anonymt livstecken (bara version)${d.ping_only ? ` – ${d.ping_only} st just nu` : ""}.</div></div>`;
   const houses = [...(d.houses || [])].sort((x, y) => (y.mine ? 1 : 0) - (x.mine ? 1 : 0));
   const cards = houses.map((h) => {
     const n = Object.values(h.devices).reduce((a, l) => a + l.length, 0);
@@ -1540,7 +1540,7 @@ async function renderInstalls() {
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px">
         <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${(h.devices.country || [])[0] ? ` <span class="note" style="font-weight:600">· ${FLAG[(h.devices.country || [])[0].split("@")[0].replace("country:", "")] || ""} ${labelOf((h.devices.country || [])[0])}</span>` : ""}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
         <div class="note">sedan ${esc(h.since)}</div></div>
-      ${n ? rows : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
+      ${n ? rows : h.ping_only ? `<div class="note" style="padding:8px 0">Anonym installation – telemetrin är avstängd, bara livstecken och version.</div>` : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
   }).join("");
   main.innerHTML = summary
     + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-bottom:16px">${cards}</div>`
@@ -1576,6 +1576,7 @@ function installsCard(d) {
         <div><div style="font-size:2rem;font-weight:800">${d.new_last_7d}</div><div class="note">nya senaste veckan</div></div>
       </div>
       ${d.without_devices ? `<div class="note" style="margin-top:8px">${d.without_devices} har inte valt några enheter än.</div>` : ""}
+      ${d.ping_only ? `<div class="note" style="margin-top:4px">${d.ping_only} har telemetrin avstängd och syns bara som anonymt livstecken.</div>` : ""}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px;margin-top:14px">${cats}</div>
       <div class="note" style="margin-top:10px">Antal enheter, från telemetrin: bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte, och en installation syns med sina enheter först när den valt dem i startguiden.</div>
     </div>`;

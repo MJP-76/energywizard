@@ -240,3 +240,51 @@ def test_kvarstaende_fel_rapporteras_igen_efter_en_timme(monkeypatch):
         t._ERROR_SEEN["main_loop:ValueError"] = datetime.now(timezone.utc) - timedelta(minutes=61)
         t.report_error({"house_id": "h"}, "main_loop", "ValueError")
     assert mock_post.call_count == 2
+
+
+def test_livstecken_bara_nar_telemetrin_ar_av(monkeypatch):
+    """Telemetrin av: ett anonymt livstecken (hashat ID + version, inga enheter) så att installationen syns.
+    Telemetrin på: inget livstecken (översikten räcker). TELEMETRY_PING=false: inget alls."""
+    monkeypatch.delenv("TELEMETRY_PING", raising=False)
+    t = _reload(monkeypatch, opt_in="false")
+    with patch("telemetry.requests.post") as mock_post:
+        t.send_ping({"house_id": "mitt-hus"})
+    mock_post.assert_called_once()
+    body = mock_post.call_args.kwargs["json"]
+    assert set(body) == {"house", "version", "drivers", "ping"} and body["drivers"] == [] and body["ping"] is True
+    assert "mitt-hus" not in str(body)
+
+    t = _reload(monkeypatch, opt_in="true")
+    with patch("telemetry.requests.post") as mock_post:
+        t.send_ping({"house_id": "mitt-hus"})
+    mock_post.assert_not_called()
+
+    monkeypatch.setenv("TELEMETRY_PING", "false")
+    t = _reload(monkeypatch, opt_in="false")
+    with patch("telemetry.requests.post") as mock_post:
+        t.send_ping({"house_id": "mitt-hus"})
+        t.send_driver_snapshot({"house_id": "mitt-hus"})
+        t.report_error({"house_id": "mitt-hus"}, "main_loop", "ValueError")
+    mock_post.assert_not_called()
+    monkeypatch.delenv("TELEMETRY_PING", raising=False)
+    _reload(monkeypatch)
+
+
+def test_insamlaren_skiljer_livstecken_fran_hus_utan_enheter(monkeypatch, tmp_path):
+    import importlib.util, pathlib
+    monkeypatch.setenv("TELEMETRY_DB_PATH", str(tmp_path / "t.sqlite3"))
+    monkeypatch.delenv("STATS_TOKEN", raising=False)
+    path = pathlib.Path(__file__).resolve().parent.parent / "telemetry-collector" / "app.py"
+    spec = importlib.util.spec_from_file_location("collector_app_test", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    from fastapi.testclient import TestClient
+    c = TestClient(mod.app)
+    with c:
+        c.post("/ingest/drivers", json={"house": "a" * 16, "version": "1.2.39", "drivers": [], "ping": True})
+        c.post("/ingest/drivers", json={"house": "b" * 16, "version": "1.2.39", "drivers": []})
+        c.post("/ingest/drivers", json={"house": "c" * 16, "version": "1.2.39", "drivers": ["meter:ha@Tibber"]})
+        s = c.get("/api/stats").json()
+    assert s["active"] == 3 and s["ping_only"] == 1 and s["without_devices"] == 1
+    assert [h["ping_only"] for h in s["houses"]] == [True, False, False]
+    assert s["houses"][0]["devices"] == {} and s["equipment"] == {"meter": {"ha@Tibber": 1}}

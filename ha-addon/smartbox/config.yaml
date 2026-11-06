@@ -29,10 +29,12 @@ panel_icon: mdi:lightning-bolt
 panel_title: EnergyWizard
 options:
   telemetry_opt_in: false
+  anonymous_ping: true
   telemetry_endpoint: "https://energywizzard.profitalgos.com/telemetry"
 schema:
   dashboard_password: "password?"
   telemetry_opt_in: bool
+  anonymous_ping: bool
   telemetry_endpoint: "str?"
   nibe_local_username: "str?"
   nibe_local_password: "password?"

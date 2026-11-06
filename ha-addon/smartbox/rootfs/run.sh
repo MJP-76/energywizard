@@ -21,6 +21,7 @@ print("" if v is None else (str(v).lower() if isinstance(v, bool) else v))' "$OP
 }
 if [ -f "$OPTIONS" ]; then
     export TELEMETRY_OPT_IN="$(opt telemetry_opt_in)"
+    _ping="$(opt anonymous_ping)"; export TELEMETRY_PING="${_ping:-true}"   # anonymt livstecken, standard på
     export TELEMETRY_ENDPOINT="$(opt telemetry_endpoint)"
     export DASHBOARD_PASSWORD="$(opt dashboard_password)"
     # NIBE lokalt REST-API (heat_pump.driver: nibe_local) - bara de som är ifyllda (#138)

@@ -52,6 +52,10 @@ Se huvudrepots README för exakt vad som skickas om du slår på
 `telemetry_opt_in` i tilläggets inställningar. (Före version 1.1.0 lästes
 tilläggets inställningar aldrig in, så reglaget hade ingen effekt.)
 
+Med telemetrin avstängd skickas bara ett anonymt livstecken en gång per dygn:
+det slumpade installations-ID:t (hashat) och versionsnumret, inget annat. Vill
+du inte skicka något alls, stäng av `anonymous_ping`.
+
 ## Kända begränsningar
 
 - Sidan **System** i webdashboard visar "Kunde inte nå Watchtower". Uppdateringar

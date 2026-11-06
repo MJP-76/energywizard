@@ -35,6 +35,11 @@ OPT_IN = os.environ.get("TELEMETRY_OPT_IN", "true").strip().lower() not in ("fal
 # Tom sträng = standard: docker-compose skickar TELEMETRY_ENDPOINT= (tom) när .env saknar raden, och då
 # skickades ingenting alls (upptäckt 2026-11-03 - Emils eget hus syntes aldrig i samlaren).
 ENDPOINT = (os.environ.get("TELEMETRY_ENDPOINT", "").strip() or "https://energywizzard.profitalgos.com/telemetry").rstrip("/")
+# Anonymt livstecken (2026-11-06, Emils beslut): även installationer utan telemetri skickar en gång per dygn bara
+# installations-ID (slumpat, hashat) och version - inget om utrustning, mätvärden eller fel. Syns som en installation
+# utan utrustning på Installationer. Redovisas i README/DOCS och kan stängas av (TELEMETRY_PING=false / tilläggets
+# alternativ "anonymous_ping"). Med den vanliga telemetrin på skickas det inte (översikten räcker).
+PING = os.environ.get("TELEMETRY_PING", "true").strip().lower() not in ("false", "0", "no")
 SNAPSHOT_EVERY = timedelta(hours=24)        # daglig signal: samlaren räknar "aktiva" som hörda de senaste 3 dygnen
 _last_snapshot: datetime | None = None
 
@@ -239,6 +244,12 @@ def maybe_send_daily(cfg: dict, now: datetime | None = None) -> None:
     """Anropas varje varv i huvudloopen: skickar översikten igen när ett dygn gått (signalen "aktiv")."""
     global _last_snapshot
     now = now or datetime.now(timezone.utc)
+    if not OPT_IN and PING and ENDPOINT:                  # bara livstecken, en gång per dygn
+        if _last_snapshot is None or now - _last_snapshot >= SNAPSHOT_EVERY:
+            _last_snapshot = now
+            import threading
+            threading.Thread(target=send_ping, args=(cfg,), daemon=True, name="telemetry-ping").start()
+        return
     if not (OPT_IN and ENDPOINT):
         return
     # Startrapporten skickas innan något är uppmätt: skicka en gång till när temperaturerna finns (sedan dygnsvis).
@@ -249,6 +260,19 @@ def maybe_send_daily(cfg: dict, now: datetime | None = None) -> None:
     _last_snapshot = now                              # sätts direkt: en långsam HA ska inte ge flera trådar
     import threading
     threading.Thread(target=send_driver_snapshot, args=(cfg,), daemon=True, name="telemetry-daily").start()
+
+
+def send_ping(cfg: dict) -> None:
+    """Anonymt livstecken: installations-ID (hashat) och version, inget annat. Se PING ovan."""
+    global _last_snapshot
+    if OPT_IN or not (PING and ENDPOINT):
+        return
+    _last_snapshot = datetime.now(timezone.utc)
+    try:
+        requests.post(f"{ENDPOINT}/ingest/drivers", json={"house": house_hash(cfg), "version": _software_version(),
+                                                           "drivers": [], "ping": True}, timeout=5)
+    except Exception as e:
+        print(f"ℹ️ Livstecken kunde inte skickas, fortsätter ändå: {e}")
 
 
 def send_driver_snapshot(cfg: dict) -> None:

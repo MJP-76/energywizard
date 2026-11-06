@@ -153,7 +153,10 @@ Aldrig: namn, adress, plats, IP-adresser i innehållet, andra mätvärden, elpri
 för exakt vad som skickas och `telemetry-collector/` för mottagaren (du kan köra en egen:
 `docker compose --profile telemetry-collector up -d`).
 
-Vill du inte skicka något alls, sätt `TELEMETRY_OPT_IN=false` i din `.env`.
+Med `TELEMETRY_OPT_IN=false` skickas inget av ovanstående. Då skickas i stället ett **anonymt livstecken** en gång
+per dygn: det slumpade installations-ID:t (hashat) och versionsnumret, inget annat, så att vi vet hur många
+installationer som finns och vilka versioner de kör. Vill du inte skicka något alls, sätt även `TELEMETRY_PING=false`
+(i Home Assistant-tillägget: stäng av `anonymous_ping`).
 
 ## 🌍 Översätt
 

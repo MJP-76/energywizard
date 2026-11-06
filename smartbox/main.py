@@ -195,6 +195,7 @@ print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepum
       f"sol={type(solar_driver).__name__}, spa={type(spa_driver).__name__}, laddare={list(physical_charger_drivers.keys())}")
 
 telemetry.send_driver_snapshot(house_cfg)  # no-op om TELEMETRY_OPT_IN inte är satt - se telemetry.py
+telemetry.send_ping(house_cfg)             # anonymt livstecken (ID + version) när telemetrin är av - se telemetry.py
 ew_journal.install("motor")              # installationens logg: allt som skrivs ut, i husets databas (ew_journal.py)
 telemetry.install_error_hook(house_cfg)    # "❌"-fel -> modul.funktion + feltyp (aldrig texten), se telemetry.py
 

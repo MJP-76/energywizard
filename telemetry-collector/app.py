@@ -88,6 +88,9 @@ def _str_field(d: dict, key: str, max_len: int = 200) -> str:
     return str(v)[:max_len] if v is not None else ""
 
 
+PING_MARK = "~ping"
+
+
 @app.post("/ingest/drivers")
 async def ingest_drivers(request: Request):
     body = await request.json()
@@ -101,7 +104,8 @@ async def ingest_drivers(request: Request):
                 datetime.now(timezone.utc).isoformat(),
                 house,
                 version,
-                ",".join(str(x) for x in (body.get("drivers") or []))[:2000],
+                # Anonymt livstecken (telemetrin av, smartbox/telemetry.py send_ping): bara ID + version
+                PING_MARK if body.get("ping") is True else ",".join(str(x) for x in (body.get("drivers") or []))[:2000],
                 _str_field(body, "ts", 64),
             ),
         )
@@ -201,9 +205,10 @@ async def stats(request: Request, me: str = ""):
     latest = {}
     for house, version, drivers in rows:
         if _is_real_house(house):
-            latest[house] = (version, [d for d in (drivers or "").split(",") if d])
+            latest[house] = (version, [d for d in (drivers or "").split(",") if d and d != PING_MARK],
+                             drivers == PING_MARK)
     equipment, versions = {}, {}
-    for version, drivers in latest.values():
+    for version, drivers, _ in latest.values():
         versions[version or "okänd"] = versions.get(version or "okänd", 0) + 1
         for d in drivers:                     # enheter, inte hus: två Easee-boxar i samma hus räknas som 2
             cat, _, rest = d.partition(":")
@@ -219,6 +224,7 @@ async def stats(request: Request, me: str = ""):
             cat, _, rest = d.partition(":")
             devs.setdefault(cat, []).append(_norm(rest))
         houses.append({"label": f"Hus {i}", "since": (first.get(h) or "")[:10], "mine": bool(me) and h == me, "devices": devs,
+                       "ping_only": latest[h][2],     # bara anonymt livstecken (telemetrin av): ID + version
                        # Bara fel från husets nuvarande version: ett fel som rättats i en senare version försvinner
                        # när huset uppdaterats, i stället för att ligga kvar ett dygn
                        "version": latest[h][0], "errors": sorted({e for v, e in errs.get(h, []) if v == latest[h][0]})})
@@ -228,7 +234,8 @@ async def stats(request: Request, me: str = ""):
         "active_days": ACTIVE_DAYS,
         "total_known": sum(1 for h in known if _is_real_house(h)),
         "new_last_7d": sum(1 for h, f in first.items() if _is_real_house(h) and f >= week),
-        "without_devices": sum(1 for _, d in latest.values() if not d),
+        "without_devices": sum(1 for _, d, p in latest.values() if not d and not p),
+        "ping_only": sum(1 for _, _, p in latest.values() if p),
         "equipment": {cat: dict(sorted(v.items(), key=lambda kv: -kv[1])) for cat, v in sorted(equipment.items())},
         "versions": versions,
         "houses": houses,

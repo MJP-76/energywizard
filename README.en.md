@@ -113,7 +113,10 @@ Sent once a day and at start, to `https://energywizzard.profitalgos.com/telemetr
 - Version number and a timestamp.
 
 Never: names, addresses, location, other measurements, electricity prices, fees or history. See `smartbox/telemetry.py` for exactly
-what is sent. To send nothing at all, set `TELEMETRY_OPT_IN=false` in your `.env`.
+what is sent. With `TELEMETRY_OPT_IN=false` none of the above is sent. Instead an **anonymous heartbeat** is sent once a
+day: the random installation id (hashed) and the version number, nothing else, so we know how many installations exist
+and which versions they run. To send nothing at all, also set `TELEMETRY_PING=false` (in the Home Assistant add-on:
+turn off `anonymous_ping`).
 
 ## 🌍 Translate
 
