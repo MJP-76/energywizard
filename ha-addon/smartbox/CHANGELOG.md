@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.26 (2026-11-06)
+- **Appen hoppade upp till toppen** när man scrollade (stor text): uppdateringen var 5:e sekund ritade om sidan med
+  scrollen överst. Scrollpositionen behålls nu.
+- **Klockan vreds av misstag** när man scrollade med fingret på den: ett lodrätt drag scrollar nu sidan, och tiden väljs
+  först när man vrider eller trycker.
+
 ## 1.2.25 (2026-11-06)
 - **Inga inbyggda pumpadresser** (#165): Thermia/Husdata läses bara när pumpens adress är angiven (PUMP_IP eller
   `heat_pump.connection.modbus_host`). Förut försökte motorn mot två fasta adresser och skrev ett fel varje minut hos

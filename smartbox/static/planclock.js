@@ -190,12 +190,24 @@
       if (ahead < 0) ahead += 24;
       return Math.round(ahead * 4);
     }
-    let dragging = false;
-    svgEl.addEventListener("pointerdown", (ev) => { dragging = true; root.classList.add("drag"); svgEl.setPointerCapture(ev.pointerId); show(idxFromPoint(ev), true); ev.preventDefault(); });
-    svgEl.addEventListener("pointermove", (ev) => { if (dragging) show(idxFromPoint(ev), true); });
-    const stop = () => { dragging = false; root.classList.remove("drag"); };
-    svgEl.addEventListener("pointerup", stop);
-    svgEl.addEventListener("pointercancel", stop);
+    // När sidan runt omkring scrollar (appen med stor text, touch-action: pan-y) väntar ett finger på pekskärm tills det
+    // syns om det är en scroll eller en vridning: tar webbläsaren rörelsen som scroll (pointercancel) återställs visaren,
+    // ett tryck utan rörelse väljer tiden som förut (2026-11-06: klockan vreds av misstag när man scrollade).
+    let dragging = false, pending = false, downIdx = 0;
+    const panAllowed = () => /pan/.test(getComputedStyle(svgEl).touchAction || "");
+    svgEl.addEventListener("pointerdown", (ev) => {
+      dragging = true; downIdx = idx; root.classList.add("drag");
+      if (ev.pointerType === "touch" && panAllowed()) { pending = true; return; }
+      pending = false; svgEl.setPointerCapture(ev.pointerId); show(idxFromPoint(ev), true); ev.preventDefault();
+    });
+    svgEl.addEventListener("pointermove", (ev) => {
+      if (!dragging) return;
+      if (pending) { pending = false; try { svgEl.setPointerCapture(ev.pointerId); } catch (e) { /* redan släppt */ } }
+      show(idxFromPoint(ev), true);
+    });
+    const stop = () => { dragging = false; pending = false; root.classList.remove("drag"); };
+    svgEl.addEventListener("pointerup", (ev) => { if (pending) show(idxFromPoint(ev), true); stop(); });
+    svgEl.addEventListener("pointercancel", () => { if (dragging) show(downIdx, true); stop(); });
     svgEl.addEventListener("keydown", (ev) => {
       const step = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 4, PageDown: -4 }[ev.key];
       if (step) { show(idx + step, true); ev.preventDefault(); } else if (ev.key === "Home") { show(0, true); ev.preventDefault(); }

@@ -332,6 +332,8 @@ function render() {
   const body = { hem: pageHem, bil: pageBil, hus: pageHus, plan: pagePlan, historik: pageHistorik }[page]();
   const ok = S ? S.ok : true;
   const tabs = TABS[ER()].map((k) => [k, TABNAME[k]]);
+  // Scrollar sidan (stor text, tscroll) ska omritningen var 5:e sekund inte kasta en tillbaka till toppen
+  const _oldPg = document.querySelector(".page"), _keepScroll = _oldPg && _oldPg.dataset.p === page ? _oldPg.scrollTop : 0;
   app.innerHTML = `<div class="top"><div class="greet" data-a="greet"><b><span class="dot ${ok ? "" : "off"}"></span>${esc(GR ? GR.hello : "EnergyWizard")}</b>${GR ? `<span class="gl">${esc([GR.weather, GR.line].filter(Boolean).join(" · "))}</span>` : ""}${S && S.version && S.version !== "dev" && S.version !== "local" ? `<span class="ver" title="Du kör senaste versionen">v${esc(S.version)} ✓ senaste</span>` : ""}</div><div class="tools"><button class="icobtn" data-a="theme" aria-label="Byt tema">${themeIcon()}</button>${warn ? `<button class="icobtn warn" data-a="health">⚠ ${S.health.length}</button>` : ""}<button class="icobtn" data-a="settings" aria-label="Inställningar">${ICON.gear}</button></div></div>${ROLE === "owner" && VIEWAS ? `<button class="vastrip" data-a="viewas" data-v="">Visar som ${VIEWAS === "family" ? "familj" : "gäst"} · tryck för att avsluta</button>` : ER() === "guest" ? `<div class="vastrip">Gästläge · bara titta</div>` : ""}${needInstall() && page === "bil" ? `<button class="installbar" data-a="installapp"><b>Installera som app</b><span>${installEvt ? "Ett tryck" : "Så gör du"}</span></button>` : ""}${body}`;
   let tb = $("#tabs"); if (!tb) { tb = document.createElement("nav"); tb.id = "tabs"; tb.className = "tabs"; document.body.insertBefore(tb, $("#toast")); }
   tb.style.setProperty("--ntabs", tabs.length);
@@ -342,7 +344,10 @@ function render() {
     if (PCNEW && (!PCH || PCH.index === 0)) { PCH = EWPlanView.mount(PCEL, PC, { lang: I18N.lang === "en" ? "en" : "sv", unit: "kr" }); PCNEW = false; }
     pcs.replaceWith(PCEL);
   }
+  const _pg = document.querySelector(".page");
+  if (_pg) _pg.dataset.p = page;
   fit();
+  if (_pg && _keepScroll) _pg.scrollTop = _keepScroll;
 }
 function overflows(pg) {
   const r = pg.getBoundingClientRect(); if (pg.scrollHeight > pg.clientHeight + 1) return true;
@@ -350,9 +355,11 @@ function overflows(pg) {
 }
 function fit() {                                           // krymper innehållet steg för steg tills inget sticker ut eller överlappar (stora typsnitt, små skärmar)
   const pg = document.querySelector(".page"); if (!pg) return;
+  const st = pg.scrollTop;                                 // omräkningen får inte nollställa scrollen
   pg.classList.remove("t1", "t2", "t3", "t4", "tscroll");
   for (let l = 1; l <= 4 && overflows(pg); l++) pg.classList.add("t" + l);
   if (overflows(pg)) pg.classList.add("tscroll");          // sista utvägen: scrolla hellre än att kort överlappar eller göms
+  if (st) pg.scrollTop = st;
 }
 window.addEventListener("resize", () => fit());
 let APPV = null;
