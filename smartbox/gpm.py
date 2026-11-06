@@ -823,7 +823,9 @@ class GlobalPriorityManager:
                 reason_str = "Snabbt stigande sol-värme" if indoor_temp < indoor_max else f"För varmt inne ({indoor_temp:.1f}°C >= {indoor_max}°C)"
                 actions["log"].append(f"🛑 Prio 5 (HUS): {reason_str}. Mjukt kompressor-stopp aktiverat ({adjustment}°C).")
                 
-            elif indoor_temp < indoor_min:
+            # Bara när kylan hållit i sig (main.py: 30 min i följd, sustained.py) - inte för en vädring.
+            # Saknas nyckeln (tester, återuppspelning) gäller det gamla beteendet.
+            elif indoor_temp < indoor_min and state.get('indoor_cold_confirmed', True):
                 actions["pump_mode"] = "CHEAP"
                 actions["pump_target_temp"] = state.get('temp_cheap', 22.0)
                 actions["log"].append(f"🏠 Prio 5 (HUS): Kallt inne! ({indoor_temp:.1f}°C < {indoor_min}°C). Tvingar värme oavsett elpris.")

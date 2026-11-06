@@ -281,6 +281,10 @@ last_appliance_running = {}   # hushållsmaskin -> körde den förra varvet (app
 # Säkerhetslarm för kallt inne (auto-värme kan vara avstängd i manuellt pumpläge)
 INDOOR_COLD_ALERT_C  = 18.0
 indoor_cold_alerted  = False
+# Kallt inne räknas först efter 30 min i följd (sustained.py): ingen notis eller tvångsvärme för en vädring
+import sustained
+_cold_alert_watch = sustained.Sustained()
+_cold_gpm_watch = sustained.Sustained()
 last_sent_solar_limit = None
 last_solar_write_at = None   # när exportgränsen senast skrevs (solar_write_guard.py)
 last_solar_notified_state = False
@@ -1635,7 +1639,8 @@ while True:
                 'peak_shaving_enabled': cfg.get("peak_shaving_enabled", True), 'solar_is_shaky': solar_is_shaky,
                 'solar_auto_export': str(all_overrides.get("solar_auto_export", "true")).lower() != "false",
                 'sun_soon': _sun_cache.get("soon"), 'sun_day': _sun_cache.get("day"),
-                'indoor_temp': indoor_temp, 'indoor_humidity': ha_temps.get('indoor_humidity'), 'indoor_min': cfg.get("indoor_min", 19.0), 'indoor_max': cfg.get("indoor_max", 22.5),
+                'indoor_temp': indoor_temp, 'indoor_humidity': ha_temps.get('indoor_humidity'), 'indoor_min': cfg.get("indoor_min", 19.0),
+                'indoor_cold_confirmed': _cold_gpm_watch.update(indoor_temp is not None and indoor_temp < cfg.get("indoor_min", 19.0), now), 'indoor_max': cfg.get("indoor_max", 22.5),
                 'water_temp': water_temp or 50.0, 'water_target_normal': wt_norm,
                 'brine_out_temp': pump_data.get("brine_out_temp") if pump_data else None,
                 'spa_temp': gecko_data.get("current_temp") if gecko_data else None,
@@ -2026,7 +2031,8 @@ while True:
             # --- SÄKERHETSLARM: Kallt inomhus (slår INTE på värmen) ---
             # Viktigt när pumpen står i manuellt läge, då GPM:s automatiska kylskydd är ur spel.
             if indoor_temp is not None:
-                if indoor_temp < INDOOR_COLD_ALERT_C and not indoor_cold_alerted:
+                _cold_confirmed = _cold_alert_watch.update(indoor_temp < INDOOR_COLD_ALERT_C, now)
+                if _cold_confirmed and not indoor_cold_alerted:
                     pump_is_manual = all_overrides.get("pump_smart_mode") == "manual"
                     notifier.alert_indoor_cold(indoor_temp, INDOOR_COLD_ALERT_C, pump_is_manual)
                     indoor_cold_alerted = True

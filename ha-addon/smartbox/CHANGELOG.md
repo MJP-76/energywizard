@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.18 (2026-11-06)
+- **Kallt inne räknas först efter 30 minuter**: notisen "Kallt inomhus!" och värmetvånget oavsett elpris kommer
+  först när det varit kallt i 30 minuter i följd. En vädring eller öppen dörr nära givarna (t.ex. 21,8 → 14,6 °C
+  under några minuter) ger ingen notis och ingen dyr värme.
+
 ## 1.2.17 (2026-11-06)
 - **Färdigbyggd bild**: Home Assistant hämtar tillägget som en färdig bild (amd64 och aarch64) i stället för att
   bygga det på din maskin. Uppdateringar går på någon minut och misslyckas inte längre på maskiner med lite minne.
