@@ -342,7 +342,7 @@ function flowSvg(d) {
     cards += `<g class="fnode${n.active ? " on" : ""}" data-page="${n.page}" transform="translate(${n.x - 90},${n.y - 34})" style="cursor:pointer">
       <rect width="180" height="68" rx="16" fill="var(--card2)" stroke="${n.active ? c : "var(--line)"}" stroke-width="${n.active ? 2 : 1}"/>
       <text x="16" y="28" font-size="20">${esc(n.icon)}</text>
-      <text x="46" y="27" font-size="14" font-weight="700" fill="var(--txt)">${esc(n.label)}</text>
+      <text x="46" y="27" font-size="14" font-weight="700" fill="var(--txt)">${esc(n.label)}${n.key === "batteri" && n.w != null ? `<tspan font-size="12" font-weight="400" fill="var(--mut)"> · ${fmtW(Math.abs(n.w))}</tspan>` : ""}</text>
       <text x="46" y="47" font-size="12" fill="var(--mut)">${esc(n.detail)}</text>
       ${why ? `<title>${esc(why)}</title>` : ""}
     </g>`;
@@ -1869,6 +1869,8 @@ async function generateConfig(save) {
 }
 
 function openPage(id) {
+  // #161: en dold flik (utrustning installationen inte har) öppnar Översikt i stället för en tom sida
+  if (PAGES.length && id !== "oversikt" && !PAGES.some((p) => p.id === id)) id = "oversikt";
   currentPage = id;
   renderSidebar();
   closeMobileMenu();

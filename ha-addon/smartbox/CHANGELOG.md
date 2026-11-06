@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.23 (2026-11-06)
+- **Dolda flikar** (#161): webben döljer flikarna Spabad, Elbil, Värmepump och Solceller när installationen saknar den
+  utrustningen (Solceller ligger kvar om det finns ett husbatteri). Egna flikar kan döljas med `ui: hidden_tabs:
+  [prognos, temperaturer]` i house_config.yaml. En dold flik öppnar Översikt.
+- **Batteriets effekt i flödesbilden** (#160): batterirutan på Översikt visar effekten, t.ex. "Batteri · 850 W".
+
 ## 1.2.22 (2026-11-06)
 - Sponsringspåminnelsen berättar vad utvecklingen kostar (runt 1 000 € de senaste veckorna) och visas en gång till
   den här månaden, på installationens språk. Den kan som förut stängas av i inställningarna.

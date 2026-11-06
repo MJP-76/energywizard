@@ -667,10 +667,33 @@ async def price_settings_set(request: Request):
     return {"ok": True}
 
 
+def _hidden_pages(cfg: dict) -> set:
+    """#161: flikar för utrustning som installationen inte har döljs (en tom Spabad-flik ser trasig ut), plus de man
+    själv valt att dölja (ui.hidden_tabs i house_config.yaml). Översikt, Inställningar och System döljs aldrig."""
+    on = lambda k: bool((cfg.get(k) or {}).get("enabled"))
+    hidden = set()
+    if not on("spa"):
+        hidden.add("spabad")
+    if not (cfg.get("evs") or []):
+        hidden.add("elbil")
+    if not on("heat_pump"):
+        hidden.add("varmepump")
+    if not on("solar") and not on("battery"):          # Solceller-fliken visar även husbatteriet
+        hidden.add("solceller")
+    extra = (cfg.get("ui") or {}).get("hidden_tabs") or []
+    if isinstance(extra, list):
+        hidden |= {str(x) for x in extra}
+    return hidden - {"oversikt", "installningar", "system"}
+
+
 @app.get("/api/me")
 async def me(request: Request):
     role, user = AUTH.session(request)
-    pages = [p for p in PAGES if p["built"]]
+    try:
+        hidden = _hidden_pages(house_config.load_house_config(HOUSE_CONFIG_FILE))
+    except Exception:
+        hidden = set()                                    # ingen/trasig installation: visa allt
+    pages = [p for p in PAGES if p["built"] and p["id"] not in hidden]
     if TELEMETRY_STATS_URL and role == "owner":       # bara utvecklarens egen server, bara ägaren
         pages.insert(len(pages) - 1, INSTALLS_PAGE)
     return {"role": role, "user": user, "pages": pages}
