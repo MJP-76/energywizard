@@ -46,7 +46,7 @@ def test_sponsorrutan_en_gang_i_manaden_efter_en_vecka(st):
     sponsor.dismiss(t1)
     assert sponsor.state("sv", t1 + timedelta(days=5))["show"] is False  # samma månad
     assert sponsor.state("en", datetime(2026, 12, 1))["show"] is True    # ny månad
-    assert "spare time" in sponsor.state("en", t1)["text"]
+    assert "spare time" in sponsor.state("en", t1)["text"] and "1,000" in sponsor.state("en", t1)["text"]
 
 
 def test_sponsornotisen_kan_stangas_av_och_gar_till_ha_en_gang(st):
@@ -90,3 +90,18 @@ def test_web_common_sprak_bara_i_startguiden_eller_agaren(st):
     role["r"] = "owner"
     assert asyncio.run(fn(R({"language": "sv"})))["ok"]
     assert asyncio.run(fn(R({"language": "klingon"}))).status_code == 400
+
+
+def test_extra_utskick_visas_igen_aven_om_manadens_redan_setts(st):
+    """2026-11-06: meddelandet om utvecklingskostnaden når även den som redan stängt/fått novembers påminnelse."""
+    import sponsor
+    t0 = datetime(2026, 10, 1)
+    sponsor.state("sv", t0)                                               # installed_at
+    st.update(sponsor_seen_month="2026-11", sponsor_ha_month="2026-11")  # novembers vanliga redan visad/skickad
+    t = datetime(2026, 11, 6, 12)
+    assert sponsor.state("sv", t)["show"] is True and "1 000 €" in sponsor.state("sv", t)["text"]
+    assert sponsor.send_ha_notice(lambda *a: True, "sv", t)
+    sponsor.dismiss(t)
+    assert sponsor.state("sv", t)["show"] is False
+    assert not sponsor.send_ha_notice(lambda *a: True, "sv", t + timedelta(hours=1))
+    assert "/Emil" not in sponsor.state("sv", t)["text"]

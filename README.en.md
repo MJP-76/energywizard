@@ -125,6 +125,11 @@ programming: see [TRANSLATING.md](TRANSLATING.md).
 EnergyWizard is free, without subscription or ads, and will stay that way. The most expensive part is not the
 code but **verifying against real hardware**.
 
+Much of the code is written, reviewed and tested together with Claude, an AI that costs money for every hour it
+works. Over the past few weeks, developing EnergyWizard has cost around €1,000, and everything is shared for free
+with everyone who uses it. If you think the project is worth it, we would be very grateful for a sponsorship, big
+or small.
+
 <p>
   <a href="https://github.com/sponsors/murre87"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
 </p>

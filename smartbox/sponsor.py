@@ -13,20 +13,26 @@ GRACE_DAYS = 7
 
 TITLE = {"sv": "Gillar du EnergyWizard? ❤️", "en": "Do you like EnergyWizard? ❤️"}
 TEXT = {
-    "sv": ("Hej! Jag hoppas att EnergyWizard gör nytta hemma hos dig. Jag bygger det på min fritid, "
-           "och mycket av koden skrivs tillsammans med Claude, en AI som kostar pengar varje månad. "
-           "Om du tycker att projektet är värt det blir jag jätteglad för ett litet bidrag, stort som smått. "
-           "Det håller EnergyWizard gratis och öppet för alla. Tack för att du är med! /Emil"),
-    "en": ("Hi! I hope EnergyWizard is making a difference in your home. I build it in my spare time, "
-           "and much of the code is written together with Claude, an AI that costs money every month. "
-           "If you think the project is worth it, I would be really happy for a small contribution, big or small. "
-           "It keeps EnergyWizard free and open for everyone. Thank you for being part of it! /Emil"),
+    "sv": ("Hej! Jag hoppas att EnergyWizard gör nytta hemma hos dig. Jag bygger det på min fritid, och mycket av "
+           "koden skrivs, granskas och testas tillsammans med Claude, en AI som kostar pengar för varje timme den "
+           "arbetar. De senaste veckorna har det kostat runt 1 000 € att utveckla EnergyWizard, och allt delas gratis "
+           "med alla som använder det. Om du tycker att projektet är värt det blir jag väldigt tacksam för en "
+           "sponsring, stor som liten. Det håller EnergyWizard gratis och öppet för alla. Tack för att du är med!"),
+    "en": ("Hi! I hope EnergyWizard is making a difference in your home. I build it in my spare time, and much of "
+           "the code is written, reviewed and tested together with Claude, an AI that costs money for every hour it "
+           "works. Over the past few weeks, developing EnergyWizard has cost around €1,000, and everything is shared "
+           "for free with everyone who uses it. If you think the project is worth it, I would be very grateful for a "
+           "sponsorship, big or small. It keeps EnergyWizard free and open for everyone. Thank you for being part of it!"),
 }
+# Ett extra utskick utöver månadens: visas en gång till även för den som redan sett/fått månadens påminnelse
+# (2026-11-06, meddelandet om utvecklingskostnaden). Avstängd påminnelse och första veckan respekteras som vanligt.
+CAMPAIGN = {"2026-11": "2026-11-kostnad"}
 BUTTON = {"sv": "Sponsra EnergyWizard", "en": "Sponsor EnergyWizard"}
 
 
 def _month(now):
-    return now.strftime("%Y-%m")
+    m = now.strftime("%Y-%m")
+    return CAMPAIGN.get(m, m)
 
 
 def _installed_at(now):

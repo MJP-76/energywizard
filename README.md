@@ -168,6 +168,11 @@ Det byggs på kvällar och helger, och det dyraste är inte koden utan att
 **verifiera mot riktig hårdvara**: en växelriktare, värmepump eller laddbox
 som ingen i projektet har kan bara stödjas på riktigt om någon testar den.
 
+Mycket av koden skrivs, granskas och testas tillsammans med Claude, en AI som kostar pengar för varje timme
+den arbetar. De senaste veckorna har det kostat runt 1 000 € att utveckla EnergyWizard, och allt delas gratis
+med alla som använder det. Tycker du att projektet är värt det blir vi väldigt tacksamma för en sponsring,
+stor som liten.
+
 <p>
   <a href="https://github.com/sponsors/murre87"><img src="https://img.shields.io/badge/Sponsra_på_GitHub-%E2%9D%A4-db61a2?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsra på GitHub"></a>
 </p>

@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.22 (2026-11-06)
+- Sponsringspåminnelsen berättar vad utvecklingen kostar (runt 1 000 € de senaste veckorna) och visas en gång till
+  den här månaden, på installationens språk. Den kan som förut stängas av i inställningarna.
+- Appen: sponsringsrutan visas som en ruta mitt på skärmen (låg tidigare längst ner på sidan) och går att scrolla
+  med stor text.
+
 ## 1.2.21 (2026-11-06)
 - **NIBE via Home Assistants myUplink-integration** (#158): ny drivrutin som läser värmepumpen via integrationens
   entiteter. Installationsguiden kopplar dem själv via NIBE:s givarkoder (BT1 ute, BT2 framledning, BT3 retur,
