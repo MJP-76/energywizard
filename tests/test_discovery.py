@@ -460,3 +460,38 @@ def test_solaredge_lagringsniva_pa_vaxelriktaren_feltolkas_inte_som_husbatteri()
 def test_inget_batteri_ger_none_inte_krasch():
     result = discover_house([e for e in SYNTHETIC_ENTITIES if e["d"] == "dev_light"])
     assert result["battery"] is None
+
+
+def test_fronius_mppt_moduler_summeras():
+    """#139: Fronius GEN24 har en DC-effekt per MPPT-modul. Guiden föreslår alla moduler summerade, aldrig AC-effekten
+    (den innehåller batteriets urladdning) och aldrig en totalgivare två gånger."""
+    d = dict(a="Garage", d="dev_gen24", dn="Fronius GEN24", m="Fronius", mo="Symo GEN24 8.0 Plus", dc="power", u="W")
+    ents = [
+        {"e": "sensor.fronius_symo_gen24_8_0_plus_mppt_module_0_dc_power", "n": "MPPT module 0 DC power", "st": "2100", **d},
+        {"e": "sensor.fronius_symo_gen24_8_0_plus_mppt_module_1_dc_power", "n": "MPPT module 1 DC power", "st": "1700", **d},
+    ]
+    sug = discover_house(ents)["solar"]["generic_suggestion"]
+    assert sug["entities"]["pv_power_w"] == [ents[0]["e"], ents[1]["e"]] and sug["entities"]["sum_inverters"] is True
+    one = discover_house(ents[:1])["solar"]["generic_suggestion"]
+    assert one["entities"]["pv_power_w"] == ents[0]["e"] and "sum_inverters" not in one["entities"]
+
+
+def test_guidens_yaml_med_summerade_moduler_blir_lista_och_ja():
+    import importlib.util, os, sys
+    from pathlib import Path
+    import yaml
+    root = Path(__file__).resolve().parent.parent
+    cwd = os.getcwd()
+    os.chdir(root / "webdashboard")
+    try:
+        mod = sys.modules.get("webdashboard_app")
+        if mod is None:
+            spec = importlib.util.spec_from_file_location("webdashboard_app", root / "webdashboard" / "app.py")
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["webdashboard_app"] = mod
+            spec.loader.exec_module(mod)
+        sol = {"driver": "generic_number", "entities": {"pv_power_w": ["sensor.m0_dc_power", "sensor.m1_dc_power"], "sum_inverters": True}}
+        cfg = yaml.safe_load(mod._build_house_config_yaml({"solar": sol}))
+    finally:
+        os.chdir(cwd)
+    assert cfg["solar"]["entities"] == {"pv_power_w": ["sensor.m0_dc_power", "sensor.m1_dc_power"], "sum_inverters": True}

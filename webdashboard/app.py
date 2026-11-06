@@ -1728,8 +1728,8 @@ def _build_house_config_yaml(sel: dict) -> str:
             solar_entities.setdefault("pv_power_w", solar["pv_power_entity"])
         if solar.get("today_kwh_entity"):
             solar_entities.setdefault("today_kwh", solar["today_kwh_entity"])
-        for key, val in solar_entities.items():
-            lines.append(f"    {key}: {val}")
+        for key, val in solar_entities.items():          # lista/ja-nej (sum_inverters) som JSON - giltig YAML
+            lines.append(f"    {key}: {val if isinstance(val, str) else json.dumps(val)}")
     else:
         lines += ["solar:", "  enabled: false"]
     lines.append("")

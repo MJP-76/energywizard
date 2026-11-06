@@ -530,6 +530,15 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                              and e.get("u") == "%"
                              and _has(e.get("n"), re.compile("export|limit|gräns|power.?limit", re.I))), None)
             suggested = {"pv_power_w": solar_e["e"]}
+            # Fronius GEN24 m.fl.: en effektgivare per MPPT-modul (module_0, module_1 ...) och ingen ren solsumma (växelriktarens
+            # AC-effekt innehåller batteriets urladdning). Alla moduler på samma enhet summeras (#139, 2026-11-07). Bara
+            # givare med modulnummer tas med, så en totalgivare kan aldrig räknas två gånger.
+            _mod = re.compile(r"(mppt.?module.?|mppt.?|pv.?|string.?)(\d+).*(dc.?)?power", re.I)
+            if _mod.search(solar_e["e"]):
+                mods = sorted({e["e"] for e in power if e.get("d") == solar_e.get("d") and _mod.search(e["e"])
+                               and _mod.search(e["e"]).group(1).lower() == _mod.search(solar_e["e"]).group(1).lower()})
+                if len(mods) > 1:
+                    suggested = {"pv_power_w": mods, "sum_inverters": True}
             if today_kwh:
                 suggested["today_kwh"] = today_kwh["e"]
             if limit_e:

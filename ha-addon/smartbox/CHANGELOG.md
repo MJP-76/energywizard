@@ -1,5 +1,9 @@
 # Ändringar
 
+## 1.2.44 (2026-11-07)
+- **Guiden summerar MPPT-modulerna** (#139): hittar den en effektgivare per MPPT-modul (t.ex. Fronius GEN24) föreslår
+  den alla moduler summerade i stället för bara den första.
+
 ## 1.2.43 (2026-11-07)
 - **Flera växelriktare**: den generiska soldrivrutinen kan summera solproduktionen från flera växelriktare
   (`sum_inverters: true`, se README).
