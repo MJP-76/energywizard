@@ -1,0 +1,47 @@
+name: simulator
+# FTW-drivrutinerna (smartbox/ftw_drivers) genom vår Lua-brygga mot Sourcefuls enhetssimulator (MIT,
+# srcfl/device-simulator). Simulatorn byggs och körs bara här i GitHub Actions - aldrig på EnergyWizard-servern.
+# Blockerar inte bilderna (eget arbetsflöde); rapporten laddas upp som artefakt.
+
+on:
+  push:
+    branches: [main]
+    paths: ["smartbox/lua_host.py", "smartbox/ftw_drivers/**", "smartbox/drivers/ftw_device.py", "tests/simulator/**", ".github/workflows/simulator.yml"]
+  workflow_dispatch:
+
+jobs:
+  ftw-mot-simulatorn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: srcfl/device-simulator
+          ref: a3030d3ff2d4b547d0aa596022ca85daa69904eb   # låst version (2026-11-06)
+          path: devsim
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: devsim/go.sum
+      - name: Bygg simulatorn (utan skrivbordsdelen)
+        working-directory: devsim
+        run: CGO_ENABLED=0 go build -o simulator ./cmd/simulator
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: smartbox/requirements.txt
+      - run: pip install lupa pymodbus requests pytest paho-mqtt websocket-client cryptography pyyaml
+      - name: Starta en simulerad växelriktare per drivrutin
+        run: bash tests/simulator/start_sims.sh "$GITHUB_WORKSPACE/devsim/simulator"
+      - name: FTW-drivrutinerna mot simulatorn
+        run: cd tests && python -m pytest -q -rxs simulator/ -p no:cacheprovider --rootdir=. -o pythonpath=../smartbox
+      - name: Rapport
+        if: always()
+        run: cat tests/simulator/out/report.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ftw-simulator-rapport
+          path: tests/simulator/out/
