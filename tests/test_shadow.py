@@ -48,9 +48,10 @@ def test_miljovariabel_slar_pa(monkeypatch):
     assert shadow.active()
 
 
-def test_thermia_och_heishamon_skriver_inte():
+def test_thermia_och_heishamon_skriver_inte(monkeypatch):
     ew_settings.update(shadow_mode=True)
     import pump
+    monkeypatch.setattr(pump, "PUMP_IPS", ["192.0.2.10"])      # en pump med adress (utan adress skrivs inget alls, #172)
     with patch.object(pump, "_get_client") as gc:
         assert pump._write_holding(13, 215) is True
     gc.assert_not_called()
