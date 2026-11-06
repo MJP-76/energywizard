@@ -26,8 +26,12 @@ ARG ENERGYWIZARD_REPO=https://github.com/murre87/energywizard
 #  - ADD av grenens senaste commit från GitHub: Docker jämför innehållet, så en ändrad main ger alltid en ny klon.
 ARG BUILD_VERSION=
 ADD https://github.com/murre87/energywizard/commits/main.atom /tmp/energywizard-main.json
+# Med ENERGYWIZARD_COMMIT (CI) checkas exakt den commiten ut, så att den färdiga bilden för en version innehåller den
+# kod versionen byggdes från även om main hunnit flytta sig under bygget.
 RUN echo "EnergyWizard ${ENERGYWIZARD_REPO} ${ENERGYWIZARD_REF} ${ENERGYWIZARD_COMMIT} ${BUILD_VERSION}" && git clone --depth 1 --branch "${ENERGYWIZARD_REF}" \
-        "${ENERGYWIZARD_REPO}" /src && rm -f /tmp/energywizard-main.json
+        "${ENERGYWIZARD_REPO}" /src && rm -f /tmp/energywizard-main.json \
+    && if [ -n "${ENERGYWIZARD_COMMIT}" ] && [ "$(git -C /src rev-parse HEAD)" != "${ENERGYWIZARD_COMMIT}" ]; then \
+         git -C /src fetch --depth 1 origin "${ENERGYWIZARD_COMMIT}" && git -C /src checkout -q "${ENERGYWIZARD_COMMIT}"; fi
 
 # Samma layout som docker-compose-driften: ewapp och webdashboard gör
 # sys.path.insert(0, "/smartbox") och importerar motorns moduler därifrån

@@ -59,6 +59,12 @@ tilläggets inställningar aldrig in, så reglaget hade ingen effekt.)
 - Entitetsväljaren sparar inte `house_config.yaml` själv, den ger dig en fil
   att ladda ner och lägga på plats (steg 4 ovan).
 
+## Uppdateringar
+
+Från version 1.2.17 hämtar Home Assistant en färdigbyggd bild (`ghcr.io/murre87/energywizard`, amd64 och aarch64)
+i stället för att bygga tillägget på din maskin. En uppdatering tar då någon minut i stället för en lång byggtid, och
+misslyckas inte på maskiner med lite minne. En ny version visas i Home Assistant först när bilden för den finns.
+
 ## Overifierat än
 
 Version 1.1.0: startskriptet är kört med samma mapplayout som bilden -

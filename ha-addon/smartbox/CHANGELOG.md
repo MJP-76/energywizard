@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.17 (2026-11-06)
+- **Färdigbyggd bild**: Home Assistant hämtar tillägget som en färdig bild (amd64 och aarch64) i stället för att
+  bygga det på din maskin. Uppdateringar går på någon minut och misslyckas inte längre på maskiner med lite minne.
+  Den här uppdateringen är den sista som byggs på din maskin, och den kan ta en stund.
+
 ## 1.2.16 (2026-11-06)
 - **Innetemperaturen räknade in utegivaren** (#149): en utegivare som var förkryssad bland innegivarna gav t.ex.
   (18,2 + 2,4) / 2 = 10,3 °C och larm om kallt hus. Utegivare räknas aldrig in i innetemperaturen. I givarlistan visas
