@@ -10,14 +10,17 @@ Laddboxarna kopplas till bilnamn som i resten av gränssnittet (timeline.CHARGER
 Ren funktion, testas i tests/test_live_flow.py.
 """
 
+import math
+
 WATER_ON = 2          # decisions.WATER_ON - varmvattenproduktion begärd
 
 
 def _f(v):
     try:
-        return float(v) if v is not None else None
+        f = float(v) if v is not None else None
     except (TypeError, ValueError):
         return None
+    return f if f is None or math.isfinite(f) else None      # "inf"/"nan" i loggen (#171) visas inte
 
 
 def nodes(row, decision_items=None, cars=None, has_spa=None):

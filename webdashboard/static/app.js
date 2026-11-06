@@ -1199,6 +1199,21 @@ async function mountShadow() {
 }
 
 // Elpris och avgifter per land (smartbox/nordpool.py cost_settings): land, elområde, moms, avgifter.
+// #171: vänd tecknet på nätets och batteriets effekt (ew_settings; house_config.yaml går före om den anger det)
+async function mountSignSettings() {
+  let d; try { d = await api("api/sign-settings"); } catch (e) { return; }
+  const card = document.getElementById("signcard"), body = document.getElementById("signbody");
+  if (!card || !d || !d.ok) return;
+  card.hidden = false;
+  const row = (key, label, on, locked) => `<div class="togglerow" style="padding:6px 0;gap:12px"><span style="flex:1 1 auto;min-width:0">${label}${locked ? `<div class="note">Låst i house_config.yaml</div>` : ""}</span>
+      <label class="switch" style="flex:none"><input type="checkbox" data-sign="${key}" ${on ? "checked" : ""} ${locked ? "disabled" : ""}><span class="slider"></span></label></div>`;
+  body.innerHTML = row("grid", "Vänd tecknet på nätets effekt", d.grid, d.grid_locked) + (d.has_battery ? row("battery", "Vänd tecknet på batteriets effekt", d.battery, d.battery_locked) : "");
+  body.querySelectorAll("[data-sign]").forEach((cb) => cb.onchange = async () => {
+    try { await postJSON("api/sign-settings", { [cb.dataset.sign]: cb.checked }); toast("Sparat - syns i Översikt inom en minut"); }
+    catch (e) { cb.checked = !cb.checked; toast(e.message); }
+  });
+}
+
 async function mountPhoneSetting() {
   let d;
   try { d = await api("api/notify-target"); } catch (e) { return; }
@@ -1616,6 +1631,11 @@ async function renderInstallningar() {
         <label class="switch" style="flex:0 0 auto"><input type="checkbox" id="shadowtoggle"><span class="slider"></span></label></div>
       <div id="shadowlist" style="margin-top:10px"></div>
     </div>
+    <div class="card" style="margin-bottom:16px" id="signcard" hidden>
+      <div style="font-size:1.1rem;font-weight:700">± Effektgivarnas tecken</div>
+      <div class="note" style="margin-top:4px">EnergyWizard räknar nätet som <b>+ när du köper</b> och <b>− när du säljer</b>, och batteriet som <b>+ när det laddar</b>. Visar Översikt tvärtom (t.ex. "Köper" när du säljer): vänd tecknet här. Gäller direkt.</div>
+      <div id="signbody" style="margin-top:8px"></div>
+    </div>
     <div class="card" style="margin-bottom:16px" id="phonecard" hidden>
       <div style="font-size:1.1rem;font-weight:700">📱 Aviseringar till</div>
       <div class="note" style="margin-top:4px">Vilken telefon, notify-tjänst eller vilket skript i Home Assistant som får EnergyWizards aviseringar.</div>
@@ -1688,6 +1708,7 @@ async function renderInstallningar() {
   mountBatteryPlanSettings();
   mountPriceSettings();
   mountSensorSettings();
+  mountSignSettings();
   mountPhoneSetting();
   mountNotifyPrefs();
   mountShadow();

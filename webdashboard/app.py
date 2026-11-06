@@ -1149,6 +1149,38 @@ def _battery_sign_hint(row):
             "inverted": bool(ew_settings.get("battery_power_invert", False))}
 
 
+@app.get("/api/sign-settings")
+async def sign_settings_get(request: Request):
+    """#171: effektgivarnas tecken (batteri, nät) - valen i webben, och om house_config.yaml låser dem."""
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    try:
+        hc = house_config.load_house_config(HOUSE_CONFIG_FILE)
+    except Exception:
+        hc = {}
+    bat, pm = (hc.get("battery") or {}), (hc.get("power_meter") or {})
+    pm_e = pm.get("entities") if isinstance(pm.get("entities"), dict) else pm
+    return {"ok": True, "has_battery": bool(bat.get("enabled")),
+            "battery": bool(ew_settings.get("battery_power_invert", False)), "battery_locked": "power_invert" in bat,
+            "grid": bool(ew_settings.get("grid_power_invert", False)), "grid_locked": "power_w_invert" in (pm_e or {})}
+
+
+@app.post("/api/sign-settings")
+async def sign_settings_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren"}, status_code=403)
+    b = await request.json()
+    upd = {}
+    if "battery" in b:
+        upd["battery_power_invert"] = bool(b["battery"])
+    if "grid" in b:
+        upd["grid_power_invert"] = bool(b["grid"])
+    ew_settings.update(**upd)
+    return {"ok": True}
+
+
 @app.post("/api/battery-invert")
 async def battery_invert(request: Request):
     """Vänder tecknet på batteriets effekt (ew_settings, gäller om house_config.yaml inte anger power_invert)."""

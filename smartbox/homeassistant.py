@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import re
 import requests as _requests_real
@@ -300,10 +301,12 @@ def _get_numeric_state(entity_id):
         return 0.0
         
     try:
-        return float(raw)
+        v = float(raw)
     except ValueError:
         # Kan vara en status-text (t.ex. 'charging'), skippa varning.
         return None
+    # "inf"/"nan" (en mall i HA som delar med noll, #171: laddnivå "inf %") är inget mätvärde
+    return v if math.isfinite(v) else None
 
 def room_temps():
     """Rummen = de valda innegivarna (Inställningar -> Givare), live: [{'name', 'temp'}]. Inga fasta rum i koden."""
@@ -344,9 +347,10 @@ def _get_numeric_attribute(entity_id, attribute):
         return None
         
     try:
-        return float(raw)
-    except ValueError:
+        v = float(raw)
+    except (TypeError, ValueError):
         return None
+    return v if math.isfinite(v) else None
 
 def read_temperatures():
     """Råvärden per vald innegivare (nyckel = givarens key) + "ute". Korrigeringen (offset) läggs på i main.py,
@@ -439,13 +443,16 @@ def read_easee_lite():
 def read_easee_carport():
     return _read_easee_charger(EASEE_CARPORT_ENTITIES)
 
+# Prefixet är fritt: äldre Tibber-integrationer döpte entiteterna "tibber_pulse_<hem>_...", nyare efter hemmets namn
+# ("sensor.hemma_power"). Med bara "tibber_pulse_" hittades spänning/ström men inte köp/sälj hos de nyare, och då blev
+# försäljning köp (U x I saknar tecken, #171: "Köper 6,2 kW" när huset sålde 6 kW från batteriet).
 _PULSE_PATTERNS = {
-    "voltage": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:spanning_fas|voltage_phase|voltage_l)([123])$"),
-    "current": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:strom_fas|current_phase|current_l)([123])$"),
-    "hour": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:ackumulerad_forbrukning_under_aktuell_timme|accumulated_consumption_current_hour)$"),
+    "voltage": re.compile(r"^sensor\.(.+?)_(?:spanning_fas|voltage_phase|voltage_l)([123])$"),
+    "current": re.compile(r"^sensor\.(.+?)_(?:strom_fas|current_phase|current_l)([123])$"),
+    "hour": re.compile(r"^sensor\.(.+?)_(?:ackumulerad_forbrukning_under_aktuell_timme|accumulated_consumption_current_hour)$"),
     # Verklig köp- och säljeffekt (W). Pulsens fasström saknar tecken, så U x I kan inte se export (issue #114).
-    "import": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:power|effekt)$"),
-    "export": re.compile(r"^sensor\.(tibber_pulse_.+?)_(?:power_production|effekt_produktion|produktionseffekt)$"),
+    "import": re.compile(r"^sensor\.(.+?)_(?:power|effekt)$"),
+    "export": re.compile(r"^sensor\.(.+?)_(?:power_production|effekt_produktion|produktionseffekt|production_power)$"),
 }
 
 
@@ -469,6 +476,14 @@ def detect_tibber_pulse(entity_ids) -> dict:
     return {}
 
 
+def _setting(key):
+    try:
+        import ew_settings
+        return bool(ew_settings.get(key, False))
+    except Exception:
+        return False
+
+
 def read_power_meter():
     """{'net_power_w': W (+ köper, - säljer), 'l1_a'/'l2_a'/'l3_a': A eller None} - None om mätaren
     inte är konfigurerad eller inte svarar. Utan power_meter: i configen letas en Tibber Pulse
@@ -481,7 +496,9 @@ def read_power_meter():
         if not auto:
             return None
         POWER_METER.update(auto)
-        print(f"🔌 Elmätare: ingen power_meter i house_config.yaml - hittade en Tibber Pulse automatiskt ({auto['current_l1']}).")
+        how = (f"köp {auto['import_w']}, sälj {auto['export_w']}" if auto.get("import_w") else
+               "spänning × ström - kan inte se försäljning; välj elmätarens köp- och säljeffekt i installationen")
+        print(f"🔌 Elmätare: ingen power_meter i house_config.yaml - hittade en Tibber Pulse automatiskt ({how}).")
         e = POWER_METER
     try:
         cur = [_get_numeric_state(e[k]) if e.get(k) else None for k in ("current_l1", "current_l2", "current_l3")]
@@ -502,6 +519,8 @@ def read_power_meter():
             if net is None:
                 return None
             if str(e.get("power_w_invert", "")).lower() in ("1", "true", "yes", "ja"):
+                net = -net
+            elif "power_w_invert" not in e and _setting("grid_power_invert"):     # valet i webben (#171)
                 net = -net
         elif e.get("import_w"):
             imp = get_power_w(e["import_w"])

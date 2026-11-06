@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.31 (2026-11-06)
+- **Försäljning visades som köp** (#171): Tibber Pulse med nyare entitetsnamn (efter hemmets namn) hittades bara via
+  spänning × ström, som saknar tecken. Nu hittas Pulsens köp- och säljeffekt oavsett namn, och loggen säger vilka
+  givare elmätaren använder.
+- **Effektgivarnas tecken i webben**: Inställningar har reglage för att vända tecknet på nätets och batteriets effekt.
+- Laddnivå "inf %" visas inte längre; ogiltiga tal (inf/nan) från Home Assistant räknas som saknade.
+
 ## 1.2.30 (2026-11-06)
 - **Orimlig batterieffekt** (#139): visar batteriets effektgivare mer än ett husbatteri kan (t.ex. 18,2 kW) räknas den
   inte in i husets förbrukning, och Översikt säger att troligen fel givare valts (t.ex. energi i kWh) och var man
