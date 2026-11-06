@@ -28,7 +28,14 @@ _USERNAME = os.environ.get("NIBE_LOCAL_USERNAME", "")
 _PASSWORD = os.environ.get("NIBE_LOCAL_PASSWORD", "")
 _TLS_PIN_SHA256 = os.environ.get("NIBE_LOCAL_TLS_PIN_SHA256", "")
 _FIELDS = ("indoor_temp", "outdoor_temp", "forward_temp", "return_temp", "water_temp",
-           "degree_minutes", "compressor_running", "compressor_power_kw", "operating_mode")
+           "degree_minutes", "compressor_running", "compressor_power_kw", "operating_mode",
+           "compressor_frequency_hz", "compressor_power_w", "heat_produced_kwh_1h", "electric_used_kwh_1h")
+# Mätvärden som visas på Värmepump-fliken (aldrig skrivbara). Registren är lästa ur en riktig S1255 (2026-11-06):
+# frekvens/el ur kompressorn, och pumpens egen energilogg för senaste timmen (producerad värme / använd el -> COP).
+_METRIC_REGISTERS = {"compressor_frequency_hz": {"register": 1046, "unit": "Hz"},
+                     "compressor_power_w": {"register": 1048, "unit": "W"},
+                     "heat_produced_kwh_1h": {"register": 2283, "unit": "kWh"},
+                     "electric_used_kwh_1h": {"register": 2291, "unit": "kWh"}}
 # NIBE M12676SV (2026-01-13), S1155/S1255 table; match reported register metadata.
 _TEMPERATURE_REGISTERS = {"outdoor_temp": 1, "forward_temp": 5, "return_temp": 7,
                           "water_temp": 8, "indoor_temp": 26}
@@ -216,6 +223,7 @@ class NibeLocalHeatPumpDriver(HeatPumpDriver):
         if re.search(r"\bS(?:1155|1255)(?:\b|-)", self._product, re.I):
             bindings.update({k: {"register": reg, "unit": "°C"} for k, reg in _TEMPERATURE_REGISTERS.items()})
             bindings["compressor_running"] = {"register": 1100}
+            bindings.update(_METRIC_REGISTERS)
         bindings.update(self._bindings)
         for field in _FIELDS:
             if field not in bindings:
@@ -229,6 +237,8 @@ class NibeLocalHeatPumpDriver(HeatPumpDriver):
                     keys = [k for k, v in self._modes.items() if v == value]
                     value = (int(keys[0]) if keys[0].isdigit() else keys[0]) if len(keys) == 1 else None
                 elif field.endswith("_temp") and not -80 <= value <= 150:
+                    value = None
+                elif field in _METRIC_REGISTERS and value < 0:
                     value = None
                 result[field] = value
             except LocalRestError:

@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.21 (2026-11-06)
+- **NIBE via Home Assistants myUplink-integration** (#158): ny drivrutin som läser värmepumpen via integrationens
+  entiteter. Installationsguiden kopplar dem själv via NIBE:s givarkoder (BT1 ute, BT2 framledning, BT3 retur,
+  BT7/BT6 varmvatten, BT50 rum) och gradminuter. För att styra väljer man rumsbörvärdet själv.
+- Installationsguiden tog en nätverksskanners post för pumpens nätverkskort (t.ex. NetAlertX, "Nibe") för
+  värmepumpen. Nu krävs temperaturgivare eller en climate-entitet.
+- **Värmepump-flikens mätvärden** (#159): kortet "Just nu" på webben med kompressor, frekvens, el in, framledning,
+  retur och COP. NIBE S1155/S1255 lokalt ger frekvens, el och uppmätt COP ur pumpens energilogg.
+
 ## 1.2.20 (2026-11-06)
 - Appen med mycket stor text: när en flik måste scrolla fick planlistan på Plan-fliken bara 18 px höjd. Alla delar
   får nu sin naturliga höjd när sidan scrollar.

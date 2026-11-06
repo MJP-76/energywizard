@@ -768,7 +768,21 @@ async def overview(request: Request):
         "sthlm_time": str(row["sthlm_time"]),
         "price_24h": [{"t": r[0].isoformat(), "p": float(r[1])} for r in price_hist],
         "heat_battery": _heat_battery(row),
+        "pump": _pump_block(row),
     }
+
+
+def _pump_block(row):
+    """Värmepumpens mätvärden för Värmepump-fliken. COP (uppmätt) = producerad värme / använd el senaste timmen ur pumpens
+    egen energilogg (NIBE); den skattade COP:n (cop) räknas av motorn ur framledning och brinetemperatur."""
+    produced, used = _n(row.get("heat_produced_kwh_1h")), _n(row.get("electric_used_kwh_1h"))
+    return {"forward_temp": _n(row.get("forward_temp")), "return_temp": _n(row.get("return_temp")),
+            "compressor_running": row.get("compressor_running"),
+            "compressor_frequency_hz": _n(row.get("compressor_frequency_hz")),
+            "compressor_power_w": _n(row.get("compressor_power_w")),
+            "heat_produced_kwh_1h": produced, "electric_used_kwh_1h": used,
+            "cop_1h": round(produced / used, 1) if produced is not None and used is not None and used >= 0.05 else None,
+            "cop_est": _n(row.get("cop"))}
 
 
 @app.get("/api/updates")
@@ -1462,10 +1476,13 @@ def _build_house_config_yaml(sel: dict) -> str:
     if hp:
         hp_driver = hp.get("driver") or "generic_climate"
         lines += ["heat_pump:", "  enabled: true", f"  driver: {hp_driver}"]
-        if hp_driver == "generic_climate":
+        if hp_driver in ("generic_climate", "ha_entities"):
             lines += ["  entities:"]
             for key, val in (hp.get("entities") or {}).items():
-                lines.append(f"    {key}: {val}")
+                if re.fullmatch(r"[a-z_]+", str(key)) and re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", str(val)):
+                    lines.append(f"    {key}: {val}")
+            if hp_driver == "ha_entities" and not (hp.get("entities") or {}).get("room_target"):
+                lines.append("    # room_target: number.XXX  # valfritt - pumpens rumsbörvärde, behövs för att EnergyWizard ska styra")
         elif hp_driver == "thermiq":
             _pfx = str(hp.get("prefix") or "")
             if not re.fullmatch(r"thermiq_mqtt_[a-z0-9_]{1,40}", _pfx):

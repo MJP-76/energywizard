@@ -128,6 +128,35 @@ def _candidate(e: dict) -> str:
     return f"{e.get('m') or ''} {e.get('mo') or ''} {e.get('n') or ''} {e.get('dn') or ''}"
 
 
+# NIBE:s givarkoder i entiteternas namn - samma på alla språk (myUplink- och nibe_heatpump-integrationerna i HA).
+# \b efter siffran: BT1 får inte matcha BT10/BT11.
+_NIBE_BT = {"outdoor_temp": [r"\bBT1\b"], "forward_temp": [r"\bBT2\b"], "return_temp": [r"\bBT3\b"],
+            "water_temp": [r"\bBT7\b", r"\bBT6\b"], "indoor_temp": [r"\bBT50\b"]}
+_DEGREE_MIN = re.compile(r"degree.?minutes|gradminuter|gradminutter|astemin", re.I)
+
+
+def _nibe_bt_entities(ents) -> dict:
+    """#158: värmepumpens entiteter ur NIBE:s givarkoder (BT1 ute, BT2 framledning, BT3 retur, BT7/BT6 varmvatten,
+    BT50 rum) och gradminuter. Bara sensor-entiteter för temperaturerna. Tom dict om färre än två hittas."""
+    out = {}
+    for key, pats in _NIBE_BT.items():
+        for pat in pats:
+            hit = next((x["e"] for x in ents if x["e"].startswith("sensor.")
+                        and re.search(pat, f"{x.get('n') or ''} {x['e']}", re.I)), None)
+            if hit:
+                out[key] = hit
+                break
+    dm = next((x["e"] for x in ents if x["e"].split(".")[0] in ("sensor", "number")
+               and _DEGREE_MIN.search(f"{x.get('n') or ''} {x['e']}")), None)
+    if dm:
+        out["degree_minutes"] = dm
+    return out if len([k for k in out if k != "degree_minutes"]) >= 2 else {}
+
+
+def _is_temperature(x) -> bool:
+    return x.get("dc") == "temperature" or x.get("u") in ("°C", "°F")
+
+
 def _check_configured_heat_pump() -> dict | None:
     """Pumpen kan redan prata Modbus DIREKT med smartbox (husets PUMP_IP) utan att gå via
     HA alls - main.py anropar redan pump.read_sensors() varje cykel och loggar resultatet
@@ -499,6 +528,10 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                      "note": "Läser och styr via ThermIQ:s HA-integration. Ej verifierad mot en riktig pump - kör i skuggläge först."}
     for device_id, ents in ([] if heat_pump else by_device.items()):
         head = ents[0]
+        # #158: en värmepump har temperaturgivare eller en climate-entitet. Nätverksskannrar (t.ex. NetAlertX) gör en
+        # "enhet" per pryl i nätverket döpt efter nätverkskortets tillverkare ("Nibe") - den är ingen värmepump.
+        if not any(_is_temperature(x) or x["e"].startswith(("climate.", "water_heater.")) for x in ents):
+            continue
         if _has(_candidate(head), HEATPUMP):
             brand = next((b for b in _HEATPUMP_BRAND_TO_DRIVER if _has(_candidate(head), re.compile(b, re.I))), None)
             driver = _HEATPUMP_BRAND_TO_DRIVER.get(brand)
@@ -507,7 +540,13 @@ def discover_house(entities: list[dict] | None = None) -> dict:
                 "driver": driver, "driver_known": driver in HEAT_PUMP_DRIVER_REGISTRY,
                 "entity_count": len(ents),
             }
-            if driver is None:
+            bt = _nibe_bt_entities(ents) if driver is None else {}
+            if bt:
+                # NIBE via HA-integration (myUplink, nibe_heatpump): läses via entiteterna, #158
+                heat_pump.update({"driver": "ha_entities", "driver_known": True, "entities": bt,
+                                  "note": f"{heat_pump['device_name']} via Home Assistant ({len(ents)} entiteter). Läser "
+                                          f"{', '.join(sorted(bt))}. Rumsbörvärdet väljs för hand för att styra."})
+            elif driver is None:
                 # Känt märke saknas, men finns en climate-entitet kan grundläggande
                 # prisstyrning ändå fungera via GenericClimateHeatPumpDriver - föreslå
                 # det istället för en ren återvändsgränd.

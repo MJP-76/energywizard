@@ -28,6 +28,7 @@ from drivers.heatpump import HeatPumpDriver, NullHeatPumpDriver
 from drivers.heatpump_generic import GenericClimateHeatPumpDriver
 from drivers.heatpump_heishamon import HeishaMonHeatPumpDriver
 from drivers.heatpump_thermiq import ThermIQHeatPumpDriver
+from drivers.heatpump_ha_entities import HaEntitiesHeatPumpDriver
 from drivers.heatpump_myuplink import MyUplinkHeatPumpDriver
 from drivers.heatpump_nibe_local import NibeLocalHeatPumpDriver
 from drivers.heatpump_thermia import ThermiaHusdataHeatPumpDriver
@@ -62,6 +63,8 @@ HEAT_PUMP_DRIVER_REGISTRY = {
     # Thermia via ThermIQ-MQTT och ThermIQ:s HA-integration (prefix "thermiq_mqtt_<id>"). ALDRIG verifierad mot en
     # riktig pump, bara mot integrationens källkod; se drivers/heatpump_thermiq.py.
     "thermiq": ThermIQHeatPumpDriver,
+    # Värmepump som redan finns i HA via en integration (t.ex. NIBE via HA:s myUplink), läst via entiteterna (#158).
+    "ha_entities": HaEntitiesHeatPumpDriver,
 }
 SOLAR_DRIVER_REGISTRY = {"solaredge": SolarEdgeSolarDriver, "generic_number": GenericNumberSolarDriver,
                          "huawei_solar": HuaweiSolarServiceDriver, "modbus_register": ModbusRegisterSolarDriver,
@@ -211,6 +214,8 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
     if driver_cls is HeishaMonHeatPumpDriver:
         return HeishaMonHeatPumpDriver(host=hp.get("host"), base_shift=hp.get("base_shift", 0),
                                        indoor_from_z1=hp.get("indoor_from_z1", False))
+    if driver_cls is HaEntitiesHeatPumpDriver:
+        return HaEntitiesHeatPumpDriver(entities=(hp.get("entities") or {}))
     if driver_cls is ThermIQHeatPumpDriver:
         return ThermIQHeatPumpDriver(prefix=hp.get("prefix"))
     return driver_cls()

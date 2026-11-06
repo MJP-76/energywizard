@@ -306,3 +306,21 @@ def test_s1255_svarar_med_hela_punkten_pa_patch(heater, echo_raw, ok):
     d = driver(control_enabled=True, points={"room_target": binding(variable_id=3699)})
     assert d.set_room_temp(45) is ok
     assert heater.points["3699"]["value"]["integerValue"] == 450
+
+
+def test_s1255_matvarden_for_varmepumpsfliken(heater):
+    """#159: kompressorfrekvens, el in och pumpens energilogg för senaste timmen (register ur en riktig S1255)."""
+    heater.points.update({"41046": point(41046, 1046, 52, divisor=1, unit="Hz"),
+                          "41048": point(41048, 1048, 1430, divisor=1, unit="W"),
+                          "42283": point(42283, 2283, 82, divisor=100, unit="kWh"),
+                          "42291": point(42291, 2291, -17, divisor=100, unit="kWh")})
+    v = driver().read_sensors()
+    assert v["compressor_frequency_hz"] == 52 and v["compressor_power_w"] == 1430
+    assert v["heat_produced_kwh_1h"] == 0.82
+    assert v["electric_used_kwh_1h"] is None                     # negativt = saknas
+
+
+def test_andra_modeller_far_inga_matvarden(heater):
+    heater.product = "NIBE S735"
+    heater.points["41046"] = point(41046, 1046, 52, divisor=1, unit="Hz")
+    assert nibe.NibeLocalHeatPumpDriver().read_sensors().get("compressor_frequency_hz") is None

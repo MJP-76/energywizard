@@ -1388,6 +1388,25 @@ function mountLangSelect(slotId, saveForInstall) {
   });
 }
 
+// Värmepumpens mätvärden (frekvens, el, framledning/retur och COP). Visas bara de som pumpen faktiskt ger.
+function pumpCardHtml(p) {
+  if (!p) return "";
+  const tiles = [];
+  const tile = (label, value) => tiles.push(`<div><div class="note">${label}</div><div style="font-size:1.25rem;font-weight:700">${value}</div></div>`);
+  if (p.compressor_running != null) tile("Kompressor", Number(p.compressor_running) ? "Går" : "Vilar");
+  if (p.compressor_frequency_hz != null) tile("Frekvens", `${fmt(p.compressor_frequency_hz, 0, "")} Hz`);
+  if (p.compressor_power_w != null) tile("El in", `${fmt(p.compressor_power_w, 0, "")} W`);
+  if (p.forward_temp != null) tile("Framledning", fmt(p.forward_temp, 1, "°C"));
+  if (p.return_temp != null) tile("Retur", fmt(p.return_temp, 1, "°C"));
+  if (p.cop_1h != null) tile("COP, senaste timmen", fmt(p.cop_1h, 1, ""));
+  else if (p.cop_est != null) tile("COP (skattad)", fmt(p.cop_est, 1, ""));
+  if (!tiles.length) return "";
+  const hour = p.heat_produced_kwh_1h != null && p.electric_used_kwh_1h != null
+    ? `<div class="note" style="margin-top:10px">Senaste timmen: ${fmt(p.heat_produced_kwh_1h, 2, "")} kWh värme för ${fmt(p.electric_used_kwh_1h, 2, "")} kWh el (pumpens egen energilogg).</div>` : "";
+  return `<div class="card" style="margin-bottom:16px"><h2>📈 Just nu</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:8px">${tiles.join("")}</div>${hour}</div>`;
+}
+
 async function renderVarmepump() {
   const main = document.getElementById("main");
   main.innerHTML = `<div class="placeholder">Laddar…</div>`;
@@ -1398,6 +1417,7 @@ async function renderVarmepump() {
       <div style="font-size:1.1rem;font-weight:700">♨️ Värmepump</div>
       <div class="note" style="margin-top:4px">Ute ${fmt(d.outdoor_temp, 1, "°C")} · Inne ${fmt(d.indoor_temp, 1, "°C")} (mål ${d.indoor_target.toFixed(0)}°C)</div>
     </div>
+    ${pumpCardHtml(d.pump)}
     <div class="card" style="margin-bottom:16px">
       <h2>🔋 Varmvattenberedaren som värmebatteri</h2>
       <div class="note">Laddas till ${d.heat_battery ? d.heat_battery.ceiling.toFixed(0) : "–"}°C när elen är billig eller solen räcker - töms (kompressorn vilar) när elen är dyr.</div>
