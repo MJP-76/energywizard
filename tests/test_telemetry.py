@@ -295,3 +295,58 @@ def test_insamlaren_skiljer_livstecken_fran_hus_utan_enheter(monkeypatch, tmp_pa
     assert s["active"] == 3 and s["ping_only"] == 1 and s["without_devices"] == 1
     assert [h["ping_only"] for h in s["houses"]] == [True, False, False]
     assert s["houses"][0]["devices"] == {} and s["equipment"] == {"meter": {"ha@Tibber": 1}}
+
+
+def _collector(monkeypatch, tmp_path):
+    import importlib.util, pathlib
+    monkeypatch.setenv("TELEMETRY_DB_PATH", str(tmp_path / "t.sqlite3"))
+    monkeypatch.delenv("STATS_TOKEN", raising=False)
+    path = pathlib.Path(__file__).resolve().parent.parent / "telemetry-collector" / "app.py"
+    spec = importlib.util.spec_from_file_location("collector_app_test2", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_ominstallerat_hus_med_samma_utrustning_raknas_en_gang(monkeypatch, tmp_path):
+    """2026-11-06: samma hus (NIBE + Solis + Tesla + Garo + Tibber) dök upp som Hus 5 och Hus 6 med nytt ID.
+    Ett äldre hus som tystnat före ett nytt med exakt samma utrustning slås ihop; överlappande hus gör det inte."""
+    mod = _collector(monkeypatch, tmp_path)
+    eq = ["heatpump:nibe_local", "solar:generic_number", "battery:generic@Solis", "car:tesla@Tesla#Model3",
+          "charger:generic@Garo#X", "meter:ha@Tibber#Pulse", "size:fuse_16A", "country:SE", "mode:battery_samarbete"]
+    eq2 = [d.replace("generic_number", "generic_number@Solis#S6-EH3P") for d in eq if not d.startswith("mode")] + ["mode:battery_styr"]
+    latest = {"a" * 16: ("v1", eq, False), "b" * 16: ("v2", eq2, False), "c" * 16: ("v2", eq, False)}
+    first = {"a" * 16: "2026-11-05T07:58", "b" * 16: "2026-11-06T20:36", "c" * 16: "2026-11-05T09:00"}
+    last = {"a" * 16: "2026-11-06T10:15", "b" * 16: "2026-11-06T20:40", "c" * 16: "2026-11-06T20:40"}
+    merged = mod._merge_reinstalls(latest, first, last)
+    assert merged == {"b" * 16: ["a" * 16]} and set(latest) == {"b" * 16, "c" * 16}
+    small = {"d" * 16: ("v", ["meter:ha", "country:SE"], False), "e" * 16: ("v", ["meter:ha", "country:SE"], False)}
+    assert mod._merge_reinstalls(small, {"d" * 16: "1", "e" * 16: "3"}, {"d" * 16: "2", "e" * 16: "4"}) == {}
+
+
+def test_installations_id_overlever_att_installningsfilen_skrivs_over(monkeypatch, tmp_path):
+    import ew_settings
+    monkeypatch.setattr(ew_settings, "PATH", str(tmp_path / "energywizard.json"))
+    ew_settings._cache.update(mtime=None, data={})
+    t = _reload(monkeypatch)
+    tid = t.install_id()
+    assert tid and (tmp_path / ".energywizard.json.telemetry_id").read_text() == tid
+    (tmp_path / "energywizard.json").write_text('{"language": "sv"}')     # annan process skrev över utan ID:t
+    ew_settings._cache.update(mtime=None, data={})
+    assert t.install_id() == tid and ew_settings.get("telemetry_id") == tid and ew_settings.get("language") == "sv"
+
+
+def test_installningar_last_las_fran_disk_inte_gammal_cache(monkeypatch, tmp_path):
+    """Två processer: den ena har en gammal bild i minnet, den andra har sparat ett värde. update() ska inte
+    skriva tillbaka den gamla bilden (så försvann telemetry_id före 1.2.40)."""
+    import ew_settings, json
+    path = tmp_path / "energywizard.json"
+    monkeypatch.setattr(ew_settings, "PATH", str(path))
+    ew_settings._cache.update(mtime=None, data={})
+    ew_settings.update(language="sv")
+    stale = dict(ew_settings._cache)
+    path.write_text(json.dumps({"language": "sv", "telemetry_id": "x" * 32}))
+    import os
+    os.utime(path, ns=(stale["mtime"], stale["mtime"]))                  # samma mtime: cachen tror att inget ändrats
+    ew_settings.update(theme="dark")
+    assert json.loads(path.read_text()) == {"language": "sv", "telemetry_id": "x" * 32, "theme": "dark"}

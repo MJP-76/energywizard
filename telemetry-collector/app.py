@@ -183,6 +183,39 @@ def _norm(rest: str) -> str:
     return rest
 
 
+# Kategorier som beskriver husets utrustning (inte inställningar, temperaturer eller märkesdetaljer som kan bli
+# rikare mellan versioner): samma uppsättning = samma hus.
+_EQUIPMENT = ("heatpump", "solar", "battery", "car", "charger", "meter", "spa", "size", "country")
+
+
+def _fingerprint(drivers: list) -> frozenset:
+    out = set()
+    for d in drivers:
+        cat, _, rest = d.partition(":")
+        if cat in _EQUIPMENT:
+            out.add(f"{cat}:{rest.partition('@')[0]}")
+    return frozenset(out)
+
+
+def _merge_reinstalls(latest: dict, first: dict, last_seen: dict) -> dict:
+    """Samma hus med nytt installations-ID (ominstallation, tappad datamapp, eller före 1.2.40 ett ID som kunde
+    skrivas över): ett äldre hus som tystnat innan ett nytt med exakt samma utrustning dök upp räknas som samma.
+    Kräver minst fem utrustningsdelar, så att två vanliga hus med t.ex. bara en elmätare aldrig slås ihop.
+    Tar bort det äldre ur latest och returnerar {nytt hus: [äldre hus ...]}. Inga IP-adresser används."""
+    merged = {}
+    order = sorted(latest, key=lambda h: first.get(h, ""))
+    for i, old in enumerate(order):
+        fp = _fingerprint(latest[old][1])
+        if len(fp) < 5:
+            continue
+        for new in order[i + 1:]:
+            if new in latest and _fingerprint(latest[new][1]) == fp and last_seen.get(old, "") <= first.get(new, ""):
+                merged.setdefault(new, []).extend([old] + merged.pop(old, []))
+                latest.pop(old)
+                break
+    return merged
+
+
 @app.get("/api/stats")
 async def stats(request: Request, me: str = ""):
     """Sammanställning för Emils dashboard: antal aktiva installationer och vilken utrustning de kör.
@@ -194,7 +227,7 @@ async def stats(request: Request, me: str = ""):
     with _db() as c:
         known = [r[0] for r in c.execute("SELECT house FROM known_houses")]
         rows = c.execute(
-            "SELECT house, version, drivers FROM driver_snapshots WHERE received_at >= ? ORDER BY id", (since,)).fetchall()
+            "SELECT house, version, drivers, received_at FROM driver_snapshots WHERE received_at >= ? ORDER BY id", (since,)).fetchall()
         first = {r[0]: r[1] for r in c.execute("SELECT house, first_seen FROM known_houses")}
         errs = {}
         # Bara fel som fortfarande uppstår: motorn rapporterar ett kvarstående fel en gång i timmen
@@ -202,11 +235,13 @@ async def stats(request: Request, me: str = ""):
         recent = (datetime.now(timezone.utc) - timedelta(minutes=75)).isoformat()
         for h, ver, mod, et in c.execute("SELECT DISTINCT house, version, module, error_type FROM errors WHERE received_at >= ?", (recent,)):
             errs.setdefault(h, []).append((ver, f"{mod}: {et}"))
-    latest = {}
-    for house, version, drivers in rows:
+    latest, last_seen = {}, {}
+    for house, version, drivers, at in rows:
         if _is_real_house(house):
             latest[house] = (version, [d for d in (drivers or "").split(",") if d and d != PING_MARK],
                              drivers == PING_MARK)
+            last_seen[house] = at
+    merged = _merge_reinstalls(latest, first, last_seen)
     equipment, versions = {}, {}
     for version, drivers, _ in latest.values():
         versions[version or "okänd"] = versions.get(version or "okänd", 0) + 1
@@ -218,12 +253,14 @@ async def stats(request: Request, me: str = ""):
     # Per installation, anonymt (Hus 1, 2 ... i den ordning de dök upp) - inga husidentiteter i svaret.
     # me = anroparens eget hash (webben räknar fram det ur sin house_id) markerar "ditt hus".
     houses = []
-    for i, h in enumerate(sorted(latest, key=lambda x: first.get(x, "")), start=1):
+    since = {h: min([first.get(h) or ""] + [first.get(o) or "" for o in merged.get(h, [])]) for h in latest}
+    for i, h in enumerate(sorted(latest, key=lambda x: since[x]), start=1):
         devs = {}
         for d in latest[h][1]:
             cat, _, rest = d.partition(":")
             devs.setdefault(cat, []).append(_norm(rest))
-        houses.append({"label": f"Hus {i}", "since": (first.get(h) or "")[:10], "mine": bool(me) and h == me, "devices": devs,
+        houses.append({"label": f"Hus {i}", "since": since[h][:10],
+                       "reinstalls": len(merged.get(h, [])), "mine": bool(me) and h == me, "devices": devs,
                        "ping_only": latest[h][2],     # bara anonymt livstecken (telemetrin av): ID + version
                        # Bara fel från husets nuvarande version: ett fel som rättats i en senare version försvinner
                        # när huset uppdaterats, i stället för att ligga kvar ett dygn
@@ -232,8 +269,10 @@ async def stats(request: Request, me: str = ""):
     return {
         "active": len(latest),
         "active_days": ACTIVE_DAYS,
-        "total_known": sum(1 for h in known if _is_real_house(h)),
-        "new_last_7d": sum(1 for h, f in first.items() if _is_real_house(h) and f >= week),
+        "total_known": sum(1 for h in known if _is_real_house(h)) - sum(len(v) for v in merged.values()),
+        "new_last_7d": sum(1 for h, f in first.items() if _is_real_house(h) and f >= week)
+                       - sum(1 for v in merged.values() for o in v if (first.get(o) or "") >= week),
+        "merged_reinstalls": sum(len(v) for v in merged.values()),
         "without_devices": sum(1 for _, d, p in latest.values() if not d and not p),
         "ping_only": sum(1 for _, _, p in latest.values() if p),
         "equipment": {cat: dict(sorted(v.items(), key=lambda kv: -kv[1])) for cat, v in sorted(equipment.items())},

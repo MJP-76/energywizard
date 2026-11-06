@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.40 (2026-11-06)
+- **Samma hus räknades två gånger**: motorn, webben och appen skriver i samma inställningsfil, och utan lås kunde
+  en av dem skriva tillbaka en gammal bild så att installations-ID:t försvann. Då dök huset upp som ett nytt på
+  Installationer. Skrivningarna är nu låsta och läses färskt från disk, och ID:t har en egen reservfil.
+  Insamlaren slår ihop befintliga dubbletter (samma utrustning, det gamla tystnade innan det nya dök upp).
+
 ## 1.2.39 (2026-11-06)
 - **Anonymt livstecken**: med telemetrin avstängd skickas en gång per dygn bara det hashade installations-ID:t och
   versionen, så att alla installationer syns i räkningen. Inget om utrustning, hus eller mätvärden. Stängs av helt

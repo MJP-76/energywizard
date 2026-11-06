@@ -34,16 +34,45 @@ def get(key, default=None):
     return load().get(key, default)
 
 
+def _read_fresh() -> dict:
+    try:
+        with open(PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+
+
 def update(**values) -> dict:
-    """Sparar nya värden (None tar bort ett värde). Skrivs atomiskt och bara läsbart för ägaren."""
-    data = load()
+    """Sparar nya värden (None tar bort ett värde). Skrivs atomiskt och bara läsbart för ägaren.
+
+    Låst och läst färskt från disk (2026-11-06): motorn, webben och appen skriver alla i samma fil. Utan lås kunde
+    en process läsa, en annan spara telemetry_id, och den första sedan skriva tillbaka sin gamla bild - då försvann
+    ID:t och installationen dök upp som ett nytt hus på Installationer."""
+    folder = os.path.dirname(PATH) or "."
+    os.makedirs(folder, exist_ok=True)
+    lock = open(os.path.join(folder, ".energywizard.lock"), "a")
+    try:
+        try:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            pass
+        try:
+            data = _read_fresh()
+        except (OSError, ValueError):
+            data = load()
+        return _write(data, values, folder)
+    finally:
+        lock.close()
+
+
+def _write(data: dict, values: dict, folder: str) -> dict:
     for k, v in values.items():
         if v is None:
             data.pop(k, None)
         else:
             data[k] = v
-    folder = os.path.dirname(PATH) or "."
-    os.makedirs(folder, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=folder, prefix=".energywizard.", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:

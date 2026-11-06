@@ -57,16 +57,43 @@ def install_id(create: bool = True) -> str | None:
     skapar aldrig ett eget, så att motorn och webben inte kan få olika."""
     try:
         import ew_settings
-        tid = ew_settings.get("telemetry_id")
+        tid = ew_settings.get("telemetry_id") or _read_id_backup(ew_settings.PATH)
+        if tid and ew_settings.get("telemetry_id") != tid:
+            ew_settings.update(telemetry_id=tid)            # tappat ur inställningsfilen: lägg tillbaka samma
         if not tid and create:
             import uuid
             tid = uuid.uuid4().hex
             ew_settings.update(telemetry_id=tid)
             if ew_settings.get("telemetry_id") != tid:     # gick inte att spara: hellre inget än ett nytt varje start
                 return None
+        if tid:
+            _write_id_backup(ew_settings.PATH, tid)
         return tid or None
     except Exception:
         return None
+
+
+def _id_backup_path(settings_path: str) -> Path:
+    """Egen fil bredvid inställningarna som bara telemetrin skriver: ID:t överlever om inställningsfilen skrivs över."""
+    p = Path(settings_path)
+    return p.with_name(f".{p.name}.telemetry_id")
+
+
+def _read_id_backup(settings_path: str) -> str | None:
+    try:
+        v = _id_backup_path(settings_path).read_text().strip()
+        return v if len(v) == 32 and all(c in "0123456789abcdef" for c in v) else None
+    except OSError:
+        return None
+
+
+def _write_id_backup(settings_path: str, tid: str) -> None:
+    p = _id_backup_path(settings_path)
+    try:
+        if not p.exists() or p.read_text().strip() != tid:
+            p.write_text(tid)
+    except OSError:
+        pass
 
 
 def house_hash(cfg: dict | None = None, create: bool = True) -> str:
