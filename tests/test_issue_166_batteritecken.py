@@ -33,8 +33,16 @@ def test_forslag_nar_huset_bara_gar_ihop_med_omvant_tecken():
     h = wd._battery_sign_hint({"pv_power_w": 200, "net_power": 400, "battery_power_w": 1000})
     assert h and h["house_w"] == -400 and h["house_w_flipped"] == 1600
     assert wd._battery_sign_hint({"pv_power_w": 200, "net_power": 1400, "battery_power_w": 1000}) is None   # huset +0,6: ok
-    assert wd._battery_sign_hint({"pv_power_w": 0, "net_power": 100, "battery_power_w": 50}) is None       # för liten effekt
-    assert wd._battery_sign_hint({"pv_power_w": 200, "net_power": 400, "battery_power_w": None}) is None
+    assert wd._battery_sign_hint({"pv_power_w": 0, "net_power": 100, "battery_power_w": 50}) is None       # huset positivt
+    assert h["flip_ok"] and h["pv_w"] == 200 and h["net_w"] == 400 and h["battery_w"] == 1000
+
+
+def test_delarna_visas_aven_nar_omvant_tecken_inte_hjalper():
+    """#139: huset negativt utan att ett omvänt batteritecken räddar det - visa delarna, ingen knapp."""
+    h = _wd()._battery_sign_hint({"pv_power_w": 0, "net_power": -2000, "battery_power_w": 100})
+    assert h and not h["flip_ok"] and h["house_w"] == -2100
+    h2 = _wd()._battery_sign_hint({"pv_power_w": 300, "net_power": -1500, "battery_power_w": None})
+    assert h2 and not h2["flip_ok"] and h2["battery_w"] is None
 
 
 def test_valet_i_webben_galler_direkt_om_yaml_inte_last(monkeypatch, tmp_path):

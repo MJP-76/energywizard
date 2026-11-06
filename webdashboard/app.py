@@ -23,7 +23,7 @@ import requests
 
 sys.path.insert(0, "/smartbox")
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 
@@ -1120,16 +1120,20 @@ def _battery_sign_hint(row):
     har batterisensorn troligen motsatt tecken. Då föreslår Översikt "Vänd tecknet" (bara om det inte är låst i
     house_config.yaml med battery.power_invert). None = inget att föreslå."""
     pv, net, bat = (_n(row.get(k)) for k in ("pv_power_w", "net_power", "battery_power_w"))
-    if bat is None or net is None or abs(bat) < 200:
+    if net is None:
         return None
-    raw, flipped = (pv or 0) + net - bat, (pv or 0) + net + bat
-    if raw > -300 or flipped < -100:
+    raw = (pv or 0) + net - (bat or 0)
+    if raw > -300:
         return None
+    # #139: visa alltid delarna när huset blir negativt; knappen bara när ett omvänt batteritecken får det att gå ihop
+    flipped = (pv or 0) + net + (bat or 0)
+    flip_ok = bat is not None and abs(bat) >= 200 and flipped >= -100
     try:
         locked = "power_invert" in (house_config.load_house_config(HOUSE_CONFIG_FILE).get("battery") or {})
     except Exception:
         locked = False
-    return {"house_w": round(raw), "house_w_flipped": round(flipped), "locked": locked,
+    return {"house_w": round(raw), "house_w_flipped": round(flipped), "locked": locked, "flip_ok": flip_ok,
+            "pv_w": round(pv or 0), "net_w": round(net), "battery_w": None if bat is None else round(bat),
             "inverted": bool(ew_settings.get("battery_power_invert", False))}
 
 
@@ -1749,6 +1753,24 @@ web_common.register(app, lambda r: AUTH.session(r)[0], lambda: not webauth.owner
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+_INDEX_CACHE = {"key": None, "html": ""}
+
+
+def _index_html() -> str:
+    """index.html med versionsmärkta app.js/style.css (?v=innehållets hash). #167: Home Assistant-appen på iOS visade en
+    sparad, gammal style.css trots Cache-Control: no-cache - ett nytt filnamn per version hämtas alltid på nytt."""
+    import hashlib
+    files = ("static/index.html", "static/app.js", "static/style.css")
+    key = tuple(os.path.getmtime(f) for f in files)
+    if _INDEX_CACHE["key"] != key:
+        html = open(files[0], encoding="utf-8").read()
+        for name in ("app.js", "style.css"):
+            v = hashlib.sha1(open(f"static/{name}", "rb").read()).hexdigest()[:10]
+            html = html.replace(f'"static/{name}"', f'"static/{name}?v={v}"')
+        _INDEX_CACHE.update(key=key, html=html)
+    return _INDEX_CACHE["html"]
+
+
 @app.get("/{full_path:path}")
 async def spa(full_path: str):
-    return FileResponse("static/index.html")
+    return HTMLResponse(_index_html(), headers={"Cache-Control": "no-cache"})

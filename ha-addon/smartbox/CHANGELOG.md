@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.27 (2026-11-06)
+- **Webben hämtar alltid senaste versionen** (#167): app.js och style.css länkas med versionsnummer. Home Assistant-appen
+  på iOS kunde visa en gammal, sparad stilmall (t.ex. den grå mobilmenyn) trots att en ny version var installerad.
+- **Husets förbrukning negativ** (#139): Översikt visar alltid delarna (sol + nät − batteri) när huset räknas negativt,
+  så att man ser vilken givare som visar fel. Knappen för att vända batteriets tecken visas när den hjälper.
+
 ## 1.2.26 (2026-11-06)
 - **Appen hoppade upp till toppen** när man scrollade (stor text): uppdateringen var 5:e sekund ritade om sidan med
   scrollen överst. Scrollpositionen behålls nu.

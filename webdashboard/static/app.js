@@ -365,9 +365,12 @@ async function mountFlow(slotId) {
     const whyRows = d.nodes.filter((n) => d.why[n.key]).map((n) => `<div style="display:flex;gap:10px;align-items:baseline;padding-top:8px;border-top:1px solid var(--line)"><span>${esc(n.icon)}</span><div><b>${esc(n.label)}</b> <span class="note" style="font-size:.9rem">${esc(d.why[n.key])}</span></div></div>`).join("");
     // #166: batterisensorn verkar ha omvänt tecken (huset räknas negativt) - föreslå att vända det
     const bs = d.battery_sign, kw = (w) => (w / 1000).toFixed(1).replace(".", ",");
-    const signBox = bs ? `<div class="note" style="margin-top:10px;padding:10px 12px;border:1px solid var(--warn);border-radius:12px;line-height:1.45">
-        ⚠️ Husets förbrukning blir ${kw(bs.house_w)} kW, vilket inte går. Batteriets effekt verkar ha omvänt tecken: vänt blir huset ${kw(bs.house_w_flipped)} kW.
-        ${bs.locked ? "Tecknet är låst i house_config.yaml (battery.power_invert) - ändra det där." : `<button class="icobtn" id="batinv" style="margin-top:8px">Vänd tecknet på batteriets effekt</button>`}</div>` : "";
+    const parts = bs ? `Sol ${kw(bs.pv_w)} + nät ${kw(bs.net_w)}${bs.battery_w != null ? ` − batteri ${kw(bs.battery_w)}` : ""} = ${kw(bs.house_w)} kW.` : "";
+    const signBox = !bs ? "" : `<div class="note" style="margin-top:10px;padding:10px 12px;border:1px solid var(--warn);border-radius:12px;line-height:1.45">
+        ⚠️ Husets förbrukning blir ${kw(bs.house_w)} kW, vilket inte går, så den visas som 0. ${parts}
+        ${bs.flip_ok ? ` Batteriets effekt verkar ha omvänt tecken: vänt blir huset ${kw(bs.house_w_flipped)} kW.
+          ${bs.locked ? "Tecknet är låst i house_config.yaml (battery.power_invert) - ändra det där." : `<br><button class="icobtn" id="batinv" style="margin-top:8px">Vänd tecknet på batteriets effekt</button>`}`
+        : ` Någon av givarna visar fel: kontrollera att nätets effekt är + när du köper och − när du säljer, att solcellerna visar produktionen${bs.battery_w != null ? " och att batteriet är + när det laddar" : ""}, och att enheten (W eller kW) stämmer.`}</div>`;
     slot.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0">⚡ Just nu</h2><span class="note">${esc(d.ts || "")}</span></div>${flowSvg(d)}${signBox}${whyRows ? `<div style="display:grid;gap:8px;margin-top:6px">${whyRows}</div>` : ""}</div>`;
     const bi = slot.querySelector("#batinv");
     if (bi) bi.onclick = async () => { try { await postJSON("api/battery-invert", {}); toast("Tecknet är vänt - syns i bilden inom en minut"); } catch (e) { toast(e.message); } };
