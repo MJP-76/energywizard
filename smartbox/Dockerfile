@@ -14,6 +14,9 @@ COPY *.py .
 # tidigare av *.py-mönstret ovan (matchar bara toppnivåfiler) - house_config.py importerar
 # från det, så utan den här raden kraschar importen i produktion (upptäckt vid Steg 3).
 COPY drivers/ ./drivers/
+# Sourcefuls FTW-drivrutiner (driver: ftw, lua_host.py) och översättningarna (notisernas språk)
+COPY ftw_drivers/ ./ftw_drivers/
+COPY i18n/ ./i18n/
 
 # Kör hjärnan (unbuffered så loggarna syns direkt)
 CMD ["python", "-u", "main.py"]

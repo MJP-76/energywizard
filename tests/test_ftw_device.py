@@ -102,3 +102,10 @@ def test_guiden_skriver_ftw_och_den_gar_att_lasa():
         f.write(text); f.flush()
         cfg = house_config.load_house_config(f.name)
     assert house_config.build_battery_driver(cfg).__class__.__name__ == "FtwBatteryDriver"
+
+
+def test_motorns_image_far_med_ftw_drivrutinerna():
+    """Motorns Dockerfile kopierade bara *.py och drivers/ - ftw_drivers/ saknades i produktion (2026-11-06)."""
+    from pathlib import Path
+    df = (Path(__file__).resolve().parent.parent / "smartbox" / "Dockerfile").read_text()
+    assert "COPY ftw_drivers/" in df and "COPY i18n/" in df

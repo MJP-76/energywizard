@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.12 (2026-11-06)
+- **NIBE lokalt REST fungerar mot riktiga pumpar** (#145, felanalys av larsfrisk): läsningen kraschade med "Bad file
+  descriptor" när pumpen stängde anslutningen efter svaret. Tomt produktnamn (S1255) godtas och modellens register
+  väljs, felets typ syns i loggen, och varmvattentemperaturen läses för alla värmepumpar (inte bara Thermia).
+- **Bilens faser och maxström lärs in** av laddningarna när installationen inte anger dem.
+- **Installationsguiden**: batteri eller växelriktare utan Home Assistant-integration kan väljas via en FTW-drivrutin.
+- **Skyline**: avläsningen ligger ovanför staden, höjden anpassas efter huset, billigaste och dyraste timmen märks,
+  och soluppgången syns på natten.
+
 ## 1.2.11 (2026-11-06)
 - **Gästbil** (#131): ladda en bil som inte är din på valfri laddbox – ange kWh och ev. klar-tid i appen (Bil → Gästbil),
   så laddas de billigaste timmarna fram till dess, alltid under säkringen. Avslutas när kabeln dras ur.
