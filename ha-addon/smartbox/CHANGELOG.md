@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.13 (2026-11-06)
+- **Färre falsklarm**: tillfälliga nätverksfel (Home Assistant eller väderprognosen svarade inte en stund) är
+  varningar, och på Installationer visas de grått för sig – bara riktiga fel visas i rött.
+- FTW-drivrutinerna provas automatiskt mot Sourcefuls enhetssimulator vid varje ändring (Sungrow: läsning och
+  styrning fungerar; sju av åtta läser rätt).
+
 ## 1.2.12 (2026-11-06)
 - **NIBE lokalt REST fungerar mot riktiga pumpar** (#145, felanalys av larsfrisk): läsningen kraschade med "Bad file
   descriptor" när pumpen stängde anslutningen efter svaret. Tomt produktnamn (S1255) godtas och modellens register
