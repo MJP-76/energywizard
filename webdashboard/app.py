@@ -1463,6 +1463,11 @@ def _build_house_config_yaml(sel: dict) -> str:
             lines += ["  entities:"]
             for key, val in (hp.get("entities") or {}).items():
                 lines.append(f"    {key}: {val}")
+        elif hp_driver == "thermiq":
+            _pfx = str(hp.get("prefix") or "")
+            if not re.fullmatch(r"thermiq_mqtt_[a-z0-9_]{1,40}", _pfx):
+                _pfx = "thermiq_mqtt_vp1  # FYLL I - början på ThermIQ-entiteterna (sensor.<detta>_outdoor_t)"
+            lines += [f"  prefix: {_pfx}"]
         elif hp_driver == "heishamon":
             lines += ["  host: 192.168.1.XXX  # FYLL I - HeishaMon-kortets IP (dess webbsida visar /json)",
                       "  base_shift: 0       # din vanliga kurvförskjutning (-5..5); EnergyWizard flyttar relativt den",

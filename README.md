@@ -117,7 +117,7 @@ integrationernas källkod och väntar på en betatestare med riktig hårdvara.
 
 | Delsystem | Stöds |
 |---|---|
-| 🌡️ **Värmepump** | ✅ Thermia via Husdata · ✅ alla med `climate`-entitet i HA · NIBE S-serien (lokalt API) · NIBE/Bosch/Atlantic/Daikin via myUplink · Panasonic Aquarea via HeishaMon |
+| 🌡️ **Värmepump** | ✅ Thermia via Husdata · ✅ alla med `climate`-entitet i HA · NIBE S-serien (lokalt API) · NIBE/Bosch/Atlantic/Daikin via myUplink · Panasonic Aquarea via HeishaMon · Thermia via ThermIQ (HA-integrationen) |
 | 🔋 **Husbatteri** | styr: Solax Gen4-6 och Growatt (Solax Modbus), Solis (solis_modbus) och Fronius Gen24 (fronius_modbus), t.ex. med BYD HVS, FoxESS (lokalt och moln), HomeWizard Plug-In Battery · läser: Felicity, SolarEdge, GivEnergy, Huawei Luna, Sonnen, Victron m.fl. Planeringsstil i fem steg och val om batteriet får sälja till nätet. |
 | ☀️ **Solceller** | ✅ SolarEdge · Huawei SUN2000 · Growatt · Sungrow · Fronius · generisk exportgräns (Solis, Solplanet, Sigenergy m.fl.) |
 | ⚡ **Elmätare** | ✅ Tibber Pulse · HomeWizard P1 · P1/HAN-mätare med effekt i HA |

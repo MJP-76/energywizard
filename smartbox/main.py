@@ -714,15 +714,36 @@ while True:
                 try:
                     _w = _climate_watch.setdefault(_cid, car_climate_watch.ClimateWatch())
                     _want = all_overrides.get(_key)
-                    _res = _w.step(_want, homeassistant._get_raw_state(_cent) if _want not in (None, "", "off") else None, time.time())
+                    _on_req = _want not in (None, "", "off")
+                    _res = _w.step(_want, homeassistant._get_raw_state(_cent) if _on_req else None, time.time(),
+                                   homeassistant._get_numeric_attribute(_cent, "current_temperature") if _on_req else None)
                     _name = _cid.capitalize()
                     if _res == "resend":
                         _t = float(_want) if str(_want).replace(".", "", 1).isdigit() else 21.0
                         homeassistant.set_car_climate(_cent, "heat_cool", _t)
                         print(f"🚗 {_name}: värmen har inte startat än - skickar igen (försök {_w.tries}).")
+                    elif _res == "reheat":
+                        # Inte om bilen kört iväg (bilens tracker, samma som klimatschemat; okänd position = hemma)
+                        _trk = (_ev.get("entities") or {}).get("tracker")
+                        _away = False
+                        if _trk:
+                            _lat = homeassistant._get_numeric_attribute(_trk, "latitude")
+                            _lon = homeassistant._get_numeric_attribute(_trk, "longitude")
+                            _d = calc_distance(weather.LATITUDE, weather.LONGITUDE, _lat, _lon) if _lat and _lon else None
+                            _away = _d is not None and _d > 0.5
+                        if _away:
+                            _w._reset()
+                            logger.set_override(_key, "off")
+                            print(f"🚗 {_name}: bilen har kört iväg - värmer inte igen, uppföljningen avslutad.")
+                        else:
+                            _t = float(_want) if str(_want).replace(".", "", 1).isdigit() else 21.0
+                            homeassistant.set_car_climate(_cent, "heat_cool", _t)
+                            print(f"🚗 {_name}: kupén höll inte temperaturen 10 min efter att värmen gick av - värmer igen ({_w.reheats}).")
                     elif _res == "ok":
+                        print(f"🚗 {_name}: värmen är igång i bilen - håller temperaturen en timme från knapptrycket.")
+                    elif _res == "done":
                         logger.set_override(_key, "off")
-                        print(f"🚗 {_name}: värmen är igång i bilen.")
+                        print(f"🚗 {_name}: värmen har hållits en timme - uppföljningen avslutad.")
                     elif _res == "give_up":
                         logger.set_override(_key, "off")
                         print(f"🚗 {_name}: värmen startade inte efter flera försök - aviserar.")

@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.15 (2026-11-06)
+- **Bilvärmen håller temperaturen**: när du startat värmen från appen och bilen själv stängt av klimatet kollar
+  EnergyWizard 10 minuter senare. Har kupén svalnat mer än 1 °C under önskad temperatur startas värmen igen
+  (högst 3 gånger, i en timme från knapptrycket, och inte om bilen kört iväg).
+- **Thermia via ThermIQ** (#153): ny drivrutin för ThermIQ-MQTT/ThermIQ-ROOM via ThermIQ:s HA-integration. Den läser
+  inne-, ute-, framlednings-, retur- och varmvattentemperatur samt gradminuter, kompressor och larm, och styr
+  rumsbörvärdet och varmvattnets start/stopp. Installationsguiden känner igen den själv. Den är inte provad mot en
+  riktig pump än, så kör i skuggläge först.
+
 ## 1.2.14 (2026-11-06)
 - **Minutloggen tappades** hos hus vars drivrutin rapporterar på/av som sant/falskt: databasen vägrade raden
   (DatatypeMismatch). Sådana värden sparas nu som 1/0.

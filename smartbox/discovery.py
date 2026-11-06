@@ -488,7 +488,16 @@ def discover_house(entities: list[dict] | None = None) -> dict:
 
     # --- Värmepump: enhet vars tillverkare/modell/namn matchar HEATPUMP ---
     heat_pump = None
-    for device_id, ents in by_device.items():
+    # Thermia via ThermIQ (thermiq/thermiq_mqtt-ha): entity_id "sensor.thermiq_mqtt_<id>_outdoor_t" m.fl. Känns igen
+    # på namnet (integrationen sätter entity_id själv), oavsett enhet - drivers/heatpump_thermiq.py.
+    _tiq = next((m.group(1) for m in (re.fullmatch(r"sensor\.(thermiq_mqtt_[a-z0-9_]+?)_outdoor_t", e["e"])
+                                       for e in entities) if m), None)
+    if _tiq:
+        heat_pump = {"device_name": "Thermia (ThermIQ)", "maker": "ThermIQ", "driver": "thermiq",
+                     "driver_known": True, "prefix": _tiq,
+                     "entity_count": sum(1 for e in entities if f".{_tiq}_" in e["e"]),
+                     "note": "Läser och styr via ThermIQ:s HA-integration. Ej verifierad mot en riktig pump - kör i skuggläge först."}
+    for device_id, ents in ([] if heat_pump else by_device.items()):
         head = ents[0]
         if _has(_candidate(head), HEATPUMP):
             brand = next((b for b in _HEATPUMP_BRAND_TO_DRIVER if _has(_candidate(head), re.compile(b, re.I))), None)

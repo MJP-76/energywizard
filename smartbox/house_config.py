@@ -27,6 +27,7 @@ from drivers.charger_generic import GenericChargerDriver
 from drivers.heatpump import HeatPumpDriver, NullHeatPumpDriver
 from drivers.heatpump_generic import GenericClimateHeatPumpDriver
 from drivers.heatpump_heishamon import HeishaMonHeatPumpDriver
+from drivers.heatpump_thermiq import ThermIQHeatPumpDriver
 from drivers.heatpump_myuplink import MyUplinkHeatPumpDriver
 from drivers.heatpump_nibe_local import NibeLocalHeatPumpDriver
 from drivers.heatpump_thermia import ThermiaHusdataHeatPumpDriver
@@ -58,6 +59,9 @@ HEAT_PUMP_DRIVER_REGISTRY = {
     # Panasonic Aquarea via HeishaMon, lokalt över HTTP (host i house_config.yaml). ALDRIG verifierad mot en riktig
     # pump, bara mot HeishaMons källkod; se drivers/heatpump_heishamon.py.
     "heishamon": HeishaMonHeatPumpDriver,
+    # Thermia via ThermIQ-MQTT och ThermIQ:s HA-integration (prefix "thermiq_mqtt_<id>"). ALDRIG verifierad mot en
+    # riktig pump, bara mot integrationens källkod; se drivers/heatpump_thermiq.py.
+    "thermiq": ThermIQHeatPumpDriver,
 }
 SOLAR_DRIVER_REGISTRY = {"solaredge": SolarEdgeSolarDriver, "generic_number": GenericNumberSolarDriver,
                          "huawei_solar": HuaweiSolarServiceDriver, "modbus_register": ModbusRegisterSolarDriver,
@@ -207,6 +211,8 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
     if driver_cls is HeishaMonHeatPumpDriver:
         return HeishaMonHeatPumpDriver(host=hp.get("host"), base_shift=hp.get("base_shift", 0),
                                        indoor_from_z1=hp.get("indoor_from_z1", False))
+    if driver_cls is ThermIQHeatPumpDriver:
+        return ThermIQHeatPumpDriver(prefix=hp.get("prefix"))
     return driver_cls()
 
 

@@ -693,7 +693,8 @@ async def action(car: str, request: Request):
         _cache["t"] = 0.0
         if not ok:
             raise HTTPException(502, "Bilen svarade inte på klimatkommandot")
-        return {"ok": True, "msg": ("Värmekommando skickat (21 °C). EnergyWizard kollar att bilen startar värmen och säger till om den inte gör det."
+        return {"ok": True, "msg": ("Värmekommando skickat (21 °C). EnergyWizard kollar att bilen startar värmen, och värmer igen om kupén svalnat "
+                                    "10 min efter att den gått av (i en timme, så länge bilen är hemma)."
                                     if on else "Stoppkommando skickat")}
     raise HTTPException(400, "Okänd åtgärd")
 
