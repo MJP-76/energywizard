@@ -501,12 +501,15 @@ def init_overrides_db():
             with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS overrides (
-                        device     VARCHAR(50) PRIMARY KEY,
-                        mode       VARCHAR(64) NOT NULL DEFAULT 'auto',
+                        device     VARCHAR(200) PRIMARY KEY,
+                        mode       TEXT NOT NULL DEFAULT 'auto',
                         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                     )
                 """)
-                cur.execute("ALTER TABLE overrides ALTER COLUMN mode TYPE VARCHAR(64)")        # 2026-10-30: 10 räckte inte för tidsstämplar ('2026-10-30 08:57'), vilket fällde hela sol-laddningens sparande
+                # 2026-10-30: 10 räckte inte för tidsstämplar. 2026-11-07: 64 räckte inte heller (gästladdningens JSON
+                # ~85 tecken, långa enhetsnamn för bilar med långa id) - StringDataRightTruncation i telemetrin (Hus 5).
+                cur.execute("ALTER TABLE overrides ALTER COLUMN mode TYPE TEXT")
+                cur.execute("ALTER TABLE overrides ALTER COLUMN device TYPE VARCHAR(200)")
                 cur.execute("""
                     INSERT INTO overrides (device, mode) VALUES
                         ('heat',             'auto'),

@@ -1,5 +1,8 @@
 # Ändringar
 
+## 1.2.46 (2026-11-07)
+- **Överstyrningar sparas igen**: långa värden (t.ex. gästladdning) fick inte plats i databasen och föll med ett fel.
+
 ## 1.2.45 (2026-11-07)
 - **Telemetrin är obligatorisk**: den är ett villkor för att använda EnergyWizard och går inte längre att stänga av.
   Vill du inte dela den ska du inte använda EnergyWizard. Vad som skickas står i README under "Telemetri"
