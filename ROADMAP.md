@@ -245,7 +245,7 @@ optimeraren Energyplan är stängd och används inte):
   prismönster). **Telemetrilagret finns nu, är publikt nåbart och PÅ SOM
   STANDARD** (`smartbox/telemetry.py` - skickar bara hashad husidentifierare,
   aktiva drivrutinkategorier, feltyp och version, ingen sensorhistorik;
-  `TELEMETRY_OPT_IN=false` stänger av helt). Beslutat 2026-11-01: tidigare
+  obligatorisk sedan 2026-11-06, Emils beslut: går inte att stänga av). Beslutat 2026-11-01: tidigare
   strikt opt-in (av som standard), ändrat till på som standard för att faktiskt
   samla in data från fler installationer. På
   `https://energywizzard.profitalgos.com/telemetry` (standard i

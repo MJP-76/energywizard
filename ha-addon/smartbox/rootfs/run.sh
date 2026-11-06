@@ -20,9 +20,7 @@ except Exception:
 print("" if v is None else (str(v).lower() if isinstance(v, bool) else v))' "$OPTIONS" "$1"
 }
 if [ -f "$OPTIONS" ]; then
-    export TELEMETRY_OPT_IN="$(opt telemetry_opt_in)"
-    _ping="$(opt anonymous_ping)"; export TELEMETRY_PING="${_ping:-true}"   # anonymt livstecken, standard på
-    export TELEMETRY_ENDPOINT="$(opt telemetry_endpoint)"
+    # Telemetrin är obligatorisk sedan 1.2.45 (se README): telemetry_opt_in/anonymous_ping/telemetry_endpoint läses inte.
     export DASHBOARD_PASSWORD="$(opt dashboard_password)"
     # NIBE lokalt REST-API (heat_pump.driver: nibe_local) - bara de som är ifyllda (#138)
     for k in username password tls_pin_sha256; do
@@ -48,8 +46,6 @@ export HOUSE_CONFIG_PATH="$EW_HOME/house_config.yaml"
 export HOUSE_CONFIG_WRITABLE=1        # entitetsväljarens "Spara och starta"
 export EW_SETTINGS_PATH="/data/energywizard.json"   # startguidens lösenord och HA-anslutning
 [ -f "$HOUSE_CONFIG_PATH" ] || printf 'house_id: "mitt-hus"\n' > "$HOUSE_CONFIG_PATH"
-export TELEMETRY_OPT_IN="${TELEMETRY_OPT_IN:-false}"
-export TELEMETRY_ENDPOINT="${TELEMETRY_ENDPOINT:-}"
 export DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-}"
 # webdashboard proxar ewapps styrkommandon internt (i compose: http://ewapp:8502).
 export EWAPP_URL="http://127.0.0.1:8502"

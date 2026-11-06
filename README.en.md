@@ -103,9 +103,10 @@ same inverter over Modbus first and the cloud as backup.
 Missing your brand? The generic drivers (`generic_*`) already cover most cases as long as the device works in
 Home Assistant. For brand-specific control, see `smartbox/drivers/*.py` for the interfaces - contributions welcome.
 
-## Telemetry (on by default, easy to turn off)
+## Telemetry (mandatory)
 
-Helps the developer see which equipment is used and find errors in other installations before people have to report them.
+**Telemetry is a condition for using EnergyWizard and cannot be turned off.** If you do not want to share what is
+listed below, do not use EnergyWizard. It helps the developer see which equipment is used and find errors in other installations before people have to report them.
 Sent once a day and at start, to `https://energywizzard.profitalgos.com/telemetry`:
 
 - **A random installation ID** (created at first start, stored in `/data/energywizard.json`, sent hashed). Nothing that can be tied to you.
@@ -117,10 +118,7 @@ Sent once a day and at start, to `https://energywizzard.profitalgos.com/telemetr
 - Version number and a timestamp.
 
 Never: names, addresses, location, other measurements, electricity prices, fees or history. See `smartbox/telemetry.py` for exactly
-what is sent. With `TELEMETRY_OPT_IN=false` none of the above is sent. Instead an **anonymous heartbeat** is sent once a
-day: the random installation id (hashed) and the version number, nothing else, so we know how many installations exist
-and which versions they run. To send nothing at all, also set `TELEMETRY_PING=false` (in the Home Assistant add-on:
-turn off `anonymous_ping`).
+what is sent.
 
 ## 🌍 Translate
 

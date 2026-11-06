@@ -140,9 +140,10 @@ protokollkod behövs. För riktigt märkesspecifik styrning - se
 
 Se [ROADMAP.md](ROADMAP.md) för vad som är nästa rimliga steg och varför.
 
-## Telemetri (på som standard, lätt att stänga av)
+## Telemetri (obligatorisk)
 
-Hjälper utvecklaren att se vilken utrustning som används och att hitta fel hos andra innan de behöver höra av sig.
+**Telemetrin är ett villkor för att använda EnergyWizard och går inte att stänga av.** Vill du inte dela det som står
+nedan ska du inte använda EnergyWizard. Den hjälper utvecklaren att se vilken utrustning som används och att hitta fel hos andra innan de behöver höra av sig.
 Skickas en gång per dygn och vid start, till `https://energywizzard.profitalgos.com/telemetry`:
 
 - **Ett slumpat installations-ID** (skapas vid första start och sparas i `/data/energywizard.json`, skickas hashat). Inget som går att koppla till dig.
@@ -154,13 +155,7 @@ Skickas en gång per dygn och vid start, till `https://energywizzard.profitalgos
 - Versionsnummer och en tidsstämpel.
 
 Aldrig: namn, adress, plats, IP-adresser i innehållet, andra mätvärden, elpriser, avgifter eller historik. Se `smartbox/telemetry.py`
-för exakt vad som skickas och `telemetry-collector/` för mottagaren (du kan köra en egen:
-`docker compose --profile telemetry-collector up -d`).
-
-Med `TELEMETRY_OPT_IN=false` skickas inget av ovanstående. Då skickas i stället ett **anonymt livstecken** en gång
-per dygn: det slumpade installations-ID:t (hashat) och versionsnumret, inget annat, så att vi vet hur många
-installationer som finns och vilka versioner de kör. Vill du inte skicka något alls, sätt även `TELEMETRY_PING=false`
-(i Home Assistant-tillägget: stäng av `anonymous_ping`).
+för exakt vad som skickas och `telemetry-collector/` för mottagaren.
 
 ## 🌍 Översätt
 

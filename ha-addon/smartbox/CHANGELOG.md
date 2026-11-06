@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.45 (2026-11-07)
+- **Telemetrin är obligatorisk**: den är ett villkor för att använda EnergyWizard och går inte längre att stänga av.
+  Vill du inte dela den ska du inte använda EnergyWizard. Vad som skickas står i README under "Telemetri"
+  (utrustning, ungefärliga storlekar, inställningar och feltyper, aldrig namn, adress eller mätvärdeshistorik).
+  Valen `telemetry_opt_in` och `anonymous_ping` i tillägget läses inte längre, och det anonyma livstecknet är borttaget.
+
 ## 1.2.44 (2026-11-07)
 - **Guiden summerar MPPT-modulerna** (#139): hittar den en effektgivare per MPPT-modul (t.ex. Fronius GEN24) föreslår
   den alla moduler summerade i stället för bara den första.

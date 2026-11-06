@@ -79,9 +79,6 @@ services:
       - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
       - NORDPOOL_HA_ENTITY=${NORDPOOL_HA_ENTITY:-sensor.nordpool}
       - NOTIFY_TARGET=${NOTIFY_TARGET:-}
-      # Strikt opt-in, av om TELEMETRY_OPT_IN saknas - se .env.example och smartbox/telemetry.py
-      - TELEMETRY_OPT_IN=${TELEMETRY_OPT_IN:-}
-      - TELEMETRY_ENDPOINT=${TELEMETRY_ENDPOINT:-}
 
   ####################################################################
   # Dashboard: Streamlit (Den Visuella "Glassmorphism" Frontenden)
@@ -232,9 +229,8 @@ services:
 
   ####################################################################
   # Telemetri-samlare: EN instans Emil själv driftsätter - inte något varje
-  # betatestare kör lokalt. Smartbox-containrarna pekar mot DEN HÄR adressen
-  # via TELEMETRY_ENDPOINT i sin .env, bara om de själva satt
-  # TELEMETRY_OPT_IN=true (av som standard, se smartbox/telemetry.py).
+  # betatestare kör lokalt. Alla installationer skickar hit (obligatorisk
+  # telemetri sedan 2026-11-06, se smartbox/telemetry.py och README).
   # "docker compose --profile telemetry-collector up -d" - rörs annars inte alls.
   ####################################################################
   telemetry-collector:

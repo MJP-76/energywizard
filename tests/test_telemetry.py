@@ -1,5 +1,5 @@
 """smartbox/telemetry.py: PÅ som standard - bevisar att det skickas utan att
-något måste sättas i .env, att TELEMETRY_OPT_IN=false stänger av helt, att
+något måste sättas i .env, att den inte går att stänga av (obligatorisk sedan 2026-11-06), att
 rätt (och bara rätt) fält skickas, och att ett sändningsfel aldrig kraschar.
 Mockar requests helt - rör aldrig nätverket."""
 import importlib
@@ -32,12 +32,17 @@ def test_pa_som_standard_utan_nagon_env_variabel(monkeypatch):
     mock_post.assert_called_once()
 
 
-def test_opt_in_false_stanger_av_helt(monkeypatch):
-    t = _reload(monkeypatch, opt_in="false")
+def test_obligatorisk_gar_inte_att_stanga_av(monkeypatch):
+    """Emils beslut 2026-11-06: telemetrin är ett villkor för att använda EnergyWizard. Varken TELEMETRY_OPT_IN=false
+    eller en egen TELEMETRY_ENDPOINT stänger av eller leder om den."""
+    t = _reload(monkeypatch, opt_in="false", endpoint="https://annan.example.com")
+    assert t.OPT_IN is True and t.ENDPOINT == "https://energywizzard.profitalgos.com/telemetry"
+    assert not hasattr(t, "send_ping")
     with patch("telemetry.requests.post") as mock_post:
         t.send_driver_snapshot({"house_id": "mitt-hus"})
         t.report_error({"house_id": "mitt-hus"}, "main_loop", "ValueError")
-    mock_post.assert_not_called()
+    assert mock_post.call_count == 2
+    assert all(c.args[0].startswith("https://energywizzard.profitalgos.com/telemetry") for c in mock_post.call_args_list)
 
 
 def test_tom_endpoint_betyder_standardadressen(monkeypatch):
@@ -100,7 +105,7 @@ def test_driver_snapshot_skickar_bara_tillatna_falt(monkeypatch, tmp_path):
         t.send_driver_snapshot(cfg)
     assert mock_post.call_count == 1
     url, kwargs = mock_post.call_args[0][0], mock_post.call_args[1]
-    assert url == "https://telemetri.example.com/ingest/drivers"
+    assert url == "https://energywizzard.profitalgos.com/telemetry/ingest/drivers"
     payload = kwargs["json"]
     assert set(payload.keys()) == {"house", "version", "drivers", "ts"}
     assert payload["house"] != "mitt-hus"  # hashat, inte klartext
@@ -240,34 +245,6 @@ def test_kvarstaende_fel_rapporteras_igen_efter_en_timme(monkeypatch):
         t._ERROR_SEEN["main_loop:ValueError"] = datetime.now(timezone.utc) - timedelta(minutes=61)
         t.report_error({"house_id": "h"}, "main_loop", "ValueError")
     assert mock_post.call_count == 2
-
-
-def test_livstecken_bara_nar_telemetrin_ar_av(monkeypatch):
-    """Telemetrin av: ett anonymt livstecken (hashat ID + version, inga enheter) så att installationen syns.
-    Telemetrin på: inget livstecken (översikten räcker). TELEMETRY_PING=false: inget alls."""
-    monkeypatch.delenv("TELEMETRY_PING", raising=False)
-    t = _reload(monkeypatch, opt_in="false")
-    with patch("telemetry.requests.post") as mock_post:
-        t.send_ping({"house_id": "mitt-hus"})
-    mock_post.assert_called_once()
-    body = mock_post.call_args.kwargs["json"]
-    assert set(body) == {"house", "version", "drivers", "ping"} and body["drivers"] == [] and body["ping"] is True
-    assert "mitt-hus" not in str(body)
-
-    t = _reload(monkeypatch, opt_in="true")
-    with patch("telemetry.requests.post") as mock_post:
-        t.send_ping({"house_id": "mitt-hus"})
-    mock_post.assert_not_called()
-
-    monkeypatch.setenv("TELEMETRY_PING", "false")
-    t = _reload(monkeypatch, opt_in="false")
-    with patch("telemetry.requests.post") as mock_post:
-        t.send_ping({"house_id": "mitt-hus"})
-        t.send_driver_snapshot({"house_id": "mitt-hus"})
-        t.report_error({"house_id": "mitt-hus"}, "main_loop", "ValueError")
-    mock_post.assert_not_called()
-    monkeypatch.delenv("TELEMETRY_PING", raising=False)
-    _reload(monkeypatch)
 
 
 def test_insamlaren_skiljer_livstecken_fran_hus_utan_enheter(monkeypatch, tmp_path):

@@ -27,14 +27,13 @@ ingress: true
 ingress_port: 8503
 panel_icon: mdi:lightning-bolt
 panel_title: EnergyWizard
-options:
-  telemetry_opt_in: false
-  anonymous_ping: true
-  telemetry_endpoint: "https://energywizzard.profitalgos.com/telemetry"
+# Telemetrin är obligatorisk sedan 1.2.45. De gamla telemetrivalen finns kvar som valfria i schemat bara så att
+# befintliga installationer (som har dem sparade) inte stoppas av Supervisors validering - de läses inte.
+options: {}
 schema:
   dashboard_password: "password?"
-  telemetry_opt_in: bool
-  anonymous_ping: bool
+  telemetry_opt_in: "bool?"
+  anonymous_ping: "bool?"
   telemetry_endpoint: "str?"
   nibe_local_username: "str?"
   nibe_local_password: "password?"

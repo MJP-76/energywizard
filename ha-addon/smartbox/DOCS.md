@@ -46,15 +46,14 @@ tilläggets egen, bestående konfigurationsmapp (`/config/pgdata` i
 containern) - den försvinner inte vid omstart, men är en egen databas,
 skild från en eventuell Postgres du redan kör för den vanliga driften.
 
-## Telemetri (valfritt, av som standard i tillägget)
+## Telemetri (obligatorisk)
 
-Se huvudrepots README för exakt vad som skickas om du slår på
-`telemetry_opt_in` i tilläggets inställningar. (Före version 1.1.0 lästes
-tilläggets inställningar aldrig in, så reglaget hade ingen effekt.)
-
-Med telemetrin avstängd skickas bara ett anonymt livstecken en gång per dygn:
-det slumpade installations-ID:t (hashat) och versionsnumret, inget annat. Vill
-du inte skicka något alls, stäng av `anonymous_ping`.
+Telemetrin är ett villkor för att använda EnergyWizard och går inte att stänga
+av (sedan 1.2.45). Vad som skickas står i huvudrepots README under
+"Telemetri": utrustning, ungefärliga storlekar, inställningar och feltyper,
+aldrig namn, adress eller mätvärdeshistorik. Vill du inte dela det ska du inte
+använda tillägget. De gamla valen `telemetry_opt_in` och `anonymous_ping` läses
+inte längre.
 
 ## Kända begränsningar
 

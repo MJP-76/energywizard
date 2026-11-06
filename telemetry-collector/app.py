@@ -1,7 +1,6 @@
 """EnergyWizard telemetri-samlare: en EGEN, fristående tjänst - driftsätts EN gång
-av Emil (inte av varje betatestare). Varje smartbox pekar via TELEMETRY_ENDPOINT
-mot den här enda instansen, bara om TELEMETRY_OPT_IN=true är satt lokalt hos dem
-(se smartbox/telemetry.py - strikt opt-in, av som standard).
+av Emil (inte av varje betatestare). Alla installationer skickar hit
+(obligatoriskt sedan 2026-11-06, se smartbox/telemetry.py).
 
 Tar bara emot och lagrar det smartbox/telemetry.py redan sanerat: en hashad
 husidentifierare, drivrutinkategorier, feltyper, version, tidsstämpel. Inget UI

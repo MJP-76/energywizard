@@ -1537,7 +1537,7 @@ async function renderInstalls() {
   const big = (n, t) => `<div><div style="font-size:2rem;font-weight:800">${n}</div><div class="note">${t}</div></div>`;
   const summary = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
     <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px">${big(d.active, `aktiva (hörda senaste ${d.active_days} dygnen)`)}${big(d.total_known, "totalt sedan start")}${big(d.new_last_7d, "nya senaste veckan")}</div>
-    <div class="note" style="margin-top:10px">Ett kort per användare, anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var. Utan telemetri syns installationen ändå via ett anonymt livstecken (bara version)${d.ping_only ? ` – ${d.ping_only} st just nu` : ""}.</div></div>`;
+    <div class="note" style="margin-top:10px">Ett kort per användare, anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var.${d.ping_only ? ` ${d.ping_only} kör en äldre version som bara skickar version (anonymt) – de visar sin utrustning när de uppdaterat till 1.2.45, där telemetrin är obligatorisk.` : ""}</div></div>`;
   const houses = [...(d.houses || [])].sort((x, y) => (y.mine ? 1 : 0) - (x.mine ? 1 : 0));
   const cards = houses.map((h) => {
     const n = Object.values(h.devices).reduce((a, l) => a + l.length, 0);
@@ -1561,7 +1561,7 @@ async function renderInstalls() {
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px">
         <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${(h.devices.country || [])[0] ? ` <span class="note" style="font-weight:600">· ${FLAG[(h.devices.country || [])[0].split("@")[0].replace("country:", "")] || ""} ${labelOf((h.devices.country || [])[0])}</span>` : ""}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
         <div class="note">sedan ${esc(h.since)}</div></div>
-      ${n ? rows : h.ping_only ? `<div class="note" style="padding:8px 0">Anonym installation – telemetrin är avstängd, bara livstecken och version.</div>` : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
+      ${n ? rows : h.ping_only ? `<div class="note" style="padding:8px 0">Äldre version utan telemetri – utrustningen syns när installationen uppdaterat till 1.2.45.</div>` : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
   }).join("");
   main.innerHTML = summary
     + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-bottom:16px">${cards}</div>`
@@ -1597,9 +1597,9 @@ function installsCard(d) {
         <div><div style="font-size:2rem;font-weight:800">${d.new_last_7d}</div><div class="note">nya senaste veckan</div></div>
       </div>
       ${d.without_devices ? `<div class="note" style="margin-top:8px">${d.without_devices} har inte valt några enheter än.</div>` : ""}
-      ${d.ping_only ? `<div class="note" style="margin-top:4px">${d.ping_only} har telemetrin avstängd och syns bara som anonymt livstecken.</div>` : ""}
+      ${d.ping_only ? `<div class="note" style="margin-top:4px">${d.ping_only} kör en äldre version utan telemetri och syns med utrustning efter uppdateringen.</div>` : ""}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px;margin-top:14px">${cats}</div>
-      <div class="note" style="margin-top:10px">Antal enheter, från telemetrin: bara drivrutin och märke, aldrig vem eller var. Den som stängt av telemetrin syns inte, och en installation syns med sina enheter först när den valt dem i startguiden.</div>
+      <div class="note" style="margin-top:10px">Antal enheter, från telemetrin: bara drivrutin och märke, aldrig vem eller var. En installation syns med sina enheter när den valt dem i startguiden.</div>
     </div>`;
 }
 
@@ -2099,7 +2099,7 @@ function setupHA(total, prev) {
        scrolla längst ner till <b>Långlivade åtkomsttoken</b> och tryck <b>Skapa token</b>. Kopiera den och klistra in här.
      </details>
      <details class="note"><summary>Vad skickas till utvecklaren?</summary>
-       <p style="margin:6px 0">En gång per dygn: vilken utrustning du har (drivrutin, märke och modell, t.ex. "NIBE S1255"), var innetemperaturen kommer ifrån, priskälla och land, ungefärliga storlekar (t.ex. batteri 10–15 kWh, huvudsäkring 25 A), inne- och utetemperatur i hela grader och om skuggläget, batteristyrningen eller tidstariffen är på. Vid fel: var i koden felet uppstod och vilken typ, aldrig feltexten. Felen blir automatiskt ärenden på GitHub så att de kan rättas. Aldrig namn, adress, entiteter eller andra mätvärden.</p><p style="margin:6px 0">Stäng av med TELEMETRY_OPT_IN=false.</p></details>`,
+       <p style="margin:6px 0">En gång per dygn: vilken utrustning du har (drivrutin, märke och modell, t.ex. "NIBE S1255"), var innetemperaturen kommer ifrån, priskälla och land, ungefärliga storlekar (t.ex. batteri 10–15 kWh, huvudsäkring 25 A), inne- och utetemperatur i hela grader och om skuggläget, batteristyrningen eller tidstariffen är på. Vid fel: var i koden felet uppstod och vilken typ, aldrig feltexten. Felen blir automatiskt ärenden på GitHub så att de kan rättas. Aldrig namn, adress, entiteter eller andra mätvärden.</p><p style="margin:6px 0">Telemetrin är ett villkor för att använda EnergyWizard och går inte att stänga av.</p></details>`,
     "Testa och spara", async () => {
       const j = await postJSON("api/setup/ha", { url: document.getElementById("s_url").value, token: document.getElementById("s_tok").value });
       document.getElementById("setupok").textContent = j.message || "Kopplat!";
