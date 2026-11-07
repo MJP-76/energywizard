@@ -76,10 +76,6 @@ BATTERY_DRIVER_REGISTRY = {"generic": GenericBatteryDriver, "ferroamp_modbus": F
 # "läs valfri Easee-box"-funktion finns) - charger-configen pekar ut vilken via
 # physical: lite|carport, och det faktiska Easee-ID:t kommer från .env (driftsspecifikt,
 # samma mönster som värmepumpens modbus_host) snarare än att hårdkodas i en checkad-in YAML.
-_EASEE_PHYSICAL = {
-    "lite": (lambda: homeassistant.EASEE_LITE_ID, homeassistant.read_easee_lite),
-    "carport": (lambda: homeassistant.EASEE_CARPORT_ID, homeassistant.read_easee_carport),
-}
 
 
 def load_house_config(path: str) -> dict:
@@ -126,13 +122,11 @@ def car_specs(cfg: dict) -> dict:
 
 
 def _easee_driver(charger_cfg: dict):
-    """Easee ur installationen: id + entities + enable_switch. Äldre installationer med bara physical: lite/carport
-    får den gamla kopplingen (EASEE_CHARGER_ID/EASEE_CARPORT_ID i .env)."""
-    if charger_cfg.get("entities"):
-        return EaseeChargerDriver(id=str(charger_cfg.get("id", "")), entities=charger_cfg["entities"],
-                                  enable_switch=charger_cfg.get("enable_switch"))
-    get_id, reader = _EASEE_PHYSICAL.get(charger_cfg.get("physical"), (lambda: charger_cfg.get("id", ""), lambda: {}))
-    return EaseeChargerDriver(id=get_id(), reader=reader)
+    """Easee ur installationen: id (laddboxens serienummer) + entities + enable_switch. Inga inbyggda laddboxar."""
+    if not charger_cfg.get("entities"):
+        print(f"⚠️ Easee {charger_cfg.get('id') or '?'}: inga entiteter i installationen - kör Skanna mitt Home Assistant.")
+    return EaseeChargerDriver(id=str(charger_cfg.get("id", "")), entities=charger_cfg.get("entities") or {},
+                              enable_switch=charger_cfg.get("enable_switch"))
 
 
 def build_charger_drivers(cfg: dict) -> dict:
@@ -191,8 +185,7 @@ def build_default_car_per_charger(cfg: dict) -> dict:
             continue
         driver_name = charger_cfg.get("driver")
         if CHARGER_DRIVER_REGISTRY.get(driver_name) is EaseeChargerDriver:
-            get_id, _ = _EASEE_PHYSICAL.get(charger_cfg.get("physical"), (lambda: charger_cfg.get("id", ""), None))
-            out[get_id()] = ev.get("id", "")
+            out[str(charger_cfg.get("id", ""))] = ev.get("id", "")
         else:
             out[charger_cfg.get("id", "")] = ev.get("id", "")
     return out

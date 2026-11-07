@@ -43,11 +43,8 @@ HA_URL = os.environ.get("HA_URL", "").strip().strip("\"'").rstrip("/")
 # faller igenom till exakt samma HA_IP/HA_TOKEN-väg som innan, oförändrat.
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 
-EASEE_LITE_ID = os.environ.get("EASEE_CHARGER_ID") # Nissan
-if not EASEE_LITE_ID: EASEE_LITE_ID = "EHLS9NVL"
-
-EASEE_CARPORT_ID = os.environ.get("EASEE_CARPORT_ID") # Tesla
-if not EASEE_CARPORT_ID: EASEE_CARPORT_ID = "EHLU7JCT"
+# Easee-laddboxarnas id och entiteter kommer ur installationen (evs[].charger: id, entities, enable_switch).
+# 2026-11-07: förut låg utvecklarens två laddboxar här som standard (serienummer, entiteter, påslagsbrytare).
 
 # Givare väljs av användaren (Inställningar -> Givare, sparas som "sensors" i /data/energywizard.json):
 #   {"indoor": [{"key": "in_1", "entity": "sensor.x_temperature", "label": "Vardagsrum",
@@ -93,36 +90,6 @@ def indoor_sensors() -> list:
 def indoor_sensor_labels() -> dict:
     return {s["key"]: s["label"] for s in indoor_sensors()}
 
-
-EASEE_LITE_ENTITIES = {
-    "power_kw":        "sensor.easee_lite_effekt",
-    "current_a":       "sensor.easee_lite_strom",           # 2026-10-15: uppmätt laddström (aktiverad i HA; max-allowed-sensorn är otillgänglig)
-    "circuit_current": "sensor.easee_lite_maximum_allowed_charge_current",
-    "dynamic_limit":   "sensor.easee_lite_maximum_allowed_charge_current",
-    "output_limit":    "sensor.easee_lite_maximum_allowed_charge_current",
-    "max_limit":       "sensor.easee_lite_maximum_allowed_charge_current",
-    "session_kwh":     "sensor.easee_lite_energi_laddningssession",
-    "lifetime_kwh":    "sensor.easee_lite_livstidsforbrukning",
-    "status":          "sensor.easee_lite_status",
-    "online":          "binary_sensor.easee_lite_online",
-    "phases":          "select.easee_lite_allowed_charging_phases",
-    "reason_no_current": "sensor.easee_lite_status",
-    "current_l1":      "sensor.easee_lite_strom_l1",
-    "current_l2":      "sensor.easee_lite_strom_l2",
-    "current_l3":      "sensor.easee_lite_strom_l3",
-}
-
-EASEE_CARPORT_ENTITIES = {
-    "power_kw":        "sensor.carport_effekt",
-    "current_a":       "sensor.carport_strom",              # 2026-10-15: uppmätt laddström (aktiverad i HA)
-    "session_kwh":     "sensor.carport_energi_laddningssession",
-    "status":          "sensor.carport_status",
-    "online":          "binary_sensor.carport_online",
-    "phases":          "select.carport_allowed_charging_phases",
-    "current_l1":      "sensor.carport_strom_l1",
-    "current_l2":      "sensor.carport_strom_l2",
-    "current_l3":      "sensor.carport_strom_l3",
-}
 
 # Bilarnas entiteter kommer ur installationen (evs[].entities, drivers/car_generic.py) - inga inbyggda namn.
 
@@ -374,13 +341,7 @@ def read_humidities():
 _PHASE_STATE: dict = {}
 
 
-def _phase_key(charger_id=None, entities=None):
-    if entities is not None:
-        return "lite" if entities is EASEE_LITE_ENTITIES else "carport"
-    return "lite" if charger_id == EASEE_LITE_ID else "carport"
-
-
-def _read_easee_charger(entities: dict):
+def _read_easee_charger(entities: dict, charger_id: str | None = None):
     try:
         result = {}
         for key, entity in entities.items(): 
@@ -390,11 +351,14 @@ def _read_easee_charger(entities: dict):
                 result[key] = _get_numeric_state(entity)
 
         # Fasströmmar: integrationen har en enda ström-sensor; fasernas strömmar ligger som attribut (T3/T4/T5 = L1/L2/L3).
+        # Nyare Easee-integration (2026) döper dem state_inCurrentT3 osv. - båda namnen läses (2026-11-07: fasströmmarna
+        # blev None för alla med Easee, och bilarnas faser/maxström kunde inte läras in).
         _ce = entities.get("current_a")
         if _ce:
-            for _k, _a in (("current_l1", "inCurrentT3"), ("current_l2", "inCurrentT4"), ("current_l3", "inCurrentT5")):
+            for _k, _t in (("current_l1", "T3"), ("current_l2", "T4"), ("current_l3", "T5")):
                 if result.get(_k) is None:
-                    result[_k] = _get_numeric_attribute(_ce, _a)
+                    v = _get_numeric_attribute(_ce, f"state_inCurrent{_t}")
+                    result[_k] = v if v is not None else _get_numeric_attribute(_ce, f"inCurrent{_t}")
 
         raw_power = result.get("power_kw")
         power_kw = (raw_power / 1000.0) if raw_power is not None and raw_power > 100 else raw_power
@@ -428,7 +392,7 @@ def _read_easee_charger(entities: dict):
             "status":          result.get("status"),
             "online":          bool(result.get("online")),
             "reason_no_current": result.get("reason_no_current"),
-            "phases":          _get_raw_state(entities.get("phases")) or _PHASE_STATE.get(_phase_key(entities=entities))
+            "phases":          _get_raw_state(entities.get("phases")) or _PHASE_STATE.get(charger_id)   # per laddbox
         }
     except Exception as e:
         print(f"❌ HA: Fel vid läsning av laddare: {e}")        
@@ -437,11 +401,6 @@ def _read_easee_charger(entities: dict):
 
 
 
-def read_easee_lite():
-    return _read_easee_charger(EASEE_LITE_ENTITIES)
-
-def read_easee_carport():
-    return _read_easee_charger(EASEE_CARPORT_ENTITIES)
 
 # Prefixet är fritt: äldre Tibber-integrationer döpte entiteterna "tibber_pulse_<hem>_...", nyare efter hemmets namn
 # ("sensor.hemma_power"). Med bara "tibber_pulse_" hittades spänning/ström men inte köp/sälj hos de nyare, och då blev
@@ -700,16 +659,18 @@ def set_easee_phases(charger_id: str, phases: int):
             json={"charger_id": charger_id, "phase_mode": mode},
             timeout=10, verify=_VERIFY)
         r.raise_for_status()
-        _PHASE_STATE[_phase_key(charger_id)] = "ThreePhase" if phases == 3 else "SinglePhase"
+        _PHASE_STATE[charger_id] = "ThreePhase" if phases == 3 else "SinglePhase"
         print(f"⚡ Easee ({charger_id}): Fasläge satt till {phases}-fas (tjänst, {mode}).")
         return True
     except Exception as e:
         print(f"❌ Easee ({charger_id}): Fel vid sättning av fasläge: {e}")
         return False
 
-def turn_on_charger(charger_id: str):
+def turn_on_charger(charger_id: str, entity_id: str | None = None):
     """Tvingar laddaren att starta om den står i awaiting_start eller paused."""
-    entity_id = "switch.easee_lite_laddboxen_aktiverad" if charger_id == EASEE_LITE_ID else "switch.carport_laddare_aktiverad"
+    if not entity_id:                                # påslagsbrytaren kommer ur installationen (charger.enable_switch)
+        print(f"ℹ️ Easee ({charger_id}): ingen påslagsbrytare (enable_switch) i installationen - kan inte slå på/av laddboxen.")
+        return False
     try:
         r = requests.post(
             f"{_BASE}/services/switch/turn_on",
@@ -725,9 +686,11 @@ def turn_on_charger(charger_id: str):
         print(f"❌ Easee ({charger_id}): Fel vid turn_on: {e}")
         return False
 
-def turn_off_charger(charger_id: str):
+def turn_off_charger(charger_id: str, entity_id: str | None = None):
     """Tvingar laddaren att stanna."""
-    entity_id = "switch.easee_lite_laddboxen_aktiverad" if charger_id == EASEE_LITE_ID else "switch.carport_laddare_aktiverad"
+    if not entity_id:                                # påslagsbrytaren kommer ur installationen (charger.enable_switch)
+        print(f"ℹ️ Easee ({charger_id}): ingen påslagsbrytare (enable_switch) i installationen - kan inte slå på/av laddboxen.")
+        return False
     try:
         r = requests.post(
             f"{_BASE}/services/switch/turn_off",

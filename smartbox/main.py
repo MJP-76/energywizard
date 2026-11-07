@@ -140,7 +140,7 @@ def charger_set_limit(cid, amps, reason=None):
 
 def charger_turn_on(cid):
     drv = physical_charger_drivers.get(cid)
-    return drv.turn_on() if drv else homeassistant.turn_on_charger(cid)
+    return drv.turn_on() if drv else False         # okänd laddbox: inget att slå på
 
 
 def charger_set_phases(cid, phases):

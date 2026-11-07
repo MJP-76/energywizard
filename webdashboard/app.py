@@ -1672,17 +1672,17 @@ def _build_house_config_yaml(sel: dict) -> str:
         if charger:
             charger_driver = charger.get("driver") or "generic"
             lines.append("    charger:")
-            lines.append(f"      id: {charger.get('device_name') or car_id + '_laddare'}")
+            # Easee: laddboxens serienummer (integrationens tjänster kräver det), annars enhetsnamnet
+            _cid = charger.get("charger_id") if charger_driver == "easee" else None
+            lines.append(f"      id: {_cid or charger.get('device_name') or car_id + '_laddare'}")
             lines.append(f"      driver: {charger_driver}  # ihopparningen bil<->laddare är en gissning (ordning på vad du kryssade i) - dubbelkolla den")
-            if charger_driver == "easee":
-                dn = (charger.get("device_name") or "").lower()
-                guessed_physical = "carport" if "carport" in dn else "lite" if "lite" in dn else None
-                if guessed_physical:
-                    lines.append(f"      physical: {guessed_physical}  # gissat från enhetsnamnet '{charger.get('device_name')}' - dubbelkolla")
-                else:
-                    lines.append("      physical: lite  # FYLL I - vilken av dina Easee-boxar (lite/carport, bara namn - byt om du vill)")
+            if charger_driver == "easee" and not _cid:
+                lines.append("      # FYLL I id: laddboxens serienummer (t.ex. EH123456), står i Easee-appen och i ström-sensorns attribut 'id'")
+            if charger_driver == "easee" and charger.get("enable_switch"):
+                lines.append(f"      enable_switch: {charger['enable_switch']}")
             lines.append("      entities:")
-            charger_entities = (charger.get("entities") or {}).copy()
+            charger_entities = {**(charger.get("easee_entities") or {}), **(charger.get("entities") or {})} \
+                if charger_driver == "easee" else (charger.get("entities") or {}).copy()
             if charger.get("status_entity"):
                 charger_entities.setdefault("status", charger["status_entity"])
             for key, val in charger_entities.items():

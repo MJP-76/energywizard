@@ -4,7 +4,7 @@ Allt den behöver kommer från installationen (evs[].charger): laddboxens id (f�
 set_charger_dynamic_limit/set_charger_phase_mode), entiteterna den läser (status, effekt, fasströmmar ...) och
 enable_switch (påslaget/avslaget). Easees egna kvirkar (fasströmmar som attribut, fasläget som inte går att
 läsa tillbaka) hanteras i homeassistant._read_easee_charger / set_easee_phases.
-reader finns kvar för äldre installationer som bara anger physical: lite/carport."""
+Inga inbyggda laddboxar: allt kommer ur installationen (2026-11-07)."""
 import requests
 
 import homeassistant
@@ -19,7 +19,7 @@ class EaseeChargerDriver(ChargerDriver):
         self.entities = dict(entities or {})
         self.enable_switch = enable_switch
         if self.entities:
-            self._reader = lambda: homeassistant._read_easee_charger(self.entities)
+            self._reader = lambda: homeassistant._read_easee_charger(self.entities, self.id)
         else:
             self._reader = reader or (lambda: {})
 
@@ -38,8 +38,8 @@ class EaseeChargerDriver(ChargerDriver):
         homeassistant.set_easee_phases(self.id, phases)
 
     def _switch(self, on: bool) -> bool:
-        if not self.enable_switch:                    # äldre installationer: homeassistant:s egen koppling
-            return bool((homeassistant.turn_on_charger if on else homeassistant.turn_off_charger)(self.id))
+        if not self.enable_switch:                    # utan påslagsbrytare i installationen går det inte
+            return bool((homeassistant.turn_on_charger if on else homeassistant.turn_off_charger)(self.id, None))
         try:
             r = requests.post(f"{homeassistant._BASE}/services/switch/turn_{'on' if on else 'off'}", headers=homeassistant._HEADERS,
                               json={"entity_id": self.enable_switch}, timeout=5, verify=homeassistant._VERIFY)

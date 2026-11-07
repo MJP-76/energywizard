@@ -30,27 +30,18 @@ evs:
       daily_distance: sensor.leaf_daily_distance
     charger:
       driver: easee
-      physical: lite                   # (äldre fält, används tills motorn läser entiteterna nedan)
-      id: EHLS9NVL
+      id: EHLS9NVL                     # laddboxens serienummer (Easee-integrationens tjänster)
       phases: 1                        # Nissan Leaf 2018: endast 1-fas
       max_a: 20                        # högsta laddström (A)
       enable_switch: switch.easee_lite_laddboxen_aktiverad
       entities:
+        # 2026-11-07: bara entiteter som finns. Fasströmmarna läses ur ström-sensorns attribut (state_inCurrentT3-T5).
         power_kw: sensor.easee_lite_effekt
         current_a: sensor.easee_lite_strom
-        circuit_current: sensor.easee_lite_maximum_allowed_charge_current
-        dynamic_limit: sensor.easee_lite_maximum_allowed_charge_current
-        output_limit: sensor.easee_lite_maximum_allowed_charge_current
-        max_limit: sensor.easee_lite_maximum_allowed_charge_current
         session_kwh: sensor.easee_lite_energi_laddningssession
         lifetime_kwh: sensor.easee_lite_livstidsforbrukning
         status: sensor.easee_lite_status
         online: binary_sensor.easee_lite_online
-        phases: select.easee_lite_allowed_charging_phases
-        reason_no_current: sensor.easee_lite_status
-        current_l1: sensor.easee_lite_strom_l1
-        current_l2: sensor.easee_lite_strom_l2
-        current_l3: sensor.easee_lite_strom_l3
 
   - id: tesla
     name: Tesla Model Y
@@ -81,8 +72,7 @@ evs:
       distance_to_arrival: sensor.tesla_model_y_distance_to_arrival
     charger:
       driver: easee
-      physical: carport                # (äldre fält, används tills motorn läser entiteterna nedan)
-      id: EHLU7JCT
+      id: EHLU7JCT                     # laddboxens serienummer (Easee-integrationens tjänster)
       phases: auto                     # kan fasväxla 1<->3
       max_a: 16                        # högsta laddström (A)
       enable_switch: switch.carport_laddare_aktiverad
@@ -90,12 +80,9 @@ evs:
         power_kw: sensor.carport_effekt
         current_a: sensor.carport_strom
         session_kwh: sensor.carport_energi_laddningssession
+        lifetime_kwh: sensor.carport_livstidsforbrukning
         status: sensor.carport_status
         online: binary_sensor.carport_online
-        phases: select.carport_allowed_charging_phases
-        current_l1: sensor.carport_strom_l1
-        current_l2: sensor.carport_strom_l2
-        current_l3: sensor.carport_strom_l3
 
 heat_pump:
   enabled: true

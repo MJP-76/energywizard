@@ -135,9 +135,9 @@ def test_charger_set_phases_turn_on_turn_off():
         driver.set_phases(1)
         mock_ha.set_easee_phases.assert_called_once_with("easee1", 1)
         driver.turn_on()
-        mock_ha.turn_on_charger.assert_called_once_with("easee1")
+        mock_ha.turn_on_charger.assert_called_once_with("easee1", None)
         driver.turn_off()
-        mock_ha.turn_off_charger.assert_called_once_with("easee1")
+        mock_ha.turn_off_charger.assert_called_once_with("easee1", None)
 
 
 # ---------- Bilar (Nissan/TeslaCarDriver -> homeassistant.py) ----------

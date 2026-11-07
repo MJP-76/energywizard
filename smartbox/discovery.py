@@ -78,10 +78,52 @@ _TEMPLATE = """{% set ns = namespace(out=[]) %}
       "mo": device_attr(d, 'model') if d else none,
       "dc": s.attributes.device_class | default(none),
       "u": s.attributes.unit_of_measurement | default(none),
-      "st": s.state
+      "st": s.state,
+      "ci": s.attributes.id | default(none) if s.entity_id.startswith('sensor.') and (s.attributes.id | default(none)) is string else none
   }] %}
 {% endfor %}
 {{ ns.out | tojson }}"""
+
+
+def _easee_mapping(ents: list, status_e: dict) -> dict:
+    """Easee-laddboxens entiteter ur dess enhet, oavsett språk och vad användaren döpt boxen till (2026-11-07: guiden
+    kopplade bara status och skrev in utvecklarens boxnamn). id = laddboxens serienummer (attributet "id", t.ex.
+    EH123456) som integrationens tjänster kräver. Avstängda entiteter finns inte i listan och kopplas inte."""
+    def pick(domain, name_rx, dc=None, unit=None):
+        rx = re.compile(name_rx, re.I)
+        for e in ents:
+            if not e["e"].startswith(domain + "."):
+                continue
+            if dc and e.get("dc") != dc:
+                continue
+            if unit and e.get("u") not in unit:
+                continue
+            if rx.search(e.get("n") or "") or rx.search(e["e"]):
+                return e["e"]
+        return None
+    m = {
+        "status": status_e["e"],
+        "power_kw": pick("sensor", r"effekt|power", dc="power"),
+        # Huvudströmmen (med fasströmmarna som attribut), inte krets- eller begränsningsströmmar
+        "current_a": next((e["e"] for e in ents if e["e"].startswith("sensor.") and e.get("dc") == "current"
+                           and re.search(r"(^|_)(strom|ström|current)$", e["e"], re.I)), None),
+        "session_kwh": pick("sensor", r"session", unit=("kWh", "Wh")),
+        "lifetime_kwh": pick("sensor", r"livstid|lifetime", unit=("kWh", "Wh")),
+        "dynamic_limit": pick("sensor", r"dynamisk.?laddbox|dynamisk.?laddar|dynamic.?charger"),
+        "output_limit": pick("sensor", r"total.?begr|output.?limit"),
+        "max_limit": pick("sensor", r"max.?laddbox|max.?laddar|max.?charger"),
+        "reason_no_current": pick("sensor", r"anledning|reason"),
+        "online": pick("binary_sensor", r"online"),
+    }
+    out = {"easee_entities": {k: v for k, v in m.items() if v}}
+    # Laddboxen på/av ("Laddboxen aktiverad" / "Charger enabled") - inte touchknappen, kabellåset eller smart laddning
+    sw = pick("switch", r"(laddbox|laddare|charger)\w*.?(aktiverad|enabled)|is.?enabled$")
+    if sw:
+        out["enable_switch"] = sw
+    cid = next((e.get("ci") for e in ents if e.get("ci") and re.fullmatch(r"[A-Z0-9]{6,12}", str(e.get("ci")))), None)
+    if cid:
+        out["charger_id"] = cid
+    return out
 
 
 def read_all_entities() -> list[dict]:
@@ -682,6 +724,8 @@ def discover_house(entities: list[dict] | None = None) -> dict:
             "status_entity": status_e["e"] if status_e else None,
             "driver": driver, "driver_known": driver in CHARGER_DRIVER_REGISTRY,
         }
+        if driver == "easee":
+            charger.update(_easee_mapping(ents, status_e))
         if driver is None:
             # Känt märke saknas, men finns en switch-entitet kan grundläggande på/av-
             # styrning ändå fungera via GenericChargerDriver - föreslå det istället för

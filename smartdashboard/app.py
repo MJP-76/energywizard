@@ -3421,11 +3421,17 @@ def page_ev():
         st.rerun()
 
     st.markdown("##### ⚡ Snabbåtgärder")
+
+    def _tesla_charger():
+        import house_config as _hc
+        _cfg = _hc.load_house_config(os.environ.get("HOUSE_CONFIG_PATH", "/house_config.yaml"))
+        return _hc.build_charger_drivers(_cfg)["tesla"]
+
     t_btn_c1, t_btn_c2, t_btn_c3 = st.columns(3)
     with t_btn_c1:
         if st.button("🔌 Starta Laddning", key="t_charge_on", width="stretch"):
             try:
-                homeassistant.turn_on_charger(homeassistant.EASEE_CARPORT_ID)
+                _tesla_charger().turn_on()            # laddboxen ur installationen, inget inbyggt id
                 st.success("✅ Laddning startad!")
                 time.sleep(0.5)
                 st.rerun()
@@ -3433,7 +3439,7 @@ def page_ev():
     with t_btn_c2:
         if st.button("🛑 Stoppa Laddning", key="t_charge_off", width="stretch"):
             try:
-                homeassistant.turn_off_charger(homeassistant.EASEE_CARPORT_ID)
+                _tesla_charger().turn_off()            # laddboxen ur installationen, inget inbyggt id
                 st.success("✅ Laddning stoppad!")
                 time.sleep(0.5)
                 st.rerun()

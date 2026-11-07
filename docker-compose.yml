@@ -73,8 +73,6 @@ services:
       - NIBE_LOCAL_USERNAME=${NIBE_LOCAL_USERNAME:-}
       - NIBE_LOCAL_PASSWORD=${NIBE_LOCAL_PASSWORD:-}
       - NIBE_LOCAL_TLS_PIN_SHA256=${NIBE_LOCAL_TLS_PIN_SHA256:-}
-      - EASEE_CHARGER_ID=${EASEE_CHARGER_ID}
-      - EASEE_CARPORT_ID=${EASEE_CARPORT_ID}
       - HOUSE_CONFIG_PATH=/house_config.yaml
       - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
       - NORDPOOL_HA_ENTITY=${NORDPOOL_HA_ENTITY:-sensor.nordpool}
@@ -146,8 +144,6 @@ services:
       - HA_IP=${HA_IP}
       - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN}
-      - EASEE_CHARGER_ID=${EASEE_CHARGER_ID}
-      - EASEE_CARPORT_ID=${EASEE_CARPORT_ID}
 
   ####################################################################
   # Webdashboard: ny dator-/surfplatte-dashboard (EnergyWizard Open Fas A-F),

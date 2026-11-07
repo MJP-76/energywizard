@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.48 (2026-11-07)
+- **Easee kopplas helt av guiden**: laddboxens serienummer, påslagsbrytaren och alla entiteter (effekt, ström, session,
+  livstid, online) hittas oavsett språk och vad boxen heter. Förut kopplades bara status, och utvecklarens boxnamn
+  skrevs in åt alla.
+- **Easees fasströmmar läses igen** (nyare integration döper dem `state_inCurrentT3` osv.), så bilarnas faser och
+  maxström kan läras in.
+- **Inga inbyggda laddboxar**: utvecklarens två Easee-boxar (serienummer, entiteter, påslagsbrytare) låg som standard i
+  koden. Fasminnet gäller nu per laddbox; förut delade alla boxar samma minne.
+
 ## 1.2.47 (2026-11-07)
 - **Varning när växelriktaren inte svarar via en FTW-drivrutin** (#184–#186): Översikt visar felet, adressen och vad
   man kan kontrollera, i stället för tomma flikar för sol, batteri och historik.
