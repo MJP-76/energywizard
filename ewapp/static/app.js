@@ -2,6 +2,7 @@
 // Hem, Plan och Historik får scrolla. Poll medan sidan syns.
 const $ = (s) => document.querySelector(s), app = $("#app");
 const LS = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let FL = null;                     // "Just nu"-flödet på Hem (api/flow, samma som webbens Översikt)
 let PC = null, PCAt = 0, PCNEW = false, PCEL = null, PCH = null;   // planklockan (planclock.js) - samma DOM-nod mellan omritningar så att visaren inte hoppar
 let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null;
 let svPeriod = LS.get("ew_sv_period", "week"), hxPeriod = LS.get("ew_hx_period", "today"), hxRange = LS.get("ew_hx_range", "24h");
@@ -241,17 +242,19 @@ function nextCheap() {                                      // billigaste hela t
   return best;
 }
 const qt = (a, label, value, sub, extra = "") => `<section class="card qt" ${a}><h4>${label}</h4><div class="qv">${value}</div><div class="qs">${sub || "&nbsp;"}</div>${extra}</section>`;
-function quickGrid(s, g, net) {
+function quickGrid(s, g, net, flowShown) {             // flowShown: nät och sol syns redan i "Just nu"
   const h = (EN && EN.house) || {}, b = EN && EN.battery, hh = (t) => new Date(t).toTimeString().slice(0, 5);
   const tiles = [];
   tiles.push(qt('data-a="tab" data-v="hus"', "Inne", h.inside != null ? `${f1(h.inside)}<small>°C</small>` : "–",
     [h.target != null ? `mål ${f1(h.target, 0)}°` : "", h.mode ? (MODE_TXT[h.mode] || h.mode.toLowerCase()) : ""].filter(Boolean).join(" · ")));
-  tiles.push(qt('data-a="insights"', "Nät", net == null ? "–" : `${net < -50 ? "−" : ""}${f1(Math.abs(net) / 1000)}<small> kW</small>`,
+  if (!flowShown) tiles.push(qt('data-a="insights"', "Nät", net == null ? "–" : `${net < -50 ? "−" : ""}${f1(Math.abs(net) / 1000)}<small> kW</small>`,
     `${net == null ? "" : net < -50 ? "säljer" : "köper"}${g.price != null ? ` · ${f1(g.price, 2)} kr` : ""}`));
   const sunUp = (s.w != null && s.w > 50) || (s.forecast_w != null && s.forecast_w > 100);
-  if (sunUp || h.water == null) tiles.push(qt('data-a="solarsheet"', "Sol", s.w != null ? `${f1(s.w / 1000)}<small> kW</small>` : "–", s.today_kwh != null ? `idag ${f1(s.today_kwh, 0)} kWh` : ""));
+  if (flowShown) { /* sol, nät, varmvatten och batteri syns redan i "Just nu" */ }
+  else if (sunUp || h.water == null) tiles.push(qt('data-a="solarsheet"', "Sol", s.w != null ? `${f1(s.w / 1000)}<small> kW</small>` : "–", s.today_kwh != null ? `idag ${f1(s.today_kwh, 0)} kWh` : ""));
   else tiles.push(qt('data-a="tab" data-v="hus"', "Varmvatten", `${f1(h.water, 0)}<small>°C</small>`, h.running ? "pumpen går" : "pumpen vilar"));
-  if (b && b.soc != null) tiles.push(qt('data-a="insights"', "Batteri", `${b.soc}<small> %</small>`, b.w == null ? "" : b.w > 30 ? `laddar ${f1(b.w / 1000)} kW` : b.w < -30 ? `laddar ur ${f1(-b.w / 1000)} kW` : "vilar"));
+  if (flowShown) { /* billigaste timmen syns i planen under */ }
+  else if (b && b.soc != null) tiles.push(qt('data-a="insights"', "Batteri", `${b.soc}<small> %</small>`, b.w == null ? "" : b.w > 30 ? `laddar ${f1(b.w / 1000)} kW` : b.w < -30 ? `laddar ur ${f1(-b.w / 1000)} kW` : "vilar"));
   else { const c = nextCheap(); tiles.push(qt('data-a="tab" data-v="plan"', "Billigast", c ? `${hh(c.t)}` : "–", c ? `${f1(c.avg, 2)} kr/kWh` : "")); }
   if (SV && SV.ok) {                                      // besparingen som ruta; tryck = nästa period (idag → 7 d → månad)
     const ks = SVP.map(([k]) => k), i = Math.max(0, ks.indexOf(svPeriod)), p = SV.periods[svPeriod] || SV.periods.week, nxt = ks[(i + 1) % ks.length];
@@ -270,12 +273,69 @@ function carsRow() {                                        // bilarnas laddniv�
     <div class="crn">${c.charging ? `laddar ${f1(c.power_kw)} kW` : !c.home ? "borta" : c.plugged ? "inkopplad" : "hemma"}</div></div>`).join("")}</div>`;
 }
 
+// ---- "Just nu" (2026-11-07, Emil: framsidan ska tydligt visa vad som sker just nu, som webbens Översikt) ----
+// Källorna till vänster (sol, nät, batteri), huset i mitten, det som drar el till höger. Varje ruta: stor siffra och
+// ett statusord. Prickarna rör sig åt det håll elen går. Bara det huset har (live_flow.py).
+const FLC = { sol: "#fbbf24", nat: "#38bdf8", natut: "#22d3a0", batteri: "#2dd4bf", varmepump: "#fb923c", varmvatten: "#60a5fa", spabad: "#a78bfa", ev: "#22d3a0" };
+const FL_TAB = { sol: ["solarsheet"], nat: ["insights"], batteri: ["insights"], varmepump: ["tab", "hus"], varmvatten: ["tab", "hus"], spabad: ["tab", "hus"] };
+function flowStatus(n) {                                     // statusordet under siffran
+  const w = n.w || 0;
+  if (n.key === "nat") return w < -50 ? "säljer" : w > 50 ? "köper" : "i balans";
+  if (n.key === "sol") return w > 50 ? "producerar" : "vilar";
+  if (n.key === "batteri") return w < -30 ? "laddar ur" : w > 30 ? "laddar" : "vilar";
+  if (n.key.startsWith("ev_")) return n.active ? "laddar" : (n.detail || "").replace(/\s*·.*$/, "").toLowerCase() || "laddar inte";
+  const parts = (n.detail || "").split("·").map((x) => x.trim()).filter(Boolean);
+  if (parts.length > 1) return parts[0].toLowerCase();                       // "Går · inne 21.5 °C" -> "går"
+  return n.active ? (n.key === "varmvatten" ? "värms" : "går") : "";        // bara ett värde: det står redan som siffran
+}
+function flowCard() {
+  if (!FL || !FL.ok || !FL.nodes) return "";
+  const nodes = FL.nodes.filter((n) => n.key !== "hus"), house = FL.nodes.find((n) => n.key === "hus");
+  const left = nodes.filter((n) => ["source", "grid", "battery"].includes(n.role)), right = nodes.filter((n) => n.role === "load").slice(0, 5);
+  const W = 360, rows = Math.max(left.length, right.length, 3), H = Math.max(132, rows * 34 + 6), hub = { x: 180, y: H / 2 };
+  const LW = 112, RW = 112, RH = 30;
+  const place = (arr, x, h) => arr.map((n, i) => ({ ...n, x, h, y: arr.length === 1 ? H / 2 : h / 2 + 4 + i * ((H - h - 8) / (arr.length - 1)) }));
+  const all = [...place(left, 4, 44), ...place(right, W - RW - 4, RH)];
+  const col = (n) => n.key === "nat" ? ((n.w || 0) < -50 ? FLC.natut : FLC.nat) : n.key.startsWith("ev_") ? FLC.ev : (FLC[n.key] || "#94a3b8");
+  const motion = !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const kw = (w) => w == null ? "–" : Math.abs(w) >= 1000 ? `${f1(Math.abs(w) / 1000)}<tspan font-size="10" font-weight="500"> kW</tspan>` : `${Math.round(Math.abs(w))}<tspan font-size="10" font-weight="500"> W</tspan>`;
+  let paths = "", dots = "", cards = "";
+  all.forEach((n, i) => {
+    const isL = n.x < hub.x, w = isL ? LW : RW, sx = isL ? n.x + w : n.x, ex = isL ? hub.x - 34 : hub.x + 34, c = col(n), id = `flp${i}`;
+    const inward = n.role === "source" || (n.role === "grid" && (n.w || 0) > 50) || (n.role === "battery" && (n.w || 0) < -30);
+    paths += `<path id="${id}" d="M${sx} ${n.y} C${(sx + ex) / 2} ${n.y} ${(sx + ex) / 2} ${hub.y} ${ex} ${hub.y}" fill="none" stroke="${c}" stroke-width="${n.active ? 2 : 1.2}" stroke-dasharray="${n.active ? "0" : "2 5"}" opacity="${n.active ? .6 : .25}"/>`;
+    if (n.active && motion) {
+      const k = Math.abs(n.w || 1000) / 1000, dur = Math.max(0.8, 3.2 - k * 0.35).toFixed(2), cnt = k > 3 ? 3 : 2;
+      for (let j = 0; j < cnt; j++) dots += `<circle r="${(2.6 + Math.min(2, k / 2)).toFixed(1)}" fill="${c}"><animateMotion dur="${dur}s" begin="${(-j * dur / cnt).toFixed(2)}s" repeatCount="indefinite" keyPoints="${inward ? "0;1" : "1;0"}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
+    }
+    const tab = n.key.startsWith("ev_") ? ["tab", "bil"] : (FL_TAB[n.key] || ["tab", "hus"]);
+    // Siffran: effekt för sol/nät/batteri och bilar. Värmepumpens w är värmeeffekten (el × COP), inte vad den drar,
+    // så för pump, varmvatten och spa visas temperaturen ur detaljen i stället (som på webben).
+    const big = isL || n.key.startsWith("ev_") ? kw(n.w) : esc((n.detail || "").split("·").pop().trim().replace(/^inne\s*/i, ""));
+    cards += `<g data-a="${tab[0]}"${tab[1] ? ` data-v="${tab[1]}"` : ""} transform="translate(${n.x},${(n.y - n.h / 2).toFixed(1)})" style="cursor:pointer">
+      <rect width="${w}" height="${n.h}" rx="12" fill="var(--card)" stroke="${n.active ? c : "var(--line)"}" stroke-width="${n.active ? 1.6 : 1}"/>
+      ${isL ? `<text x="10" y="17" font-size="11" fill="${c}" font-weight="700">${esc(n.icon)} ${esc(n.label)}</text>
+      <text x="10" y="35" font-size="15" font-weight="800" fill="var(--txt)">${kw(n.w)}</text>
+      <text x="${w - 8}" y="35" font-size="10" fill="var(--mut)" text-anchor="end">${esc(flowStatus(n))}</text>`
+      : `<text x="9" y="12.5" font-size="10" fill="${n.active ? c : "var(--mut)"}" font-weight="700">${esc(n.icon)} ${esc(n.label.split(" ")[0])}</text>
+      <text x="9" y="25" font-size="11" font-weight="700" fill="var(--txt)">${big}</text>
+      <text x="${w - 7}" y="25" font-size="9.5" fill="var(--mut)" text-anchor="end">${esc(flowStatus(n)).slice(0, 14)}</text>`}
+    </g>`;
+  });
+  const hk = house && house.w != null ? f1(house.w / 1000) : "–";
+  const hubSvg = `<g data-a="insights" style="cursor:pointer" transform="translate(${hub.x - 34},${hub.y - 34})"><rect width="68" height="68" rx="18" fill="var(--card)" stroke="var(--acc)" stroke-width="1.6"/>
+    <path d="M22 32 L34 21 L46 32 V46 H22 Z" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linejoin="round"/>
+    <text x="34" y="61" text-anchor="middle" font-size="11.5" font-weight="800" fill="var(--txt)">${hk} kW</text></g>`;
+  return `<section class="card flowcard"><div class="flh"><b>Just nu</b><span class="note">${esc(FL.ts || "")}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Elen just nu">${paths}${dots}${hubSvg}${cards}</svg></section>`;
+}
+
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
   const clock = window.EWPlanView && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
   const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
-  return `<div class="page">${alerts}${clock}${planNow()}${quickGrid(s, g, net)}${carsRow()}${ljusRow()}</div>`;
+  return `<div class="page">${alerts}${flowCard()}${clock}${planNow()}${quickGrid(s, g, net, !!(FL && FL.ok))}${carsRow()}${ljusRow()}</div>`;
 }
 function solarSheet() {                                    // exportgränsen (förut på Energi-sidan) – nu ett blad från Hem
   const s = EN.solar, lim = s.limit_pct, limTxt = lim == null ? "offline" : lim >= 99.5 ? "ingen begränsning" : `${Math.round(lim)} %`;
@@ -427,7 +487,7 @@ async function load() {
     ROLE = (S && S.role) || ROLE; ME = (S && S.user) || ME; document.body.classList.toggle("guest", ROLE === "guest");
     if (page === "hus") H = await api("home");
     if (page === "hem") { if (!S || Date.now() - (S._t || 0) > 30000) { S = await api("state").catch(() => S); if (S) S._t = Date.now(); }
-      [EN, PL, SV] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
+      [EN, PL, SV, FL] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null, api("flow").catch(() => FL)]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
     if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); await loadClock(); }
     if (page === "historik") { if (histView === "energi") HX = await api("energyhistory?range=" + hxRange); else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();

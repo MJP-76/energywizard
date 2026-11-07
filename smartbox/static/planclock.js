@@ -14,11 +14,11 @@
   const COL = { discharge: "#f59e0b", export: "#d946ef", charge: "#2dd4bf", hold: "#64748b", idle: "#475569", car: ["#a78bfa", "#f472b6", "#60a5fa", "#34d399"],
                 cheap: "#3fb68b", mid: "#7c8aa0", dear: "#e0675e", sun: "#facc15" };
   const T = {
-    sv: { next12: "Nästa 12 h · totalpris", now: "Nu", today: "Idag", tomorrow: "Imorgon", until: "till", discharge: "Laddar ur", export: "Laddar ur · säljer", charge: "Laddar", hold: "Sparas",
+    sv: { next12: "Hela planen · totalpris", now: "Nu", today: "Idag", tomorrow: "Imorgon", until: "till", discharge: "Laddar ur", export: "Laddar ur · säljer", charge: "Laddar", hold: "Sparas",
           idle: "Vilar", auto: "Självförbrukning", charges: "laddar", sun: "Sol", nothing: "Inget planerat",
           heat: { CHEAP: "Värmer på huset", EXPENSIVE: "Värmen sänkt" }, drag: "Dra visaren för att se planen",
           legend: ["Laddar ur", "Laddar", "Bil", "Solprognos"], legExport: "Laddar ur · säljer", cheap: "Billigt", dear: "Dyrt" },
-    en: { next12: "Next 12 h · total price", now: "Now", today: "Today", tomorrow: "Tomorrow", until: "until", discharge: "Discharging", export: "Discharging · selling", charge: "Charging", hold: "Holding",
+    en: { next12: "Whole plan · total price", now: "Now", today: "Today", tomorrow: "Tomorrow", until: "until", discharge: "Discharging", export: "Discharging · selling", charge: "Charging", hold: "Holding",
           idle: "Idle", auto: "Self-consumption", charges: "charges", sun: "Sun", nothing: "Nothing planned",
           heat: { CHEAP: "Pre-heating", EXPENSIVE: "Heat lowered" }, drag: "Drag the hand to explore the plan",
           legend: ["Discharging", "Charging", "Car", "Sun forecast"], legExport: "Discharging · selling", cheap: "Cheap", dear: "Expensive" },
@@ -37,13 +37,13 @@
 .ewpc .ewpc-time{font-size:clamp(1.9rem,13cqw,3.3rem);font-weight:300;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.02;margin:2px 0}
 .ewpc .ewpc-price{font-size:clamp(.58rem,2.6cqw,.72rem);letter-spacing:.12em;text-transform:uppercase;opacity:.65;font-variant-numeric:tabular-nums}
 .ewpc .ewpc-act{font-size:clamp(.54rem,2.4cqw,.66rem);letter-spacing:.1em;text-transform:uppercase;margin-top:6px;line-height:1.5;font-weight:600}
-.ewpc .ewpc-now{position:absolute;right:0;top:0;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;padding:3px 11px;font:inherit;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;opacity:.7;cursor:pointer}
+.ewpc .ewpc-now{position:absolute;left:0;top:0;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;padding:3px 11px;font:inherit;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;opacity:.7;cursor:pointer}
 .ewpc .ewpc-now[hidden]{display:none}
 .ewpc .ewpc-pulse{transform-box:fill-box;transform-origin:center;animation:ewpcPulse 2s ease-out infinite}
 @keyframes ewpcPulse{0%{opacity:.6;transform:scale(1)}100%{opacity:0;transform:scale(3.4)}}
 @media (prefers-reduced-motion:reduce){.ewpc .ewpc-pulse{animation:none;opacity:0}}
 .ewpc .ewpc-hand{cursor:grab}.ewpc.drag .ewpc-hand{cursor:grabbing}
-.ewpc-strip{max-width:520px;margin:14px auto 0;font-variant-numeric:tabular-nums}
+.ewpc-strip{max-width:520px;margin:14px auto 0;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none}
 .ewpc-strip .h{display:flex;justify-content:space-between;font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;opacity:.6;margin-bottom:6px}
 .ewpc-strip .h b{opacity:1;font-weight:700;letter-spacing:.06em}
 .ewpc-strip svg{width:100%;height:auto;display:block;cursor:pointer;touch-action:pan-y}
@@ -112,8 +112,9 @@
     svg += `<circle cx="${f1(nx)}" cy="${f1(ny)}" r="3.5" fill="currentColor" class="ewpc-pulse"/><circle cx="${f1(nx)}" cy="${f1(ny)}" r="2.5" fill="currentColor"/>`;
     svg += `<g class="ewpc-hand"><line class="ewpc-hl" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle class="ewpc-hk" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle class="ewpc-hd" r="1.8" fill="currentColor"/></g>`;
     svg += `</svg>`;
-    // Nästa 12 timmar: åtgärderna som tunna band, priset som staplar (tryck för att flytta visaren dit)
-    const N = Math.min(48, slots.length), W = 480, BH = 46;
+    // Hela planen (2026-11-07: förut bara 12 h, så man nådde inte resten genom att dra i remsan): åtgärderna som tunna
+    // band, priset som staplar. Tryck eller dra i remsan för att flytta visaren dit.
+    const N = slots.length, W = 480, BH = 46;
     const sh = slots.slice(0, N), bw = W / N;
     let strip = `<svg viewBox="0 0 ${W} ${BH + 30}" class="ewpc-sv">`;
     let k = 0;
@@ -128,7 +129,7 @@
       const h = s.price == null ? 2 : 4 + (BH - 8) * level(s.price), on = !!act(s);
       strip += `<rect data-i="${i}" x="${f1(i * bw + 0.8)}" y="${f1(12 + BH - h)}" width="${f1(bw - 1.6)}" height="${f1(h)}" rx="1" fill="${on ? slotCol(s) : "currentColor"}" opacity="${on ? 0.9 : i === 0 ? 0.55 : 0.22}"/>`;
     });
-    for (let i = 0; i < N; i += 12) {
+    for (let i = 0; i < N; i += (N > 64 ? 16 : 12)) {
       const d = new Date(sh[i].t);
       strip += `<text x="${f1(i * bw + 1)}" y="${BH + 26}" font-size="10" letter-spacing="1" fill="currentColor" opacity=".5">${i === 0 ? esc(L.now.toUpperCase()) : String(d.getHours()).padStart(2, "0")}</text>`;
     }
@@ -215,8 +216,11 @@
     nowBtn.addEventListener("click", () => show(0, true));
     if (stripEl) {                                        // tryck/dra i remsan flyttar visaren till den kvarten
       const pick = (ev) => { const r = stripEl.getBoundingClientRect(); show(Math.floor((ev.clientX - r.left) / r.width * N), true); };
-      stripEl.addEventListener("pointerdown", pick);
-      stripEl.addEventListener("pointermove", (ev) => { if (ev.buttons) pick(ev); });
+      let sDrag = false;
+      stripEl.addEventListener("pointerdown", (ev) => { sDrag = true; try { stripEl.setPointerCapture(ev.pointerId); } catch (e) { /* äldre webbläsare */ } pick(ev); });
+      stripEl.addEventListener("pointermove", (ev) => { if (sDrag || ev.buttons) pick(ev); });
+      const sStop = () => { sDrag = false; };
+      stripEl.addEventListener("pointerup", sStop); stripEl.addEventListener("pointercancel", sStop);
     }
     if (pnow && slots[0].price != null) pnow.textContent = fmtPrice(slots[0].price) + " " + L.now.toLowerCase();
     show(0, false);

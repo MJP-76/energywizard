@@ -47,12 +47,12 @@ def vat_factor() -> float:
         return 1.25
 
 
-def profile_day(hours):
+def profile_day(hours, min_hours=12):
     """hours = [(timme, snittpris, köpt kWh, faktisk kostnad)] för ett dygn -> (kWh, profilpris, betalt snittpris) eller
     None. Profilpriset = vad en kWh kostar i snitt med en vanlig hushållsprofil; timmar utan pris viktas om bort."""
     hours = [(int(h), float(p), float(k or 0), float(c or 0)) for h, p, k, c in hours if p is not None]
     kwh = sum(k for _h, _p, k, _c in hours)
-    if kwh <= 0 or len(hours) < 12:
+    if kwh <= 0 or len(hours) < min_hours:
         return None
     w = sum(PROFILE[h] for h, _p, _k, _c in hours)
     prof_price = sum(PROFILE[h] * p for h, p, _k, _c in hours) / w
@@ -60,15 +60,16 @@ def profile_day(hours):
     return kwh, prof_price, paid
 
 
-def daily_rows(conn, days=40):
-    """[{day, kwh, day_avg (profilpris), paid_avg, saved_kr, would_cost_kr}] för de senaste dagarna."""
+def daily_rows(conn, days=40, min_hours=12):
+    """[{day, kwh, day_avg (profilpris), paid_avg, saved_kr, would_cost_kr}] för de senaste dagarna. min_hours: så många
+    timmar med data krävs för att ett dygn ska räknas (12 för hela dygn; 1 för "idag hittills")."""
     by_day = {}
     for d, h, p, k, c in conn.execute(_HOURLY_SQL, {"days": int(days)}).fetchall():
         by_day.setdefault(d, []).append((h, p, k, c))
     vf = vat_factor()
     out = []
     for d in sorted(by_day):
-        r = profile_day(by_day[d])
+        r = profile_day(by_day[d], min_hours)
         if r:
             row = build_day(d.isoformat(), r[0], r[1], r[2], vat=vf)
             if row:

@@ -293,3 +293,16 @@ html[data-glass] .card.qt, html[data-glass] .card.cr { border-color:rgba(255,255
 .pccard { position:relative; }
 .pccard .ewpv-seg { position:absolute; top:10px; right:12px; z-index:2; margin:0; }
 .pccard .ewpv-seg button { padding:4px 10px; font-size:.72rem; }
+
+/* "Just nu" på Hem (2026-11-07) */
+.flowcard { flex:none; padding:10px 12px 8px; }
+.flowcard .flh { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+.flowcard .flh b { font-size:.95rem; } .flowcard .flh .note { font-size:.75rem; }
+.flowcard svg { width:100%; height:auto; display:block; max-height:30dvh; }
+.page.t2 .flowcard svg { max-height:25dvh; } .page.t3 .flowcard svg { max-height:21dvh; } .page.t4 .flowcard svg { max-height:18dvh; }
+.page.t3 .flowcard .flh { display:none; }
+.page.t5 .flowcard { padding:6px 10px 4px; } .page.t5 .flowcard svg { max-height:15dvh; }
+.page.t5 .carsrow .crn { display:none; }
+.page.t5 .pccard .ewsk .pill { display:none; } .page.t5 .pccard .ewsk .t { font-size:1.35rem; }
+.page.t5 .flowcard ~ .plannow .pnrow:nth-child(n+2) { display:none; }   /* med "Just nu" räcker en beslutsrad vid stor text */
+.page.t5 .flowcard svg { max-height:13.5dvh; }

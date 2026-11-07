@@ -96,3 +96,27 @@ def nodes(row, decision_items=None, cars=None, has_spa=None):
                 if n["key"].startswith("ev_"):
                     why[n["key"]] = it.get("text")
     return {"nodes": out, "why": why}
+
+
+def house_parts(hc: dict):
+    """(bilar, har_spa, har_värmepump) ur installationen - bara det huset har. bilar: [(id, namn, loggkolumn)].
+    Laddboxarna loggas i installationens ordning: första -> ev_power_kw, andra -> ev_carport_power_kw (main.py).
+    Delas av webben och mobilappen (2026-11-07). Vid fel: (None, None, None) = visa allt som förut."""
+    import house_config
+    try:
+        has_spa = bool((hc.get("spa") or {}).get("enabled"))
+        has_heat = bool((hc.get("heat_pump") or {}).get("enabled"))
+        order = list(house_config.build_physical_charger_drivers(hc))
+        home = {c: p for p, c in house_config.build_default_car_per_charger(hc).items()}
+        cols = ["ev_power_kw", "ev_carport_power_kw"]
+        cars = []
+        for ev in hc.get("evs") or []:
+            cid = ev.get("id")
+            if not cid:
+                continue
+            idx = order.index(home[cid]) if home.get(cid) in order else -1
+            cars.append((cid, ev.get("name") or cid.capitalize(), cols[idx] if 0 <= idx < len(cols) else None))
+        return cars, has_spa, has_heat
+    except Exception as e:
+        print(f"⚠️ Bilar/spa ur installationen: {e}", flush=True)
+        return None, None, None

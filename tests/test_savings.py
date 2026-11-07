@@ -69,3 +69,12 @@ def test_jamfort_med_vanlig_hushallsprofil_och_moms():
     r = build_day("2026-11-05", kwh, prof_price, paid, vat=1.25)
     assert r["saved_kr"] == round((prof_price - paid) * kwh * 1.25, 2) and r["saved_kr"] > 0
     assert profile_day([(h, 1.0, 0, 0) for h in range(24)]) is None     # inget köpt -> ingen rad
+
+
+def test_idag_hittills_raknas_fran_forsta_timmen():
+    """HA-sensorn sensor.smartbox_besparing_idag fanns inte före lunch (kravet på 12 timmar)."""
+    from savings import profile_day
+    morning = [(h, 1.0 + h / 10, 1.5, 1.5 * (1.0 + h / 10)) for h in range(0, 8)]
+    assert profile_day(morning) is None                                    # hela dygn kräver fortfarande 12 timmar
+    kwh, prof, paid = profile_day(morning, min_hours=1)
+    assert kwh == 12.0 and prof > 0 and paid > 0

@@ -13,7 +13,7 @@ const puppeteer = require("puppeteer-core");
   await p.evaluate(() => { const pg = document.querySelector(".page"); if (pg) pg.scrollTop = 10000; }); await new Promise((r) => setTimeout(r, 500));
   await p.screenshot({ path: `/out/pg-hem-scrolled${process.env.TAG}.png` });
   for (const t of ["bil", "hus", "plan", "historik"]) {
-    await p.evaluate((t) => { const b = document.querySelector(`[data-a="tab"][data-v="${t}"]`); if (b) b.click(); }, t);
+    await p.evaluate((t) => { const b = document.querySelector(`button[data-a="tab"][data-v="${t}"], nav [data-a="tab"][data-v="${t}"]`); if (b && b.click) b.click(); }, t);
     await new Promise((r) => setTimeout(r, 3500));
     await p.evaluate(() => window.dispatchEvent(new Event("resize"))); await new Promise((r) => setTimeout(r, 800));
     const info = await p.evaluate(() => { const pg = document.querySelector(".page"); const r = pg.getBoundingClientRect();

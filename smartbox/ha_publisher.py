@@ -130,8 +130,10 @@ def _collect():
             # Samma besparing som kortet i appen och på webben: mot en vanlig hushållsprofil, med moms (savings.py)
             try:
                 import savings
-                _today = [r for r in savings.daily_rows(c, days=1) if r["day"] == datetime.now(SWE).date().isoformat()]
-                _saved = _today[0]["saved_kr"] if _today else None
+                # Idag hittills (2026-11-07: med kravet på 12 timmars data fanns sensorn inte före lunch, och HA:s kort
+                # visade "Enheten hittades inte" efter en omstart)
+                _today = [r for r in savings.daily_rows(c, days=1, min_hours=1) if r["day"] == datetime.now(SWE).date().isoformat()]
+                _saved = _today[0]["saved_kr"] if _today else 0.0
             except Exception:
                 _saved = None
             if _saved is not None:

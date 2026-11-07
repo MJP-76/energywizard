@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [ewapp, smartbox, smartdashboard, webdashboard]
+        app: [ewapp, smartbox, webdashboard]   # smartdashboard (Streamlit) borttagen 2026-11-07
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3

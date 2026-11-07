@@ -208,7 +208,6 @@ Du får använda, ändra och sprida koden fritt. Den som sprider en ändrad vers
 
 - `smartbox/` – styrmotorn (huvudloopen, drivrutinerna, prioritetsmotorn).
 - `webdashboard/` – ny dator-/surfplatte-dashboard. `ewapp/` – mobilappen (PWA).
-- `smartdashboard/` – äldre Streamlit-dashboard, fasas ut.
 - `docs/` – den publika sidan (GitHub Pages).
 - Bilderna byggs av GitHub (`.github/workflows/docker.yml`) till
   `ghcr.io/murre87/energywizard-*` och hämtas automatiskt av Watchtower.

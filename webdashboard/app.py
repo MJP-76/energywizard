@@ -1249,27 +1249,14 @@ async def battery_invert(request: Request):
 
 
 def _house_parts():
-    """(bilar, har_spa, har_värmepump) ur installationen - bara det huset har. bilar: [(id, namn, loggkolumn)].
-    Laddboxarna loggas i installationens ordning: första -> ev_power_kw, andra -> ev_carport_power_kw (main.py).
-    Vid fel: (None, None, None) = visa allt som förut."""
+    """Se live_flow.house_parts (delad med mobilappen)."""
+    import live_flow
     try:
         hc = house_config.load_house_config(HOUSE_CONFIG_FILE)
-        has_spa = bool((hc.get("spa") or {}).get("enabled"))
-        has_heat = bool((hc.get("heat_pump") or {}).get("enabled"))
-        order = list(house_config.build_physical_charger_drivers(hc))
-        home = {c: p for p, c in house_config.build_default_car_per_charger(hc).items()}
-        cols = ["ev_power_kw", "ev_carport_power_kw"]
-        cars = []
-        for ev in hc.get("evs") or []:
-            cid = ev.get("id")
-            if not cid:
-                continue
-            idx = order.index(home[cid]) if home.get(cid) in order else -1
-            cars.append((cid, ev.get("name") or cid.capitalize(), cols[idx] if 0 <= idx < len(cols) else None))
-        return cars, has_spa, has_heat
     except Exception as e:
         print(f"⚠️ Bilar/spa ur installationen: {e}", flush=True)
         return None, None, None
+    return live_flow.house_parts(hc)
 
 
 @app.get("/api/planclock")

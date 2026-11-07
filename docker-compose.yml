@@ -79,38 +79,7 @@ services:
       - NOTIFY_TARGET=${NOTIFY_TARGET:-}
 
   ####################################################################
-  # Dashboard: Streamlit (Den Visuella "Glassmorphism" Frontenden)
-  ####################################################################
-  smartdashboard:
-    image: ghcr.io/murre87/energywizard-smartdashboard:latest   # byggs av GitHub vid push och hämtas av Watchtower
-    build: ./smartdashboard
-    labels:
-      - com.centurylinklabs.watchtower.enable=true
-    container_name: smartdashboard
-    restart: unless-stopped
-    env_file:
-      - ${DASHBOARD_ENV_PATH:-./secrets/dashboard.env}   # gemensamt DASHBOARD_PASSWORD för alla dashboards
-    ports:
-      - "8501:8501"
-    volumes:
-      # Delad logik mellan backend och frontend
-      - ./smartbox:/smartbox
-    depends_on:
-      postgres-smartbox:
-        condition: service_healthy
-    environment:
-      - PYTHONUNBUFFERED=1
-      - POSTGRES_HOST=postgres-smartbox
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - HA_IP=${HA_IP}
-      - HA_URL=${HA_URL:-}
-      - HA_TOKEN=${HA_TOKEN}
-      - PRICE_SOURCE=${PRICE_SOURCE:-elprisetjustnu}
-
-  ####################################################################
-  # EnergyWizard Mobil: lätt mobilsida (PWA) för laddning, bredvid Streamlit. Nås på /m/ (nginx)
+  # EnergyWizard Mobil: lätt mobilsida (PWA) för laddning. Nås på /m/ (nginx)
   ####################################################################
   ewapp:
     image: ghcr.io/murre87/energywizard-ewapp:latest   # byggs av GitHub vid push och hämtas av Watchtower
@@ -147,7 +116,7 @@ services:
 
   ####################################################################
   # Webdashboard: ny dator-/surfplatte-dashboard (EnergyWizard Open Fas A-F),
-  # ersätter smartdashboard stegvis. profiles gör den valfri att starta - en
+  # ersatte Streamlit-dashboarden (borttagen 2026-11-07). profiles gör den valfri att starta - en
   # vanlig "docker compose up -d" (utan --profile) rör den inte alls, så den
   # kan utvecklas/testas utan att påverka den körande produktionen.
   ####################################################################

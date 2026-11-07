@@ -1,4 +1,4 @@
-"""EnergyWizard Mobil (ewapp): lättviktig mobilsida för laddning (Tesla först), bredvid Streamlit-dashboarden. Delar HA-, databas- och överstyrningslogik med smartbox (monteras från ./smartbox).
+"""EnergyWizard Mobil (ewapp): lättviktig mobilsida för laddning. Delar HA-, databas- och överstyrningslogik med smartbox (monteras från ./smartbox).
 Serveras under /m/ (nginx tar bort prefixet). Allt kräver inloggning med samma lösenord som dashboarden. Bil-knapparna skriver samma överstyrningar som dashboarden (overrides) och slår på/av laddaren direkt."""
 import base64, hashlib, hmac, ipaddress, json, math, os, re, sys, time, datetime as dt
 from zoneinfo import ZoneInfo
@@ -607,6 +607,29 @@ def prices() -> dict:
     allp = sorted(h["p"] for h in hours) or [0]
     lvl = None if cur is None else ("billigt" if cur <= allp[len(allp) // 3] else ("dyrt" if cur >= allp[2 * len(allp) // 3] else "normalt"))
     return {"now": cur, "level": lvl, "hours": hours}
+
+
+@app.get("/api/flow")
+def api_flow(request: Request):
+    """Hemskärmens "Just nu": vad som ger och drar el, samma bild som webbens Översikt (live_flow.py). Inloggning: mellanlagret."""
+    import json as _json
+    import live_flow
+    with ENGINE.connect() as c:
+        row = c.execute(text("SELECT *, timestamp AT TIME ZONE 'Europe/Stockholm' AS sthlm_time FROM sensor_log "
+                             "ORDER BY timestamp DESC LIMIT 1")).mappings().first()
+    if row is None:
+        return {"ok": False}
+    row = dict(row)
+    try:
+        items = _json.loads(row.get("decision_summary") or "[]")
+    except (TypeError, ValueError):
+        items = []
+    try:
+        hc = HC.load_house_config(HOUSE_CONFIG_PATH)
+    except Exception:
+        hc = {}
+    cars, has_spa, _heat = live_flow.house_parts(hc)
+    return {"ok": True, "ts": str(row.get("sthlm_time"))[11:16], **live_flow.nodes(row, items if isinstance(items, list) else [], cars=cars, has_spa=has_spa)}
 
 
 @app.get("/api/state")

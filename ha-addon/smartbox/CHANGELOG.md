@@ -1,5 +1,15 @@
 # Ändringar
 
+## 1.2.49 (2026-11-07)
+- **Appens framsida visar vad som händer just nu**: ett flöde med sol, nät och batteri till vänster, huset i mitten och
+  det som drar el till höger. Varje del har en siffra och ett statusord, och prickarna rör sig åt det håll elen går.
+  Rutorna för nät, sol, varmvatten och billigaste timmen, som nu syns i flödet och planen, är borttagna.
+- **Planklockans remsa visar hela planen** och går att dra i hela vägen. Förut räckte den bara 12 timmar.
+- **"Nu"-knappen i planklockan** ligger inte längre ovanpå Skyline/Klocka-valet.
+- **Besparingssensorn i Home Assistant** (`sensor.smartbox_besparing_idag`) finns från dygnets första timme. Förut
+  saknades den före lunch, och kortet visade "Enheten hittades inte".
+- **Den gamla Streamlit-dashboarden är borttagen** (webben och appen har ersatt den).
+
 ## 1.2.48 (2026-11-07)
 - **Easee kopplas helt av guiden**: laddboxens serienummer, påslagsbrytaren och alla entiteter (effekt, ström, session,
   livstid, online) hittas oavsett språk och vad boxen heter. Förut kopplades bara status, och utvecklarens boxnamn
