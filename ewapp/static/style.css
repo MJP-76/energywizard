@@ -306,3 +306,8 @@ html[data-glass] .card.qt, html[data-glass] .card.cr { border-color:rgba(255,255
 .page.t5 .pccard .ewsk .pill { display:none; } .page.t5 .pccard .ewsk .t { font-size:1.35rem; }
 .page.t5 .flowcard ~ .plannow .pnrow:nth-child(n+2) { display:none; }   /* med "Just nu" räcker en beslutsrad vid stor text */
 .page.t5 .flowcard svg { max-height:13.5dvh; }
+/* Flödet "Just nu" går före planens storlek när det blir trångt (2026-11-07) */
+.page.t5 .flowcard svg { max-height:19dvh; }
+.page.t4 .pccard .ewsk svg { max-height:16vh; } .page.t5 .pccard .ewsk svg { max-height:11vh; }
+.page.t5 .pccard .ewpc { max-width:min(190px,50vw,17dvh); }
+.page.t5 .flowcard ~ .plannow { display:none; }   /* stor text: flödet visar redan vad som händer, Plan-fliken varför */

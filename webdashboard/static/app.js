@@ -313,47 +313,8 @@ const FLOW_COL = { sol: "#fbbf24", nat: "#38bdf8", natut: "#22d3a0", batteri: "#
 const reduceMotion = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } };
 let flowTimer = null;
 
-function flowSvg(d) {
-  const W = 960, H = 380, hub = { x: 480, y: 190 };
-  const nodes = d.nodes.filter((n) => n.key !== "hus"), house = d.nodes.find((n) => n.key === "hus");
-  const left = nodes.filter((n) => ["source", "grid", "battery"].includes(n.role)), right = nodes.filter((n) => n.role === "load");
-  const place = (arr, x) => arr.map((n, i) => ({ ...n, x, y: arr.length === 1 ? H / 2 : 50 + i * ((H - 100) / (arr.length - 1)) }));
-  const all = [...place(left, 110), ...place(right, 850)];
-  const col = (n) => n.key === "nat" ? (n.w < -50 ? FLOW_COL.natut : FLOW_COL.nat) : n.key.startsWith("ev_") ? FLOW_COL.ev : (FLOW_COL[n.key] || "#94a3b8");
-  const motion = !reduceMotion();
-  let paths = "", dots = "", cards = "";
-  all.forEach((n, i) => {
-    const sx = n.x < hub.x ? n.x + 92 : n.x - 92, ex = n.x < hub.x ? hub.x - 70 : hub.x + 70;
-    const id = `fp${i}`, c = col(n);
-    // in mot huset: sol, köp från nät, batteri som laddar ur. Ut från huset: förbrukare, sälj, batteri som laddar.
-    const inward = n.role === "source" || (n.role === "grid" && n.w > 50) || (n.role === "battery" && n.w < -30);
-    const d0 = `M${sx} ${n.y} C${(sx + ex) / 2} ${n.y} ${(sx + ex) / 2} ${hub.y} ${ex} ${hub.y}`;
-    paths += `<path id="${id}" d="${d0}" fill="none" stroke="${c}" stroke-width="${n.active ? 2.5 : 1.5}" stroke-dasharray="${n.active ? "0" : "3 6"}" opacity="${n.active ? .55 : .25}"/>`;
-    if (n.active && motion && n.w != null) {
-      const kw = Math.abs(n.w) / 1000, dur = Math.max(0.7, 3.4 - kw * 0.35).toFixed(2), cnt = kw > 4 ? 4 : kw > 1.5 ? 3 : 2;
-      for (let k = 0; k < cnt; k++) {
-        const kp = inward ? "0;1" : "1;0";      // banan går alltid kort -> hus (#177: förbrukarna gick in mot huset)
-        dots += `<circle r="${(3.5 + Math.min(3, kw / 2)).toFixed(1)}" fill="${c}"><animateMotion dur="${dur}s" begin="${(-k * dur / cnt).toFixed(2)}s" repeatCount="indefinite" keyPoints="${kp}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
-      }
-    } else if (n.active && motion && n.w == null) {
-      dots += `<circle r="5" fill="${c}" opacity=".8"><animateMotion dur="2.4s" repeatCount="indefinite" keyPoints="${n.role === "load" ? "1;0" : "0;1"}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
-    }
-    const why = d.why[n.key] || (n.key === "nat" || n.key === "sol" ? "" : "");
-    cards += `<g class="fnode${n.active ? " on" : ""}" data-page="${n.page}" transform="translate(${n.x - 90},${n.y - 34})" style="cursor:pointer">
-      <rect width="180" height="68" rx="16" fill="var(--card2)" stroke="${n.active ? c : "var(--line)"}" stroke-width="${n.active ? 2 : 1}"/>
-      <text x="16" y="28" font-size="20">${esc(n.icon)}</text>
-      <text x="46" y="27" font-size="14" font-weight="700" fill="var(--txt)">${esc(n.label)}${n.key === "batteri" && n.w != null ? `<tspan font-size="12" font-weight="400" fill="var(--mut)"> · ${fmtW(Math.abs(n.w))}</tspan>` : ""}</text>
-      <text x="46" y="47" font-size="12" fill="var(--mut)">${esc(n.detail)}</text>
-      ${why ? `<title>${esc(why)}</title>` : ""}
-    </g>`;
-  });
-  const hk = house && house.w != null ? (house.w / 1000).toFixed(1) : "–";
-  const hubSvg = `<g class="fnode on" data-page="oversikt" transform="translate(${hub.x - 70},${hub.y - 62})">
-      <rect width="140" height="124" rx="28" fill="var(--card2)" stroke="var(--acc)" stroke-width="2"/>
-      <path d="M44 56 L70 34 L96 56 V86 H44 Z" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round"/>
-      <text x="70" y="108" text-anchor="middle" font-size="15" font-weight="800" fill="var(--txt)">${hk} kW</text>
-    </g>`;
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W * 1.1}px;height:auto;display:block;margin:0 auto" role="img" aria-label="Energiflöde just nu">${paths}${dots}${hubSvg}${cards}</svg>`;
+function flowSvg(d) {                    // delad med mobilappen (smartbox/static/liveflow.js) - samma bild och regler
+  return window.EWLiveFlow ? EWLiveFlow.svg(d, { attrs: (n) => `class="fnode${n.active ? " on" : ""}" data-page="${n.page}"`, hubAttrs: 'class="fnode on" data-page="oversikt"' }) : "";
 }
 
 async function mountFlow(slotId) {

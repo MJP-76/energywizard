@@ -69,3 +69,37 @@ def test_okand_kupetemp_varmer_igen_hogst_max_reheats():
         if t >= HOLD_MAX_S - 120:
             break
     assert 1 <= n <= MAX_REHEATS
+
+
+def test_hallfasen_laser_om_ett_gammalt_pa_lage():
+    """2026-11-07: Teslans entitet stod på heat_cool i över en timme fast bilen slutat värma (sovande bil uppdateras
+    inte). Under hållfasen begärs en färsk avläsning var femte minut så länge klimatet ser ut att vara på."""
+    import car_climate_watch as ccw
+    w = ccw.ClimateWatch()
+    assert w.step("21.0", "heat_cool", 0) == "ok"
+    assert w.step("21.0", "heat_cool", 60) is None
+    assert w.step("21.0", "heat_cool", ccw.HOLD_REFRESH_S + 1) == "refresh"
+    assert w.step("21.0", "heat_cool", ccw.HOLD_REFRESH_S + 60) is None
+    # avläsningen visade att den är av: efter 10 min med kall kupé värms det igen
+    t = ccw.HOLD_REFRESH_S + 120
+    assert w.step("21.0", "off", t, cabin_temp=12.0) is None
+    assert w.step("21.0", "off", t + ccw.HOLD_RECHECK_S, cabin_temp=12.0) == "reheat"
+
+
+def test_bilklimat_tidsgrans_men_paslaget_raknas_som_lyckat(monkeypatch):
+    """#190: HA svarade efter bilen vaknat - tidsgräns gav ett falskt fel fast värmen startade."""
+    import homeassistant as h
+    real = h._requests_real
+
+    class R:
+        def raise_for_status(self):
+            pass
+    def post(url, *a, **k):
+        if "set_hvac_mode" in url:
+            raise real.exceptions.Timeout("read timed out")
+        return R()
+    monkeypatch.setattr(h._requests_real, "post", post)
+    monkeypatch.setattr(h, "_climate_now", lambda e: "heat_cool")
+    assert h.set_car_climate("climate.bil", "heat_cool", 21.0) is True
+    monkeypatch.setattr(h, "_climate_now", lambda e: "off")
+    assert h.set_car_climate("climate.bil", "heat_cool", 21.0) is False

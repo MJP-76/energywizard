@@ -1,5 +1,14 @@
 # Ändringar
 
+## 1.2.50 (2026-11-07)
+- **Bilvärmen hålls på riktigt**: en sovande Tesla uppdaterar inte sin klimat-entitet, så "på" kunde stå kvar fast bilen
+  slutat värma, och då värmdes den aldrig igen. Under timmen värmen hålls begärs nu en färsk avläsning från bilen var
+  femte minut (bilens uppdateringsknapp om den finns, annars `homeassistant.update_entity`).
+- **Inget falskt fel när bilen vaknar långsamt** (#190): värmekommandot väntar upp till 60 s, och svarar Home Assistant
+  ändå inte räknas det som lyckat om bilen står på önskat läge.
+- **"Just nu" är samma komponent i appen och på webben**: samma siffror, statusord och riktningar på båda ställena.
+- **Aviseringar**: längre tidsgräns mot Home Assistant (#188). **Gallringen** hoppar över loggtabeller som huset inte har (#189).
+
 ## 1.2.49 (2026-11-07)
 - **Appens framsida visar vad som händer just nu**: ett flöde med sol, nät och batteri till vänster, huset i mitten och
   det som drar el till höger. Varje del har en siffra och ett statusord, och prickarna rör sig åt det håll elen går.

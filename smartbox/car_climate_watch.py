@@ -23,6 +23,10 @@ HOLD_RECHECK_S = 10 * 60
 HOLD_MAX_S = 60 * 60
 HOLD_TOL_C = 1.0
 MAX_REHEATS = 3
+# 2026-11-07: Teslans climate-entitet stod på heat_cool i över en timme medan bilen redan slutat värma - integrationen
+# uppdaterar inte entiteten när bilen sover. Under hållfasen begärs därför en färsk avläsning så här ofta när klimatet
+# ser ut att vara på ("refresh" -> anroparen ber HA uppdatera entiteten / trycker bilens uppdateringsknapp).
+HOLD_REFRESH_S = 5 * 60
 _OFF = (None, "", "off", "unavailable", "unknown")
 
 
@@ -38,6 +42,7 @@ class ClimateWatch:
         self.hold_since = None     # hållfas: värmen har startat
         self.off_at = None         # hållfas: när klimatet senast sågs gå av
         self.reheats = 0
+        self.last_refresh = None   # hållfas: senaste begärda färska avläsning
 
     def step(self, wanted_temp, climate_state, now_s, cabin_temp=None):
         """wanted_temp = överstyrningens värde (None/"off" = ingen värme begärd), climate_state = entitetens läge,
@@ -55,6 +60,9 @@ class ClimateWatch:
                 return "done"
             if on:
                 self.off_at = None
+                if self.last_refresh is None or now_s - self.last_refresh >= HOLD_REFRESH_S:
+                    self.last_refresh = now_s
+                    return "refresh"                              # "på" kan vara ett gammalt värde: läs om bilen
                 return None
             if self.off_at is None:
                 self.off_at = now_s
@@ -75,7 +83,7 @@ class ClimateWatch:
             self.since, self.tries, self.last_send = now_s, 0, now_s
         if on:
             self.since, self.tries, self.last_send = None, 0, None
-            self.hold_since, self.off_at = now_s, None
+            self.hold_since, self.off_at, self.last_refresh = now_s, None, now_s
             return "ok"
         if now_s - self.since >= GIVE_UP_S:
             self._reset()

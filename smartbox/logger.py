@@ -489,6 +489,10 @@ def downsample_old_data(months_old=6):
     for _tbl in ("spa_phase_log", "load_breakdown"):
         try:
             with get_db() as conn, conn.cursor() as cur:
+                # #189: tabellen skapas först när huset har något att logga där (t.ex. inget spabad -> ingen spa_phase_log)
+                cur.execute("SELECT to_regclass(%s)", (_tbl,))
+                if cur.fetchone()[0] is None:
+                    continue
                 cur.execute(f"DELETE FROM {_tbl} WHERE timestamp < NOW() - INTERVAL '{months_old} months'")
                 conn.commit()
         except Exception as e:

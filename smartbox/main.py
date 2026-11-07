@@ -777,6 +777,10 @@ while True:
                             print(f"🚗 {_name}: kupén höll inte temperaturen 10 min efter att värmen gick av - värmer igen ({_w.reheats}).")
                     elif _res == "ok":
                         print(f"🚗 {_name}: värmen är igång i bilen - håller temperaturen en timme från knapptrycket.")
+                    elif _res == "refresh":
+                        # Bilens läge kan vara gammalt (Tesla uppdaterar inte medan den sover): be om en färsk avläsning
+                        _rb = (_ev.get("entities") or {}).get("refresh_button") or (_ev.get("entities") or {}).get("update_button")
+                        threading.Thread(target=homeassistant.refresh_entity, args=(_cent, _rb), daemon=True).start()
                     elif _res == "done":
                         logger.set_override(_key, "off")
                         print(f"🚗 {_name}: värmen har hållits en timme - uppföljningen avslutad.")

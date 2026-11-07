@@ -72,13 +72,9 @@ def _send(target: str, title: str, message: str, data: dict = None):
         payload["data"] = data
     domain, svc = ("script", target.split(".", 1)[1]) if target.startswith("script.") else ("notify", target)
     try:
-        r = requests.post(
-            f"{_ha_base}/services/{domain}/{svc}",
-            headers=_ha_headers,
-            json=payload,
-            timeout=5,
-            verify=False,
-        )
+        # #188: 5 s räckte inte alltid (HA:s push via molnet eller ett skript som tar tid). Inget nytt försök: en sen
+        # men levererad notis skulle då komma två gånger.
+        r = requests.post(f"{_ha_base}/services/{domain}/{svc}", headers=_ha_headers, json=payload, timeout=20, verify=False)
         r.raise_for_status()
         print(f"🔔 Notis → {target}: {title}")
         return True

@@ -276,58 +276,11 @@ function carsRow() {                                        // bilarnas laddniv�
 // ---- "Just nu" (2026-11-07, Emil: framsidan ska tydligt visa vad som sker just nu, som webbens Översikt) ----
 // Källorna till vänster (sol, nät, batteri), huset i mitten, det som drar el till höger. Varje ruta: stor siffra och
 // ett statusord. Prickarna rör sig åt det håll elen går. Bara det huset har (live_flow.py).
-const FLC = { sol: "#fbbf24", nat: "#38bdf8", natut: "#22d3a0", batteri: "#2dd4bf", varmepump: "#fb923c", varmvatten: "#60a5fa", spabad: "#a78bfa", ev: "#22d3a0" };
 const FL_TAB = { sol: ["solarsheet"], nat: ["insights"], batteri: ["insights"], varmepump: ["tab", "hus"], varmvatten: ["tab", "hus"], spabad: ["tab", "hus"] };
-function flowStatus(n) {                                     // statusordet under siffran
-  const w = n.w || 0;
-  if (n.key === "nat") return w < -50 ? "säljer" : w > 50 ? "köper" : "i balans";
-  if (n.key === "sol") return w > 50 ? "producerar" : "vilar";
-  if (n.key === "batteri") return w < -30 ? "laddar ur" : w > 30 ? "laddar" : "vilar";
-  if (n.key.startsWith("ev_")) return n.active ? "laddar" : (n.detail || "").replace(/\s*·.*$/, "").toLowerCase() || "laddar inte";
-  const parts = (n.detail || "").split("·").map((x) => x.trim()).filter(Boolean);
-  if (parts.length > 1) return parts[0].toLowerCase();                       // "Går · inne 21.5 °C" -> "går"
-  return n.active ? (n.key === "varmvatten" ? "värms" : "går") : "";        // bara ett värde: det står redan som siffran
-}
-function flowCard() {
-  if (!FL || !FL.ok || !FL.nodes) return "";
-  const nodes = FL.nodes.filter((n) => n.key !== "hus"), house = FL.nodes.find((n) => n.key === "hus");
-  const left = nodes.filter((n) => ["source", "grid", "battery"].includes(n.role)), right = nodes.filter((n) => n.role === "load").slice(0, 5);
-  const W = 360, rows = Math.max(left.length, right.length, 3), H = Math.max(132, rows * 34 + 6), hub = { x: 180, y: H / 2 };
-  const LW = 112, RW = 112, RH = 30;
-  const place = (arr, x, h) => arr.map((n, i) => ({ ...n, x, h, y: arr.length === 1 ? H / 2 : h / 2 + 4 + i * ((H - h - 8) / (arr.length - 1)) }));
-  const all = [...place(left, 4, 44), ...place(right, W - RW - 4, RH)];
-  const col = (n) => n.key === "nat" ? ((n.w || 0) < -50 ? FLC.natut : FLC.nat) : n.key.startsWith("ev_") ? FLC.ev : (FLC[n.key] || "#94a3b8");
-  const motion = !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const kw = (w) => w == null ? "–" : Math.abs(w) >= 1000 ? `${f1(Math.abs(w) / 1000)}<tspan font-size="10" font-weight="500"> kW</tspan>` : `${Math.round(Math.abs(w))}<tspan font-size="10" font-weight="500"> W</tspan>`;
-  let paths = "", dots = "", cards = "";
-  all.forEach((n, i) => {
-    const isL = n.x < hub.x, w = isL ? LW : RW, sx = isL ? n.x + w : n.x, ex = isL ? hub.x - 34 : hub.x + 34, c = col(n), id = `flp${i}`;
-    const inward = n.role === "source" || (n.role === "grid" && (n.w || 0) > 50) || (n.role === "battery" && (n.w || 0) < -30);
-    paths += `<path id="${id}" d="M${sx} ${n.y} C${(sx + ex) / 2} ${n.y} ${(sx + ex) / 2} ${hub.y} ${ex} ${hub.y}" fill="none" stroke="${c}" stroke-width="${n.active ? 2 : 1.2}" stroke-dasharray="${n.active ? "0" : "2 5"}" opacity="${n.active ? .6 : .25}"/>`;
-    if (n.active && motion) {
-      const k = Math.abs(n.w || 1000) / 1000, dur = Math.max(0.8, 3.2 - k * 0.35).toFixed(2), cnt = k > 3 ? 3 : 2;
-      for (let j = 0; j < cnt; j++) dots += `<circle r="${(2.6 + Math.min(2, k / 2)).toFixed(1)}" fill="${c}"><animateMotion dur="${dur}s" begin="${(-j * dur / cnt).toFixed(2)}s" repeatCount="indefinite" keyPoints="${inward ? "0;1" : "1;0"}" keyTimes="0;1" calcMode="linear"><mpath href="#${id}"/></animateMotion></circle>`;
-    }
-    const tab = n.key.startsWith("ev_") ? ["tab", "bil"] : (FL_TAB[n.key] || ["tab", "hus"]);
-    // Siffran: effekt för sol/nät/batteri och bilar. Värmepumpens w är värmeeffekten (el × COP), inte vad den drar,
-    // så för pump, varmvatten och spa visas temperaturen ur detaljen i stället (som på webben).
-    const big = isL || n.key.startsWith("ev_") ? kw(n.w) : esc((n.detail || "").split("·").pop().trim().replace(/^inne\s*/i, ""));
-    cards += `<g data-a="${tab[0]}"${tab[1] ? ` data-v="${tab[1]}"` : ""} transform="translate(${n.x},${(n.y - n.h / 2).toFixed(1)})" style="cursor:pointer">
-      <rect width="${w}" height="${n.h}" rx="12" fill="var(--card)" stroke="${n.active ? c : "var(--line)"}" stroke-width="${n.active ? 1.6 : 1}"/>
-      ${isL ? `<text x="10" y="17" font-size="11" fill="${c}" font-weight="700">${esc(n.icon)} ${esc(n.label)}</text>
-      <text x="10" y="35" font-size="15" font-weight="800" fill="var(--txt)">${kw(n.w)}</text>
-      <text x="${w - 8}" y="35" font-size="10" fill="var(--mut)" text-anchor="end">${esc(flowStatus(n))}</text>`
-      : `<text x="9" y="12.5" font-size="10" fill="${n.active ? c : "var(--mut)"}" font-weight="700">${esc(n.icon)} ${esc(n.label.split(" ")[0])}</text>
-      <text x="9" y="25" font-size="11" font-weight="700" fill="var(--txt)">${big}</text>
-      <text x="${w - 7}" y="25" font-size="9.5" fill="var(--mut)" text-anchor="end">${esc(flowStatus(n)).slice(0, 14)}</text>`}
-    </g>`;
-  });
-  const hk = house && house.w != null ? f1(house.w / 1000) : "–";
-  const hubSvg = `<g data-a="insights" style="cursor:pointer" transform="translate(${hub.x - 34},${hub.y - 34})"><rect width="68" height="68" rx="18" fill="var(--card)" stroke="var(--acc)" stroke-width="1.6"/>
-    <path d="M22 32 L34 21 L46 32 V46 H22 Z" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linejoin="round"/>
-    <text x="34" y="61" text-anchor="middle" font-size="11.5" font-weight="800" fill="var(--txt)">${hk} kW</text></g>`;
-  return `<section class="card flowcard"><div class="flh"><b>Just nu</b><span class="note">${esc(FL.ts || "")}</span></div>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Elen just nu">${paths}${dots}${hubSvg}${cards}</svg></section>`;
+function flowCard() {                    // delad med webbens Översikt (smartbox/static/liveflow.js) - samma bild och regler
+  if (!FL || !FL.ok || !FL.nodes || !window.EWLiveFlow) return "";
+  const attrs = (n) => { const t = n.key.startsWith("ev_") ? ["tab", "bil"] : (FL_TAB[n.key] || ["tab", "hus"]); return `data-a="${t[0]}"${t[1] ? ` data-v="${t[1]}"` : ""}`; };
+  return `<section class="card flowcard"><div class="flh"><b>Just nu</b><span class="note">${esc(FL.ts || "")}</span></div>${EWLiveFlow.svg(FL, { compact: true, attrs, hubAttrs: 'data-a="insights"' })}</section>`;
 }
 
 function pageHem() {

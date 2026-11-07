@@ -1275,6 +1275,13 @@ async def planclock_js():
                         media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/liveflow.js")
+async def liveflow_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "liveflow.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/planskyline.js")
 async def planskyline_js():
     import plan_clock
