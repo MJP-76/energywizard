@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.52 (2026-11-07)
+- **Aviseringar till den som är hemma** (valfritt, Inställningar → Aviseringar): aviseringar om huset går till
+  telefonerna vars person är hemma enligt Home Assistant (`person.*`). Är ingen hemma går de till alla personers
+  telefoner; vet Home Assistant inte var någon är går de till den valda telefonen som förut. Samma regel i motorn och
+  i mobilappen.
+
 ## 1.2.51 (2026-11-07)
 - **Egna laster** (#192): prylar med effektsensor (t.ex. smartpluggar) kan läggas in under `loads:` i installationen.
   De syns som egna rader i "Vad drar strömmen" och räknas bort från det oförklarade (se README).

@@ -1677,6 +1677,14 @@ def push(targets: list, title: str, msg: str, key: str | None = None) -> None:
             return
     except Exception:
         pass
+    try:                                                 # "bara den som är hemma" - samma regel som motorn (notifier.py)
+        import notifier as _nf
+        if _nf.home_only():
+            _svcs = {t: _phones().get(t) for t in targets if _phones().get(t)}
+            _keep = set(_nf.pick_home(list(_svcs.values())))
+            targets = [t for t, s in _svcs.items() if s in _keep]
+    except Exception:
+        pass
     for t in targets:
         try:
             _svc = _phones().get(t)

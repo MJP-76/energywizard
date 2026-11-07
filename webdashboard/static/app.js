@@ -1198,9 +1198,11 @@ async function mountPhoneSetting() {
       ${grp("Andra notify-tjänster", (d.others || []).map((p) => opt(p, "notify." + p)))}
       ${grp("Egna skript", (d.scripts || []).map((x) => opt(x.id, x.name)))}</select>
     <div class="note" style="margin-top:6px">Ett skript anropas med variablerna <code>title</code> (rubrik) och <code>message</code> (texten), t.ex. för att skicka vidare till högtalare, Telegram eller flera telefoner.</div>
+    <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px"><input type="checkbox" id="phonehome"${d.home_only ? " checked" : ""} style="margin-top:3px">
+      <span>Bara till den som är hemma<br><span class="note">Aviseringar om huset går till telefonerna som är hemma enligt Home Assistant. Är ingen hemma går de till alla. Vet Home Assistant inte var någon är går de till telefonen ovan.</span></span></label>
     <button class="icobtn" id="phonesave" style="margin-top:10px">Spara</button>`;
   document.getElementById("phonesave").onclick = async () => {
-    try { const j = await postJSON("api/notify-target", { target: document.getElementById("phonesel").value }); toast(j.message || "Sparat"); }
+    try { const j = await postJSON("api/notify-target", { target: document.getElementById("phonesel").value, home_only: document.getElementById("phonehome").checked }); toast(j.message || "Sparat"); }
     catch (e) { toast(e.message); }
   };
 }

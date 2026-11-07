@@ -409,7 +409,7 @@ async def notify_target_get(request: Request):
                           for s in st if str(s.get("entity_id", "")).startswith("script.")), key=lambda x: x["name"].lower())
     except Exception:
         pass
-    return {"ok": True, "phones": phones, "others": others, "scripts": scripts,
+    return {"ok": True, "phones": phones, "others": others, "scripts": scripts, "home_only": bool(ew_settings.get("notify_home_only")),
             "selected": ew_settings.get("notify_target") or "", "env": os.environ.get("NOTIFY_TARGET", "")}
 
 
@@ -418,10 +418,13 @@ async def notify_target_set(request: Request):
     role, _ = AUTH.session(request)
     if role != "owner":
         return JSONResponse({"error": "Bara ägaren kan välja telefon"}, status_code=403)
-    t = str((await request.json()).get("target") or "").strip()
+    body = await request.json()
+    t = str(body.get("target") or "").strip()
     if t and not re.fullmatch(r"(script\.)?[a-z0-9_]+", t):
         return JSONResponse({"error": "Ogiltig mottagare"}, status_code=400)
     ew_settings.update(notify_target=t or None)
+    if "home_only" in body:
+        ew_settings.update(notify_home_only=bool(body.get("home_only")) or None)
     return {"ok": True, "message": "Sparat - aviseringarna går till " + (t or "den första telefonen i Home Assistant")}
 
 

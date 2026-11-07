@@ -83,6 +83,81 @@ def _send(target: str, title: str, message: str, data: dict = None):
         return False
 
 
+_phones_cache = {"t": 0.0, "list": []}
+
+
+def _all_phones() -> list:
+    """Alla mobilappar i Home Assistant (notify.mobile_app_*), läses om högst en gång i timmen."""
+    import time
+    if time.time() - _phones_cache["t"] < 3600 and _phones_cache["list"]:
+        return _phones_cache["list"]
+    _init()
+    try:
+        r = requests.get(f"{_ha_base}/services", headers=_ha_headers, timeout=10, verify=False)
+        r.raise_for_status()
+        svcs = next((d.get("services") or {} for d in r.json() if d.get("domain") == "notify"), {})
+        _phones_cache.update(t=time.time(), list=sorted(n for n in svcs if n.startswith("mobile_app_")))
+    except Exception:
+        pass
+    return _phones_cache["list"]
+
+
+def home_only() -> bool:
+    try:
+        import ew_settings
+        return bool(ew_settings.get("notify_home_only"))
+    except Exception:
+        return False
+
+
+def _persons() -> dict:
+    """device_tracker -> personens läge ("home"/"not_home"/zon) för alla person.* i Home Assistant."""
+    _init()
+    out = {}
+    try:
+        r = requests.get(f"{_ha_base}/states", headers=_ha_headers, timeout=10, verify=False)
+        r.raise_for_status()
+        for s in r.json():
+            if str(s.get("entity_id", "")).startswith("person."):
+                for trk in (s.get("attributes") or {}).get("device_trackers") or []:
+                    out[trk] = (s.get("state") or "").lower()
+    except Exception:
+        pass
+    return out
+
+
+def phone_home(service: str, persons: dict | None = None):
+    """True/False om telefonens person (person.* som har telefonens device_tracker) är hemma/borta. None = telefonen hör
+    inte till någon person (t.ex. en surfplatta på väggen, som alltid är "hemma") eller platsen är okänd."""
+    persons = _persons() if persons is None else persons
+    st = persons.get("device_tracker." + service.removeprefix("notify.").removeprefix("mobile_app_"))
+    if st in (None, "", "unknown", "unavailable"):
+        return None
+    return st == "home"
+
+
+def pick_home(services: list) -> list:
+    """Martins jämförelse 2026-11-07 (Familjetavlans hemlarm): bara till de vuxna som är hemma. Ingen hemma men platsen
+    känd -> alla (en husavisering är viktigast när huset är tomt). Ingen plats känd -> listan som den är."""
+    persons = _persons()
+    states = {s: phone_home(s, persons) for s in services}
+    known = [s for s, v in states.items() if v is not None]
+    if not known:
+        return services
+    home = [s for s in known if states[s]]
+    return home or known                     # ingen hemma: alla personers telefoner (inte väggplattor)
+
+
+def recipients() -> list:
+    """Mottagarna för en avisering om huset - samma regel i motorn och mobilappen. Utan "bara den som är hemma": den
+    valda mottagaren (eller den första telefonen). Med: telefonerna som är hemma (se pick_home)."""
+    t = target()
+    if not home_only() or (t or "").startswith("script."):
+        return [t] if t else []
+    phones = _all_phones() or ([t] if t else [])
+    return pick_home(phones)
+
+
 def send_emil(title: str, message: str, data: dict = None, key: str | None = None):
     """Avisering till husets ägare (namnet är historiskt). key = notiskategori (notify_prefs.py); utan den härleds
     kategorin ur rubriken. Avstängda kategorier skickas inte."""
@@ -93,10 +168,10 @@ def send_emil(title: str, message: str, data: dict = None, key: str | None = Non
             return False
     except Exception:
         pass
-    t = target()
-    if not t:
-        return False
-    return _send(t, title, message, data)
+    ok = False
+    for t in recipients():
+        ok = _send(t, title, message, data) or ok
+    return ok
 
 
 
