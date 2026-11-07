@@ -61,7 +61,9 @@ def nodes(row, decision_items=None, cars=None, has_spa=None):
         kw = _f(r.get("compressor_power_kw")) or 0.0
         indoor = _f(r.get("indoor_temp"))
         add("varmepump", "Värmepump", "🌡️", kw * 1000.0, (comp or 0) > 0 or kw > 0.1,
-            ("Går" if (comp or 0) > 0 else "Vilar") + (f" · inne {indoor:.1f} °C" if indoor is not None else ""),
+            # #184: utan kompressorgivare vet vi inte om pumpen går - då står inget läge (förut "Vilar")
+            " · ".join(p for p in ("Går" if (comp or 0) > 0 or kw > 0.1 else "Vilar" if comp is not None else "",
+                                   f"inne {indoor:.1f} °C" if indoor is not None else "") if p),
             "varmepump")
         wt = _f(r.get("water_temp"))
         if wt is not None:

@@ -505,3 +505,14 @@ def test_tibbers_produktion_blir_inte_solceller():
     ents.append({"e": "sensor.solis_pv_power", "n": "PV Power", "a": None, "d": "dev_solis", "dn": "Solis",
                  "m": "Solis", "mo": "S6", "dc": "power", "u": "W", "st": "1200"})
     assert discover_house(ents)["solar"]["pv_power_entity"] == "sensor.solis_pv_power"
+
+
+def test_nibe_myuplink_kompressor_kopplas():
+    """#184: kompressorns frekvens kopplas så att flödet vet om pumpen går (inte starttider eller drifttimmar)."""
+    from discovery import _nibe_bt_entities
+    base = dict(dc="temperature", u="°C", d="dev", m="NIBE")
+    ents = [{"e": "sensor.f750_bt1", "n": "F750 Utomhustemperatur (BT1)", **base},
+            {"e": "sensor.f750_bt2", "n": "F750 Framledning (BT2)", **base},
+            {"e": "sensor.f750_kompressor_starter", "n": "F750 Kompressor starter", "dc": None, "u": None, "d": "dev", "m": "NIBE"},
+            {"e": "sensor.f750_kompressorfrekvens", "n": "F750 Kompressorfrekvens, aktuell", "dc": "frequency", "u": "Hz", "d": "dev", "m": "NIBE"}]
+    assert _nibe_bt_entities(ents)["compressor"] == "sensor.f750_kompressorfrekvens"

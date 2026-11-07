@@ -42,6 +42,10 @@ class HaEntitiesHeatPumpDriver(HeatPumpDriver):
             return {}
         out = {k: self._num(k) for k in _READ}
         comp = self._num("compressor")
+        if comp is None and self._e.get("compressor"):           # binary_sensor/statustext: på/av
+            raw = str(homeassistant._get_raw_state(self._e["compressor"]) or "").strip().lower()
+            comp = 1.0 if raw in ("on", "true", "running", "drift", "går", "heating", "värme", "hot water", "varmvatten") \
+                else 0.0 if raw in ("off", "false", "idle", "stopped", "av", "vilar", "standby", "från") else None
         out["compressor_running"] = None if comp is None else comp > 0
         out["compressor_power_kw"] = None
         return out

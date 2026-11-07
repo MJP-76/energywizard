@@ -1,5 +1,10 @@
 # Ändringar
 
+## 1.2.53 (2026-11-07)
+- **Värmepumpen står inte som "Vilar" när läget är okänt** (#184): utan kompressorgivare visas bara innetemperaturen.
+  Guiden kopplar nu NIBE:s kompressorfrekvens eller kompressorstatus (myUplink, nibe_heatpump), så att flödet visar
+  när pumpen går. Statustexter som "on"/"off" läses också.
+
 ## 1.2.52 (2026-11-07)
 - **Aviseringar till den som är hemma** (valfritt, Inställningar → Aviseringar): aviseringar om huset går till
   telefonerna vars person är hemma enligt Home Assistant (`person.*`). Är ingen hemma går de till alla personers

@@ -196,7 +196,15 @@ def _nibe_bt_entities(ents) -> dict:
                and _DEGREE_MIN.search(f"{x.get('n') or ''} {x['e']}")), None)
     if dm:
         out["degree_minutes"] = dm
-    return out if len([k for k in out if k != "degree_minutes"]) >= 2 else {}
+    # #184: kompressorns frekvens eller status (myUplink: "Kompressorfrekvens, aktuell" / "Compressor frequency" /
+    # "Compressor status"), så att flödet vet om pumpen går. Frekvens > 0 = går (heatpump_ha_entities.py).
+    comp = next((x["e"] for x in ents if x["e"].split(".")[0] in ("sensor", "binary_sensor")
+                 and re.search(r"kompressor|compressor", f"{x.get('n') or ''} {x['e']}", re.I)
+                 and re.search(r"frekvens|frequency|hz|status|drift|running|state", f"{x.get('n') or ''} {x['e']} {x.get('u') or ''}", re.I)
+                 and not re.search(r"start|tid|time|hours|timmar|count|antal|max|min\b|setpoint|börvärde", f"{x.get('n') or ''} {x['e']}", re.I)), None)
+    if comp:
+        out["compressor"] = comp
+    return out if len([k for k in out if k not in ("degree_minutes", "compressor")]) >= 2 else {}
 
 
 def _is_temperature(x) -> bool:
