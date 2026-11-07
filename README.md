@@ -133,6 +133,17 @@ värmepumparna: [Så styrs värmepumpen](https://murre87.github.io/energywizard/
 vara en lista. Lägg till `sum_inverters: true` under `entities` så summeras de. Utan den är listan en reserv i tur och
 ordning, t.ex. samma växelriktare via Modbus först och molnet som reserv.
 
+**Egna laster** (t.ex. smartpluggar på tvättmaskin eller bastu) syns som egna rader i "Vad drar strömmen" och räknas
+bort från det oförklarade:
+
+```yaml
+loads:
+  - name: Tvättmaskin
+    power: sensor.tvattmaskin_power
+  - name: Bastu
+    power: [sensor.bastu_l1_power, sensor.bastu_l2_power]   # en lista summeras
+```
+
 Saknas ditt märke? De generiska drivrutinerna (`generic_*`) täcker redan de
 flesta fall så länge enheten redan fungerar i Home Assistant - ingen egen
 protokollkod behövs. För riktigt märkesspecifik styrning - se

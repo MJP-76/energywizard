@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.51 (2026-11-07)
+- **Egna laster** (#192): prylar med effektsensor (t.ex. smartpluggar) kan läggas in under `loads:` i installationen.
+  De syns som egna rader i "Vad drar strömmen" och räknas bort från det oförklarade (se README).
+- **"Vad drar strömmen"** (#191) visar bara elbil, värmepump och spabad om huset har dem.
+- **Historiken visas även med ogiltiga givarvärden** (#186): "inf"/"nan" i loggen gjorde att sidan blev tom. Sådana
+  värden sparas inte längre, och felrutor på webben visar felkoden även via Home Assistants Ingress.
+
 ## 1.2.50 (2026-11-07)
 - **Bilvärmen hålls på riktigt**: en sovande Tesla uppdaterar inte sin klimat-entitet, så "på" kunde stå kvar fast bilen
   slutat värma, och då värmdes den aldrig igen. Under timmen värmen hålls begärs nu en färsk avläsning från bilen var

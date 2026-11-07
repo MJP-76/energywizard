@@ -1315,19 +1315,28 @@ async def api_consumption():
         row = _latest_row(c)
         if row is None:
             return {"ok": False, "error": "Ingen data i sensor_log än"}
-        lb = c.execute(text(
-            "SELECT total_w, ev_w, pump_w, spa_w, unexplained_w FROM load_breakdown ORDER BY timestamp DESC LIMIT 1"
-        )).mappings().first()
+        try:
+            lb = c.execute(text(
+                "SELECT total_w, ev_w, pump_w, spa_w, unexplained_w, extra_w FROM load_breakdown ORDER BY timestamp DESC LIMIT 1"
+            )).mappings().first()
+        except Exception:                               # äldre databas utan extra_w (skapas av motorn vid nästa loggning)
+            c.rollback()
+            lb = c.execute(text(
+                "SELECT total_w, ev_w, pump_w, spa_w, unexplained_w FROM load_breakdown ORDER BY timestamp DESC LIMIT 1"
+            )).mappings().first()
         cfg = _settings_row(c, ("peak_shaving_enabled", "power_limit_kw", "fuse_size_a"))
     # avg_w_l1..3 är (trots namnet) fasströmmar i ampere ur elmätaren - visas i A mot huvudsäkringen (#130)
+    cars, has_spa, has_heat = _house_parts()          # #191: bara det huset har (None = okänt -> visa allt)
     return {"ok": True, "fuse_size_a": _n(cfg.get("fuse_size_a")),
+            "has_spa": has_spa, "has_heat": has_heat, "has_ev": None if cars is None else bool(cars),
             "avg_w_l1": _n(row.get("avg_w_l1")), "avg_w_l2": _n(row.get("avg_w_l2")),
             "avg_w_l3": _n(row.get("avg_w_l3")), "avg_w_tot": _n(row.get("avg_w_tot")),
             "house_consumption_w": _n(row.get("house_consumption_w")), "power_oven_w": _n(row.get("power_oven_w")),
             "power_computer_w": _n(row.get("power_computer_w")), "peak_shaving_active": bool(row.get("peak_shaving_active")),
             "predicted_base_load_kw": _n(row.get("predicted_base_load_kw")),
             "peak_shaving_enabled": bool(cfg.get("peak_shaving_enabled")), "power_limit_kw": _n(cfg.get("power_limit_kw")),
-            "breakdown": {k: _n(lb[k]) for k in ("total_w", "ev_w", "pump_w", "spa_w", "unexplained_w")} if lb else None}
+            "breakdown": ({**{k: _n(lb[k]) for k in ("total_w", "ev_w", "pump_w", "spa_w", "unexplained_w")},
+                           "extra": [x for x in _json_list(lb.get("extra_w")) if isinstance(x, dict) and x.get("name")]} if lb else None)}
 
 
 @app.get("/api/spa")

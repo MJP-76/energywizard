@@ -2275,7 +2275,14 @@ while True:
                     with _eng.begin() as _c:
                         _c.execute(_tx("INSERT INTO overrides (device, mode, updated_at) VALUES ('ev_charging_car', :m, NOW()) ON CONFLICT (device) DO UPDATE SET mode = EXCLUDED.mode, updated_at = NOW()"), {"m": _laddar_txt})
                     _solar_persist["laddar"] = _laddar_txt
-                _known_w = _ev_w + _pump_w + _spa_w
+                # #192: egna laster (loads: i installationen) räknas som förklarad last och loggas var för sig
+                _extra = []
+                for _ld in house_config.custom_loads(house_cfg):
+                    _vals = [homeassistant.get_power_w(_e) for _e in _ld["entities"]]
+                    _vals = [v for v in _vals if isinstance(v, (int, float)) and math.isfinite(v)]
+                    if _vals:
+                        _extra.append({"name": _ld["name"], "w": round(max(0.0, sum(_vals)))})
+                _known_w = _ev_w + _pump_w + _spa_w + sum(x["w"] for x in _extra)
                 # Robust total: aldrig mindre än de uppmätta lasterna (skyddar mot glitchande
                 # pv-sensor som annars kan göra house_consumption_w falskt negativ → 0).
                 _total_w = max(_known_w, max(0.0, house_consumption_w))
@@ -2289,7 +2296,7 @@ while True:
                 _meter_frozen = _meter_freeze.frozen(avg_net, (avg_hl1, avg_hl2, avg_hl3), time.time())
                 _lc = health.load_check(_total_w, _known_w, avg_net, (avg_hl1, avg_hl2, avg_hl3), _pv_frozen, meter_frozen=_meter_frozen)
                 _unexpl_w = _lc["unexplained_w"]
-                logger.log_load_breakdown(_total_w, _ev_w, _pump_w, _spa_w, _unexpl_w)
+                logger.log_load_breakdown(_total_w, _ev_w, _pump_w, _spa_w, _unexpl_w, extra=_extra)
                 # Oförklarad-last-notis – OBEROENDE av peak-shaving. >2 kW oförklarat i 10+ min,
                 # men BARA vid nätimport (net>0): då är hög last relevant OCH beräkningen pålitlig
                 # (vid export täcker solen lasten och pv-sensorbrus kan annars ge falsklarm).

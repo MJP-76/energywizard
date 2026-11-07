@@ -30,3 +30,12 @@ def test_sammanfattning_utan_sol_eller_data():
 
 def test_alla_intervall_har_hinkstorlek():
     assert set(RANGES) == {"24h", "7d", "30d", "1y"}
+
+
+def test_oandliga_tal_blir_tomma():
+    """#186: 'Infinity'/'NaN' i äldre loggrader gjorde att historiken inte gick att skicka som JSON (tom sida)."""
+    import energy_history as eh
+    assert eh._fin(float("inf")) is None and eh._fin(float("nan")) is None and eh._fin(None) is None
+    assert eh._fin(1.5) == 1.5
+    from decimal import Decimal
+    assert eh._fin(Decimal("Infinity")) is None and eh._fin(Decimal("2.25")) == 2.25

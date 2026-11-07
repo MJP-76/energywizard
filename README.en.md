@@ -100,6 +100,17 @@ heat pumps: [Controlling a heat pump by price](https://murre87.github.io/energyw
 list. Add `sum_inverters: true` under `entities` to add them up. Without it the list is a fallback in order, e.g. the
 same inverter over Modbus first and the cloud as backup.
 
+**Your own loads** (e.g. smart plugs on a washing machine or sauna) show as their own rows in "What is drawing power"
+and are subtracted from the unexplained load:
+
+```yaml
+loads:
+  - name: Washing machine
+    power: sensor.washer_power
+  - name: Sauna
+    power: [sensor.sauna_l1_power, sensor.sauna_l2_power]   # a list is summed
+```
+
 Missing your brand? The generic drivers (`generic_*`) already cover most cases as long as the device works in
 Home Assistant. For brand-specific control, see `smartbox/drivers/*.py` for the interfaces - contributions welcome.
 

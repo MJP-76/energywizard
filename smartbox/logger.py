@@ -1,3 +1,5 @@
+import json
+import math
 import os
 import re
 import psycopg
@@ -452,6 +454,9 @@ def log_status(
             data[k] = (1 if v else 0) if m.group(2) == "charge_completed" else v
 
         data = _coerce_bools(data)
+        # #186: "inf"/"nan" från en givare (#171) sparades och gjorde att historiken inte gick att visa (JSON tål inte
+        # oändliga tal). Ogiltiga tal sparas som tomt.
+        data = {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in data.items()}
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["%s"] * len(data))
         values = tuple(data.values())
@@ -584,7 +589,7 @@ def log_spa_phase(phase_a_w, phase_b_w, phase_c_w, activities: dict):
         return False
 
 
-def log_load_breakdown(total_w, ev_w, pump_w, spa_w, unexplained_w):
+def log_load_breakdown(total_w, ev_w, pump_w, spa_w, unexplained_w, extra=None):
     """Loggar last-nedbrytningen varje minut → dashboarden visar 'vad drar just nu' + historik,
     och den oförklarade lasten kan larmas på. Skapar tabellen vid behov, sväljer fel tyst."""
     try:
@@ -596,10 +601,11 @@ def log_load_breakdown(total_w, ev_w, pump_w, spa_w, unexplained_w):
                     total_w REAL, ev_w REAL, pump_w REAL, spa_w REAL, unexplained_w REAL
                 )
             """)
+            cur.execute("ALTER TABLE load_breakdown ADD COLUMN IF NOT EXISTS extra_w TEXT")     # #192: egna laster som JSON
             cur.execute("""
-                INSERT INTO load_breakdown (total_w, ev_w, pump_w, spa_w, unexplained_w)
-                VALUES (%s,%s,%s,%s,%s)
-            """, (total_w, ev_w, pump_w, spa_w, unexplained_w))
+                INSERT INTO load_breakdown (total_w, ev_w, pump_w, spa_w, unexplained_w, extra_w)
+                VALUES (%s,%s,%s,%s,%s,%s)
+            """, (total_w, ev_w, pump_w, spa_w, unexplained_w, json.dumps(extra) if extra else None))
             conn.commit()
         return True
     except Exception as e:

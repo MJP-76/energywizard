@@ -321,3 +321,26 @@ def build_battery_driver(cfg: dict) -> BatteryDriver:
                                      max_power_w=bat.get("max_power_w", 5000),
                                      reserve_soc=bat.get("reserve_soc", 20), max_soc=bat.get("max_soc", 100))
     return driver_cls()
+
+
+def custom_loads(cfg: dict) -> list:
+    """#192 (Lars): egna laster med effektsensor, t.ex. smartpluggar på tvättmaskin eller bastu.
+        loads:
+          - name: Tvättmaskin
+            power: sensor.tvattmaskin_power
+          - name: Bastu
+            power: [sensor.bastu_l1_power, sensor.bastu_l2_power]   # lista summeras
+    Returnerar [{"name", "entities": [...]}]. Poster utan namn eller sensor och dubblettnamn hoppas över."""
+    out, seen = [], set()
+    for item in (cfg or {}).get("loads") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        ents = item.get("power")
+        ents = [ents] if isinstance(ents, str) else ents if isinstance(ents, list) else []
+        ents = [e.strip() for e in ents if isinstance(e, str) and "." in e]
+        if not name or not ents or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        out.append({"name": name[:40], "entities": ents})
+    return out

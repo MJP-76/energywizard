@@ -19,6 +19,7 @@ DB-frågorna här; de rena hjälpfunktionerna testas i tests/test_energy_history
 """
 
 from datetime import datetime, timedelta
+import math
 import zoneinfo
 
 from sqlalchemy import text
@@ -27,6 +28,17 @@ SWE = zoneinfo.ZoneInfo("Europe/Stockholm")
 PERIODS = ("today", "7d", "30d")
 RANGES = {"24h": (timedelta(hours=24), "5 minutes"), "7d": (timedelta(days=7), "30 minutes"),
           "30d": (timedelta(days=30), "2 hours"), "1y": (timedelta(days=365), "1 day")}
+
+def _fin(v):
+    """float eller None - "Infinity"/"NaN" i äldre loggrader (#171/#186) får inte nå JSON-svaret."""
+    if v is None:
+        return None
+    f = float(v)
+    return f if math.isfinite(f) else None
+
+
+# Rader med oändliga värden räknas inte (numeric 'Infinity' i PostgreSQL 14+)
+_OK = "(net_power IS NULL OR net_power::float8 NOT IN ('Infinity','-Infinity','NaN')) AND (pv_power_w IS NULL OR pv_power_w::float8 NOT IN ('Infinity','-Infinity','NaN')) AND (battery_power_w IS NULL OR battery_power_w::float8 NOT IN ('Infinity','-Infinity','NaN')) AND (house_consumption_w IS NULL OR house_consumption_w::float8 NOT IN ('Infinity','-Infinity','NaN'))"
 
 _HOUSE = "COALESCE(house_consumption_w, net_power + COALESCE(pv_power_w, 0) - COALESCE(battery_power_w, 0))"
 
@@ -62,7 +74,7 @@ def totals(conn, period, now=None):
         WITH s AS (
             SELECT net_power, pv_power_w, battery_power_w, {_HOUSE} AS house,
                    LEAST(COALESCE(EXTRACT(EPOCH FROM lead(timestamp) OVER (ORDER BY timestamp) - timestamp), 60), 300) AS dt
-            FROM sensor_log WHERE timestamp >= :start AND timestamp <= :now
+            FROM sensor_log WHERE timestamp >= :start AND timestamp <= :now AND {_OK}
         )
         SELECT sum(GREATEST(house, 0) * dt) / 3.6e6, sum(GREATEST(pv_power_w, 0) * dt) / 3.6e6,
                sum(GREATEST(net_power, 0) * dt) / 3.6e6, sum(GREATEST(-net_power, 0) * dt) / 3.6e6,
@@ -71,7 +83,7 @@ def totals(conn, period, now=None):
         FROM s"""), {"start": start, "now": now}).fetchone()
     if not row or not row[6]:
         return None
-    r = lambda v: round(float(v), 1) if v is not None else None
+    r = lambda v: round(_fin(v), 1) if _fin(v) is not None else None
     t = {"used_kwh": r(row[0]), "solar_kwh": r(row[1]) if row[8] else None, "bought_kwh": r(row[2]), "sold_kwh": r(row[3]),
          "battery_in_kwh": r(row[4]) if row[7] else None, "battery_out_kwh": r(row[5]) if row[7] else None,
          "from": start.isoformat()}
@@ -86,9 +98,9 @@ def series(conn, rng, now=None):
     rows = conn.execute(text(f"""
         SELECT date_bin(CAST(:bucket AS interval), timestamp, TIMESTAMPTZ '2000-01-01') AS b,
                avg(net_power), avg(pv_power_w), avg({_HOUSE}), avg(battery_power_w)
-        FROM sensor_log WHERE timestamp >= :start AND timestamp <= :now
+        FROM sensor_log WHERE timestamp >= :start AND timestamp <= :now AND {_OK}
         GROUP BY 1 ORDER BY 1"""), {"bucket": bucket, "start": now - span, "now": now}).fetchall()
-    kw = lambda v: round(float(v) / 1000.0, 2) if v is not None else None
+    kw = lambda v: round(_fin(v) / 1000.0, 2) if _fin(v) is not None else None
     return {"range": rng, "bucket": bucket,
             "t": [b.astimezone(SWE).isoformat() for b, *_ in rows],
             "grid_kw": [kw(x[1]) for x in rows], "solar_kw": [kw(x[2]) for x in rows],
@@ -100,7 +112,7 @@ def latest(conn):
                                 FROM sensor_log ORDER BY timestamp DESC LIMIT 1""")).fetchone()
     if not row:
         return None
-    w = lambda v: round(float(v)) if v is not None else None
+    w = lambda v: round(_fin(v)) if _fin(v) is not None else None
     return {"ts": row[0].astimezone(SWE).isoformat(), "grid_w": w(row[1]), "solar_w": w(row[2]),
             "house_w": w(row[3]), "battery_w": w(row[4]), "battery_soc": w(row[5])}
 

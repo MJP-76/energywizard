@@ -199,3 +199,15 @@ def test_build_battery_driver_skickar_med_entities_och_kapacitet():
     assert isinstance(driver, GenericBatteryDriver)
     assert driver.capacity_kwh == 13.5
     assert driver._e == {"soc": "sensor.soc"}
+
+
+def test_egna_laster_ur_installationen():
+    """#192: loads: med namn och en eller flera effektsensorer; tomma och dubbletter hoppas över."""
+    from house_config import custom_loads
+    cfg = {"loads": [{"name": "Tvättmaskin", "power": "sensor.tvatt_power"},
+                     {"name": "Bastu", "power": ["sensor.bastu_l1", "sensor.bastu_l2", "inte_en_entitet"]},
+                     {"name": "tvättmaskin", "power": "sensor.annan"}, {"name": "", "power": "sensor.x"},
+                     {"name": "Utan sensor"}, "skräp"]}
+    assert custom_loads(cfg) == [{"name": "Tvättmaskin", "entities": ["sensor.tvatt_power"]},
+                                 {"name": "Bastu", "entities": ["sensor.bastu_l1", "sensor.bastu_l2"]}]
+    assert custom_loads({}) == []
