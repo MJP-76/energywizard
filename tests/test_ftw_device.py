@@ -109,3 +109,16 @@ def test_motorns_image_far_med_ftw_drivrutinerna():
     from pathlib import Path
     df = (Path(__file__).resolve().parent.parent / "smartbox" / "Dockerfile").read_text()
     assert "COPY ftw_drivers/" in df and "COPY i18n/" in df
+
+
+def test_status_visar_enhet_som_inte_svarar(monkeypatch):
+    """#184-#186: en FTW-växelriktare som inte svarar gav tomma flikar utan förklaring - status() ger Översikt felet."""
+    from drivers import ftw_device
+    class D:                       # en enhet som aldrig fått svar
+        name, host, port, emits, error, ok_at = "fronius", "192.168.1.50", 80, {}, "ConnectionError: refused", None
+        def fresh(self, max_age=120):
+            return False
+    monkeypatch.setattr(ftw_device, "_instances", {("fronius", "192.168.1.50", 80, 1): D()})
+    st = ftw_device.status()
+    assert st == [{"driver": "fronius", "host": "192.168.1.50", "port": 80, "ok": False,
+                   "error": "ConnectionError: refused", "has": []}]

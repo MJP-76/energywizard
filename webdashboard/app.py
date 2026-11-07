@@ -823,6 +823,8 @@ async def overview(request: Request):
         "is_high_load": is_high_load,
         # Visas bara för den som har en effekt- eller tidstariff inställd (#180: alla såg Jönköpings tider)
         "high_load_source": high_load_source,
+        # FTW-enheter som inte svarar eller inte ger sol/batteri (#184-#186: tomma flikar utan förklaring)
+        "ftw_problems": [s for s in (ew_settings.get("ftw_status") or []) if isinstance(s, dict) and not s.get("ok")],
         "sthlm_time": str(row["sthlm_time"]),
         "price_24h": [{"t": r[0].isoformat(), "p": float(r[1])} for r in price_hist],
         "heat_battery": _heat_battery(row),
@@ -950,7 +952,7 @@ def _car_limits(charger: dict, learned: dict) -> dict:
         out.update(phases="auto", phases_src="standard")
     if charger.get("max_a"):
         out.update(max_a=int(charger["max_a"]), max_a_src="installation")
-    elif isinstance(learned.get("max_a"), (int, float)) and learned["max_a"] > 0:
+    elif isinstance(learned.get("max_a"), (int, float)) and 6 <= learned["max_a"] < 16:   # som motorn: bara lägre
         out.update(max_a=int(learned["max_a"]), max_a_src="inlärt")
     else:
         out.update(max_a=16, max_a_src="standard")

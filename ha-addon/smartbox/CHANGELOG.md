@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.47 (2026-11-07)
+- **Varning när växelriktaren inte svarar via en FTW-drivrutin** (#184–#186): Översikt visar felet, adressen och vad
+  man kan kontrollera, i stället för tomma flikar för sol, batteri och historik.
+- **Elbil-knapparna** (#182): förklaring på varje knapp, och "Max"/"Ladda nu" använder bilens maxström
+  (`charger.max_a`, annars det inlärda, annars 16 A) i stället för fasta 16 A.
+- **Guiden väljer inte elmätarens produktion som solceller**: Tibber Pulses och P1-mätarnas "production" är exporten
+  till nätet, inte solen.
+
 ## 1.2.46 (2026-11-07)
 - **Överstyrningar sparas igen**: långa värden (t.ex. gästladdning) fick inte plats i databasen och föll med ett fel.
 

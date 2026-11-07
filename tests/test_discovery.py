@@ -495,3 +495,13 @@ def test_guidens_yaml_med_summerade_moduler_blir_lista_och_ja():
     finally:
         os.chdir(cwd)
     assert cfg["solar"]["entities"] == {"pv_power_w": ["sensor.m0_dc_power", "sensor.m1_dc_power"], "sum_inverters": True}
+
+
+def test_tibbers_produktion_blir_inte_solceller():
+    """Telemetri 2026-11-07: guiden valde Tibber Pulses 'power production' (exporten) som solproduktion."""
+    ents = [{"e": "sensor.tibber_pulse_hemma_power_production", "n": "Power production", "a": None, "d": "dev_tibber",
+             "dn": "Hemma", "m": "Tibber", "mo": "Price Sensor", "dc": "power", "u": "W", "st": "0"}]
+    assert discover_house(ents)["solar"] is None
+    ents.append({"e": "sensor.solis_pv_power", "n": "PV Power", "a": None, "d": "dev_solis", "dn": "Solis",
+                 "m": "Solis", "mo": "S6", "dc": "power", "u": "W", "st": "1200"})
+    assert discover_house(ents)["solar"]["pv_power_entity"] == "sensor.solis_pv_power"

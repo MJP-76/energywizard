@@ -61,6 +61,7 @@ def _load_cars():
             "status": ce.get("status"), "power": ce.get("power_kw") or ce.get("power"), "online": ce.get("online"),
             "soc": e.get("soc"), "tracker": e.get("tracker"), "cap_kwh": float(ev.get("battery_kwh") or 60),
             "phases": 1 if specs.get(cid, {}).get("phases") == "1" else 3, "fixed_phases": specs.get(cid, {}).get("phases") == "1",
+            "max_a": int(ch["max_a"]) if ch.get("max_a") else None,      # installationens maxström (#182), annars inlärd/16
             "arrival": e.get("arrival_time"), "dist": e.get("distance_to_arrival"), "destination": e.get("destination_tracker"),
             "climate": e.get("climate"), "inside": e.get("inside_temp"), "shift": e.get("shift_state"),
             "lock": e.get("lock"), "trunk": e.get("trunk"), "frunk": e.get("frunk"),
@@ -629,6 +630,22 @@ def driving(st: dict, c: dict) -> bool:
     return str(val(st, c.get("shift")) or "").upper() in ("D", "R", "N", "DRIVE", "REVERSE", "NEUTRAL") if c.get("shift") else False
 
 
+def car_max_a(car: str) -> int:
+    """Maxström för bilens laddning: installationens charger.max_a, annars det motorn lärt sig av laddningarna
+    (ev_limits.py, bara om lägre), annars 16 A."""
+    c = CARS.get(car) or {}
+    if c.get("max_a"):
+        return max(6, int(c["max_a"]))
+    try:
+        import ev_limits
+        learned = ev_limits.LimitLearner(ew_settings.get("learned_ev")).max_a(car)
+        if learned and 6 <= int(learned) < 16:
+            return int(learned)
+    except Exception:
+        pass
+    return 16
+
+
 def car_command(car: str, kind: str, body: dict | None = None) -> dict | None:
     """Laddknapparnas logik (start/max/set/stop/auto) på ett ställe: används av appens knappar OCH av Home Assistant-väljaren (input_select.<bilnamn>_laddlage), så att båda ger exakt samma överstyrning.
     Returnerar svaret, eller None om kind inte är en laddåtgärd."""
@@ -639,7 +656,8 @@ def car_command(car: str, kind: str, body: dict | None = None) -> dict | None:
     if kind in ("start", "max", "set") and status in ("disconnected", "unknown", "offline"):
         raise HTTPException(409, "Laddkabeln är inte ansluten till laddaren")
     if kind in ("start", "max", "set"):
-        amps = 16 if kind == "max" else max(6, min(16, intval(body.get("amps") or 16)))
+        top = car_max_a(car)                          # #182: bilens/laddboxens maxström, inte fasta 16 A
+        amps = top if kind == "max" else max(min(6, top), min(top, intval(body.get("amps") or top)))
         phases = intval(body.get("phases")) if intval(body.get("phases")) in (1, 3) else 0
         if c.get("fixed_phases"):                      # laddboxen/bilen klarar bara 1-fas
             phases = 1

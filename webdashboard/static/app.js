@@ -477,6 +477,11 @@ async function renderOversikt() {
       <div style="font-size:1.15rem;font-weight:700">${emoji} ${d.decision}</div>
       <div class="note" style="margin-top:4px">💸 ${fmtKrOre(d.price)}/kWh · 🌡️ Inne ${fmt(d.indoor_temp, 1, "°C")} (mål ${d.indoor_target.toFixed(0)}) · 🌳 Ute ${fmt(d.outdoor_temp, 1, "°C")}</div>
     </div>
+    ${(d.ftw_problems || []).map((s) => `<div class="card" style="margin-bottom:16px;border-color:var(--warn,#f59e0b)">
+      <b>⚠️ Växelriktaren svarar inte (FTW-drivrutinen ${esc(s.driver)}, ${esc(s.host || "")}:${esc(String(s.port || ""))})</b>
+      <div class="note" style="margin-top:6px;line-height:1.5">Därför saknas sol och batteri på Översikt, Solceller och Historik. Fel: ${esc(s.error || "inget svar")}.<br>
+      Kontrollera IP-adress och port i Inställningar → Skanna mitt Home Assistant (FTW-drivrutin), och att växelriktarens lokala gränssnitt är påslaget
+      (Fronius: <i>Solar API</i> för port 80 eller <i>Modbus TCP</i> för port 502 i växelriktarens webbsida). Får du data i Home Assistant redan kan du i stället välja de entiteterna och ingen FTW-drivrutin.</div></div>`).join("")}
     <div id="flowslot" style="margin-bottom:16px"></div>
     <div id="planslot" style="margin-bottom:16px"></div>
     <div id="savingsslot" style="margin-bottom:16px"></div>
@@ -594,16 +599,15 @@ async function renderElbil() {
         <div class="note" style="margin-top:6px">⚡ ${fmt(c.power_kw, 1, " kW")} just nu${c.planned_kwh_today != null ? ` · 📅 ${c.planned_kwh_today.toFixed(1)} kWh planerat idag` : ""}</div>
         ${c.limits ? `<div class="note">🔌 ${c.limits.phases === "auto" ? "Faser: auto" : c.limits.phases + "-fas"}${c.limits.phases_src === "inlärt" ? " (inlärt)" : ""} · max ${c.limits.max_a} A${c.limits.max_a_src === "inlärt" ? " (inlärt av laddningarna)" : c.limits.max_a_src === "standard" ? " (standard)" : ""}</div>` : ""}
         ${c.climate_state ? `<div class="note">🌡️ Klimat: ${c.climate_state}${c.climate_temp != null ? " (" + c.climate_temp.toFixed(0) + "°C)" : ""}</div>` : ""}
-        <div class="seg" style="margin-top:12px;flex-wrap:wrap">
-          <button data-car="${c.id}" data-kind="start">Ladda nu</button>
-          <button data-car="${c.id}" data-kind="max">Max</button>
-          <button data-car="${c.id}" data-kind="stop">Stoppa</button>
-          <button data-car="${c.id}" data-kind="auto">Auto</button>
-        </div>
-        <div class="seg" style="margin-top:6px">
-          <button data-car="${c.id}" data-kind="heat_on">🔥 Värm</button>
-          <button data-car="${c.id}" data-kind="heat_off">Stoppa värme</button>
-        </div>
+        ${(() => { const ma = (c.limits || {}).max_a || 16;           // #182: förklaring på varje knapp
+          const t = { start: `Laddar nu med ${ma} A, före planen och elpriset. Gäller tills du trycker Auto eller Stoppa. Säkringsskyddet gäller fortfarande.`,
+            max: `Laddar med full ström (${ma} A) direkt, oavsett elpris. Gäller tills du trycker Auto eller Stoppa. Säkringsskyddet gäller fortfarande.`,
+            stop: "Stoppar laddningen och låter planen vila tills du trycker Auto.",
+            auto: "Tillbaka till automatiken: laddar efter planen, elpriset, solen och laddschemat.",
+            heat_on: "Startar kupévärmen i bilen nu.", heat_off: "Stänger av kupévärmen." };
+          const b = (k, label) => `<button data-car="${c.id}" data-kind="${k}" title="${t[k]}" aria-label="${label}: ${t[k]}">${label}</button>`;
+          return `<div class="seg" style="margin-top:12px;flex-wrap:wrap">${b("start", "Ladda nu")}${b("max", `Max ${ma} A`)}${b("stop", "Stoppa")}${b("auto", "Auto")}</div>
+        <div class="seg" style="margin-top:6px">${b("heat_on", "🔥 Värm")}${b("heat_off", "Stoppa värme")}</div>`; })()}
         <div class="card" style="margin-top:12px;padding:12px">
           <div class="note">📅 Laddschema - klar till klockslag och nivå, per veckodag</div>
           <div style="margin:6px 0 8px;font-weight:600">${goalText(c.next_goal)}</div>

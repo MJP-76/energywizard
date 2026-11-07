@@ -335,6 +335,23 @@ def _estimate_pump_el_w(forward_c):
             return round(y0 + (y1 - y0) * (forward_c - x0) / (x1 - x0), 0)
     return 2700.0
 
+_ftw_sig = None
+
+
+def _publish_ftw_status():
+    """Skriver FTW-enheternas läge till inställningsfilen (webben läser den) - bara när läget ändrats."""
+    global _ftw_sig
+    try:
+        from drivers import ftw_device
+        st = ftw_device.status()
+        sig = str([(s["driver"], s["ok"], s["has"], (s["error"] or "").split(":")[0]) for s in st])
+        if sig != _ftw_sig:
+            _ftw_sig = sig
+            _ew_settings.update(ftw_status=st or None)
+    except Exception as e:
+        print(f"ℹ️ FTW-status kunde inte sparas: {e}")
+
+
 _pv_hist = []   # de senaste minutvärdena för solproduktion (för att upptäcka fastfrusna solvärden)
 _meter_freeze = health.MeterFreeze()   # upptäcker en nätmätare (Tibber) som står still på samma värden (falsk 'oförklarad last')
 _sensor_watch = health.SensorWatch(grace_min=30)   # varnar när en sensor som fungerat tystnat >30 min
@@ -893,6 +910,7 @@ while True:
             # Asynkron inhämtning av pump och pris
             heat_pump_driver.tick()                         # släpper en tidsbegränsad paus (Matter-lagret) när tiden gått ut
             telemetry.maybe_send_daily(house_cfg)           # daglig "aktiv"-signal
+            _publish_ftw_status()                           # FTW-enheter som inte svarar syns på Översikt (#184-#186)
             async def fetch_heavy_data():
                 return await asyncio.gather(
                     asyncio.to_thread(heat_pump_driver.read_sensors),

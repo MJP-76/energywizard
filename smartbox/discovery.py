@@ -503,8 +503,13 @@ def discover_house(entities: list[dict] | None = None) -> dict:
 
     # --- Sol: power-sensor som matchar SOLAR och/eller en känd växelriktartillverkare ---
     power = [e for e in entities if e["e"].startswith("sensor.") and e.get("dc") == "power"]
-    solar_e = next((e for e in power if _has(e.get("n"), SOLAR) and _has(_candidate(e), INVERTER_MAKERS)), None) \
-        or next((e for e in power if _has(e.get("n"), SOLAR) or _has(_candidate(e), INVERTER_MAKERS)), None)
+    # Elmätarnas "production"/"produktion" (Tibber Pulse, HomeWizard P1, Husdata ...) är exporten till nätet, inte solen
+    # (telemetri 2026-11-07: solar:generic_number@Tibber#Price Sensor). Bara givare från en växelriktartillverkare
+    # får komma från en sådan enhet.
+    _meter_dev = re.compile(r"tibber|homewizard|husdata|easee equalizer|\bp1\b|\bhan\b|kaifa|aidon|kamstrup|landis", re.I)
+    power_sol = [e for e in power if not (_has(_candidate(e), _meter_dev) and not _has(_candidate(e), INVERTER_MAKERS))]
+    solar_e = next((e for e in power_sol if _has(e.get("n"), SOLAR) and _has(_candidate(e), INVERTER_MAKERS)), None) \
+        or next((e for e in power_sol if _has(e.get("n"), SOLAR) or _has(_candidate(e), INVERTER_MAKERS)), None)
     solar = None
     if solar_e:
         brand = next((b for b in _SOLAR_BRAND_TO_DRIVER if _has(_candidate(solar_e), re.compile(b, re.I))), None)

@@ -58,6 +58,7 @@ class FtwDevice:
         if not os.path.exists(path):
             raise ValueError(f"FTW-drivrutinen '{name}' finns inte (finns: {', '.join(available())})")
         self.name, self.emits, self.ok_at, self.error = name, {}, None, None
+        self.host, self.port = host, port
         self.drv = LuaDriver(path, host=host, port=port, unit_id=unit_id, config=config or {}, allow_write=allow_write)
         self._stop = False
         self._cmd_lock = threading.Lock()
@@ -73,6 +74,11 @@ class FtwDevice:
             except Exception as e:
                 self.error = f"{type(e).__name__}: {e}"
                 print(f"⚠️ FTW {self.name}: {self.error}")
+                try:                                     # syns i insamlaren (högst en gång i timmen per feltyp), aldrig feltexten
+                    import telemetry
+                    telemetry.report_error({}, f"ftw_{self.name}.poll", type(e).__name__)
+                except Exception:
+                    pass
                 nxt = 15000
             time.sleep(max(1.0, min(60.0, nxt / 1000.0)))
 
@@ -87,6 +93,19 @@ class FtwDevice:
         with self._cmd_lock:
             f = self.drv.L.globals().driver_default_mode
             return bool(f()) if f is not None else False
+
+
+def status() -> list:
+    """Läget för varje FTW-enhet, för Översikt (#184-#186): en växelriktare som inte svarar gav tomma flikar utan
+    förklaring. {"driver", "host", "port", "ok", "error", "has": [pv/battery/meter som drivrutinen faktiskt ger]}."""
+    out = []
+    with _lock:
+        devs = list(_instances.values())
+    for d in devs:
+        out.append({"driver": d.name, "host": d.host, "port": d.port, "ok": d.fresh(),
+                    "error": None if d.fresh() else (d.error or "inget svar än"),
+                    "has": sorted(k for k in ("pv", "battery", "meter") if (d.emits or {}).get(k))})
+    return out
 
 
 def device(cfg: dict, allow_write=False) -> FtwDevice:
