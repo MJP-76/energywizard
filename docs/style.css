@@ -71,3 +71,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 60px; color:var(--mut)
   nav.top a { margin-left:12px; font-size:.85rem; }
 }
 @media (max-width:640px) { article.post pre, article.post pre code { white-space:pre-wrap; overflow-wrap:anywhere; } }
+
+/* "Ingen reklam": tydligt överst att det är ett gratis hobbyprojekt med öppen källkod, inte en produkt. */
+.notad { display:inline-block; margin:0 0 14px; padding:8px 14px; border-radius:12px; font-size:.95rem; line-height:1.45;
+  background:color-mix(in srgb, var(--acc, #34e0a1) 14%, transparent); border:1px solid color-mix(in srgb, var(--acc, #34e0a1) 45%, transparent); max-width:720px; }
