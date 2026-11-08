@@ -164,14 +164,22 @@ class GenericBatteryDriver(BatteryDriver):
         now = _t.time() if now is None else now
         if now - self._last[2] < self._keepalive:
             return False
-        return self.apply_intent(self._last[0], self._last[1], now=now)
+        return self.apply_intent(self._last[0], self._last[1], now=now, force=True)   # håll vid liv: skriv även samma värde
 
-    def apply_intent(self, intent: str, power_w: float | None = None, now: float | None = None) -> bool:
+    def apply_intent(self, intent: str, power_w: float | None = None, now: float | None = None, force: bool = False) -> bool:
         import time as _t
-        ok = self._apply(intent, power_w)
+        self._force = force
+        try:
+            ok = self._apply(intent, power_w)
+        finally:
+            self._force = False
         if ok:
             self._last = (intent, power_w, _t.time() if now is None else now)
         return ok
+
+    def _fkw(self) -> dict:
+        """force bara när det behövs (håll-vid-liv), annars läs-före-skriv i homeassistant.set_number/set_select."""
+        return {"force": True} if getattr(self, "_force", False) else {}
 
     def _step(self, step: dict, power_w: float | None) -> bool:
         p = int(round(abs(power_w))) if power_w is not None else int(self.max_power_w or 2500)
@@ -190,7 +198,7 @@ class GenericBatteryDriver(BatteryDriver):
                 v = int(round(soc))
             elif v is None:
                 v = p * (1 if step.get("sign", 1) >= 0 else -1)
-            return bool(homeassistant.set_number(step["number"], v))
+            return bool(homeassistant.set_number(step["number"], v, **self._fkw()))
         return False
 
     def _apply(self, intent: str, power_w: float | None = None) -> bool:
@@ -201,7 +209,7 @@ class GenericBatteryDriver(BatteryDriver):
         if power_w is not None:
             num = self._e.get("charge_power" if intent == "charge" else "discharge_power" if intent == "discharge" else "")
             if num:
-                ok = homeassistant.set_number(num, self._power_value(num, abs(power_w)))
+                ok = homeassistant.set_number(num, self._power_value(num, abs(power_w)), **self._fkw())
         if isinstance(option, list) or (isinstance(option, dict) and (option.get("service") or option.get("number"))):
             # Ett eller flera steg i tur och ordning (2026-11-06): tjänsteanrop {service, data, power_field} (t.ex.
             # huawei_solar.forcible_charge, eller sonnenbatterie: först manuellt läge, sedan charge_battery) och
@@ -210,7 +218,7 @@ class GenericBatteryDriver(BatteryDriver):
                 ok = ok and self._step(step, power_w)
         elif isinstance(option, dict):                   # flera val i tur och ordning (t.ex. Solax)
             for entity, opt in option.items():
-                ok = ok and homeassistant.set_select(entity, opt)
+                ok = ok and homeassistant.set_select(entity, opt, **self._fkw())
         else:
             ok = ok and self.set_mode(option)
         btn = self._e.get("mode_apply_button")

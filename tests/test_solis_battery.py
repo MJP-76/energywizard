@@ -56,7 +56,7 @@ def test_tvangsladdning_skrivs_om_fore_tidsgransen():
         sel.reset_mock()
         assert not drv.refresh(now=1000 + 179)                         # för tidigt
         assert drv.refresh(now=1000 + 180)                             # före RC Timeout på 300 s
-        sel.assert_called_once_with(RC, "Solis RC Force Battery Charge")
+        sel.assert_called_once_with(RC, "Solis RC Force Battery Charge", force=True)   # håll vid liv skriver alltid (#194)
         sel.reset_mock()
         assert drv.apply_intent("auto", now=1300)
         sel.assert_called_once_with(RC, "None")

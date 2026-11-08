@@ -184,3 +184,15 @@ def test_ensidigt_exportskydd_urladdning_aldrig_over_husets_behov():
     assert decide(s, cfg, {"auto", "discharge", "charge", "hold"})["power_w"] == 2150
     cfg["allow_export"] = True
     assert decide(s, cfg, {"auto", "discharge", "charge", "hold"})["power_w"] == 5000
+
+
+def test_liten_effektandring_i_samma_lage_skrivs_inte():
+    """#194: effektbörvärden sparas ofta i flash - samma läge och < 200 W / 10 % ändring skrivs inte."""
+    from datetime import datetime, timedelta
+    import battery_control as bc
+    t0 = datetime(2026, 11, 8, 10, 0)
+    last = {"intent": "discharge", "power_w": 3000, "rule": "plan"}
+    later = t0 + timedelta(minutes=30)
+    assert bc.should_apply({"intent": "discharge", "power_w": 3150, "rule": "plan"}, last, t0, later) is False
+    assert bc.should_apply({"intent": "discharge", "power_w": 3500, "rule": "plan"}, last, t0, later) is True
+    assert bc.should_apply({"intent": "charge", "power_w": 3000, "rule": "plan"}, last, t0, later) is True

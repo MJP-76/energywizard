@@ -60,6 +60,9 @@ fi
 
 chown -R postgres:postgres "$PGDATA"
 su postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D '$PGDATA' -l /tmp/postgres.log -w start"
+# #194: skona minneskortet (Raspberry Pi/HA Green). Skrivningarna samlas i stället för att tvingas ut till kortet vid
+# varje rad (minutloggen, journalen). Vid strömavbrott kan de sista sekundernas loggrader gå förlorade, aldrig mer.
+su postgres -c "psql -q -c \"ALTER SYSTEM SET synchronous_commit = off\" -c \"ALTER SYSTEM SET wal_writer_delay = '10s'\" -c \"ALTER SYSTEM SET checkpoint_timeout = '15min'\" -c \"SELECT pg_reload_conf()\"" >/dev/null || true
 
 su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='${POSTGRES_USER}'\"" | grep -q 1 \
     || su postgres -c "psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}'\""

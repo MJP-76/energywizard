@@ -211,3 +211,22 @@ def test_egna_laster_ur_installationen():
     assert custom_loads(cfg) == [{"name": "Tvättmaskin", "entities": ["sensor.tvatt_power"]},
                                  {"name": "Bastu", "entities": ["sensor.bastu_l1", "sensor.bastu_l2"]}]
     assert custom_loads({}) == []
+
+
+def test_las_fore_skriv_number_och_select(monkeypatch):
+    """#194: står entiteten redan på värdet skickas ingen skrivning (flashminne), utom med force (håll-vid-liv)."""
+    import homeassistant as h
+    calls = []
+
+    class G:
+        status_code = 200
+        def __init__(self, st): self.st = st
+        def json(self): return {"state": self.st}
+    class P:
+        def raise_for_status(self): pass
+    state = {"number.p": "2500", "select.m": "Force charge"}
+    monkeypatch.setattr(h._requests_real, "get", lambda url, **k: G(state[url.rsplit("/", 1)[-1]]))
+    monkeypatch.setattr(h._requests_real, "post", lambda url, **k: calls.append(url) or P())
+    assert h.set_number("number.p", 2500) and h.set_select("select.m", "Force charge") and calls == []
+    assert h.set_number("number.p", 3000) and len(calls) == 1
+    assert h.set_select("select.m", "Force charge", force=True) and len(calls) == 2

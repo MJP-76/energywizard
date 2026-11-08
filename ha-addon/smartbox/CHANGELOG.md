@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.54 (2026-11-08)
+- **Skonar flashminnet i växelriktare och batterier** (#194): värden i Home Assistant (lägesval och effektbörvärden)
+  skrivs inte om de redan stämmer, och inom samma batteriläge skrivs ingen ny effekt förrän ändringen är minst 200 W
+  eller 10 %. Håll-vid-liv-skrivningar som vissa batterier kräver (t.ex. Solis tvångsladdning) skrivs som förut.
+  Exportgränsen och värmepumpen var redan skyddade.
+- **Skonar minneskortet** i tillägget: databasen samlar sina skrivningar i stället för att tvinga ut varje rad till
+  kortet (Raspberry Pi med SD-kort, HA Green). Vid strömavbrott kan de sista sekundernas loggrader gå förlorade.
+
 ## 1.2.53 (2026-11-07)
 - **Värmepumpen står inte som "Vilar" när läget är okänt** (#184): utan kompressorgivare visas bara innetemperaturen.
   Guiden kopplar nu NIBE:s kompressorfrekvens eller kompressorstatus (myUplink, nibe_heatpump), så att flödet visar

@@ -912,10 +912,28 @@ def call_service(domain: str, service: str, data: dict) -> bool:
         return False
 
 
-def set_number(entity_id: str, value: float) -> bool:
+def _already(entity_id: str, want) -> bool:
+    """Läs före skriv (#194): står entiteten redan på värdet skrivs det inte igen. Många växelriktare och batterier
+    sparar number/select-värden i flashminne som tål ett begränsat antal skrivningar."""
+    try:
+        r = requests.get(f"{_BASE}/states/{entity_id}", headers=_HEADERS, timeout=5, verify=_VERIFY)
+        if r.status_code != 200:
+            return False
+        cur = r.json().get("state")
+        if isinstance(want, (int, float)) and not isinstance(want, bool):
+            c = float(cur)
+            return abs(c - float(want)) <= max(0.01, abs(float(want)) * 0.005)
+        return str(cur) == str(want)
+    except Exception:
+        return False
+
+
+def set_number(entity_id: str, value: float, force: bool = False) -> bool:
     """Genuint generisk number.set_value på en valfri entitet - samma mönster som
     set_solaredge_limit redan gör mot en hårdkodad entitet, återanvändbar av generiska
-    drivrutiner (laddström, exportgräns m.fl.)."""
+    drivrutiner (laddström, exportgräns m.fl.). force=True skriver även om värdet redan stämmer (håll-vid-liv)."""
+    if not force and _already(entity_id, value):
+        return True
     try:
         r = requests.post(
             f"{_BASE}/services/number/set_value",
@@ -931,10 +949,12 @@ def set_number(entity_id: str, value: float) -> bool:
         return False
 
 
-def set_select(entity_id: str, option: str) -> bool:
+def set_select(entity_id: str, option: str, force: bool = False) -> bool:
     """Genuint generisk select.select_option på en valfri entitet - de flesta
     batteriintegrationers lägesväljare (ladda/ladda ur/auto/vila) är en select-entitet,
-    inte number/switch. Återanvänds av generiska drivrutiner."""
+    inte number/switch. Återanvänds av generiska drivrutiner. Läs före skriv som set_number (#194)."""
+    if not force and _already(entity_id, option):
+        return True
     try:
         r = requests.post(
             f"{_BASE}/services/select/select_option",

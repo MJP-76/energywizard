@@ -31,6 +31,7 @@ Ren funktion; testas i tests/test_battery_control.py.
 
 from datetime import timedelta
 
+POWER_DEADBAND_W = 200        # #194: mindre effektändringar inom samma läge skrivs inte
 MIN_CHANGE_INTERVAL = timedelta(minutes=5)     # lägesbyten sparsamt (flashminne), säkerhetsregler undantagna
 SAFETY_RULES = {"stale", "fuse", "peak"}
 FUSE_MIN_W = 500
@@ -155,6 +156,11 @@ def should_apply(new, last, last_change_at, now, min_change_minutes=5.0):
         return True
     if new["intent"] == last.get("intent") and new.get("power_w") == last.get("power_w"):
         return False
+    # #194: samma läge, liten effektändring -> skriv inte (effektbörvärden sparas ofta i växelriktarens flash)
+    if new["intent"] == last.get("intent") and new.get("rule") not in SAFETY_RULES and last.get("rule") not in SAFETY_RULES:
+        a, b = new.get("power_w"), last.get("power_w")
+        if a is not None and b is not None and abs(a - b) < max(POWER_DEADBAND_W, abs(b) * 0.10):
+            return False
     if new.get("rule") in SAFETY_RULES or last.get("rule") in SAFETY_RULES:
         return True
     return (now - last_change_at) >= max(MIN_CHANGE_INTERVAL, timedelta(minutes=min_change_minutes))
