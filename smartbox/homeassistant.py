@@ -1160,3 +1160,27 @@ def send_persistent_notification(notification_id: str, title: str, message: str)
 
 if __name__ == "__main__":
     print("Home Assistant Modul laddad.")
+
+def read_ready_by(entity_id: str | None, now=None):
+    """#200 (Jonas): "klar senast" för bilen ur en valfri HA-entitet. input_datetime med datum och tid
+    ("2026-11-08 15:30:00"), bara tid ("15:30:00" -> nästa gång klockan blir det) eller en sensor med tidsstämpel
+    (ISO, med tidszon). Returnerar en tidszonsmedveten tid i framtiden, annars None."""
+    if not entity_id:
+        return None
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    swe = ZoneInfo("Europe/Stockholm")
+    now = now or datetime.now(swe)
+    raw = str(_get_raw_state(entity_id) or "").strip()
+    if raw in ("", "unknown", "unavailable", "None"):
+        return None
+    try:
+        if len(raw) <= 8 and ":" in raw:                       # bara tid
+            h, m = (int(x) for x in raw.split(":")[:2])
+            dt = now.replace(hour=h, minute=m, second=0, microsecond=0)
+            return dt if dt > now else dt + timedelta(days=1)
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        dt = dt.replace(tzinfo=swe) if dt.tzinfo is None else dt.astimezone(swe)
+        return dt if dt > now else None
+    except (ValueError, TypeError):
+        return None

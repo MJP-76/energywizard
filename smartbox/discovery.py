@@ -204,7 +204,14 @@ def _nibe_bt_entities(ents) -> dict:
                  and not re.search(r"start|tid|time|hours|timmar|count|antal|max|min\b|setpoint|börvärde", f"{x.get('n') or ''} {x['e']}", re.I)), None)
     if comp:
         out["compressor"] = comp
-    return out if len([k for k in out if k not in ("degree_minutes", "compressor")]) >= 2 else {}
+    # #200: värmekurvans förskjutning (NIBE 47011 / "Heating offset climate system 1" / "Värmeförskjutning") - styr
+    # pumpen när det inte finns något rumsbörvärde
+    off = next((x["e"] for x in ents if x["e"].startswith("number.")
+                and re.search(r"47011|heat(ing)?.?offset|v[äa]rmef[öo]rskjutning|kurvf[öo]rskjutning|offset.{0,20}(climate|klimat).?system.?1|f[öo]rskjutning.{0,12}v[äa]rmekurva",
+                              f"{x.get('n') or ''} {x['e']}", re.I)), None)
+    if off:
+        out["curve_offset"] = off
+    return out if len([k for k in out if k not in ("degree_minutes", "compressor", "curve_offset")]) >= 2 else {}
 
 
 def _is_temperature(x) -> bool:

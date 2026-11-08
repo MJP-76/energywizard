@@ -100,6 +100,22 @@ heat pumps: [Controlling a heat pump by price](https://murre87.github.io/energyw
 list. Add `sum_inverters: true` under `entities` to add them up. Without it the list is a fallback in order, e.g. the
 same inverter over Modbus first and the cloud as backup.
 
+**"Ready by" from Home Assistant:** each car can have a `ready_by` entity (an `input_datetime` with date and time,
+time only, or a timestamp sensor) and optionally `ready_soc` (charge level in %). When the time is ahead it overrides
+the weekly schedule, and a change replans charging at once:
+
+```yaml
+evs:
+  - id: car
+    entities:
+      ready_by: input_datetime.car_ready_by
+      ready_soc: input_number.car_ready_percent   # optional, otherwise 100 %
+```
+
+**NIBE without a room setpoint** (e.g. via nibegw and the Nibe Heat Pump integration): the setup wizard maps the heating
+curve offset (47011) as `curve_offset`, and EnergyWizard controls the pump with it. Default 2 steps per degree around
+20.5 °C within −5…+5 (`offset_steps_per_c`, `offset_base_c`, `offset_min`, `offset_max` under `heat_pump:`).
+
 **Your own loads** (e.g. smart plugs on a washing machine or sauna) show as their own rows in "What is drawing power"
 and are subtracted from the unexplained load:
 

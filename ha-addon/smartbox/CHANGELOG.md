@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.55 (2026-11-08)
+- **"Klar senast" från Home Assistant** (#200): en valfri `ready_by`-entitet per bil (och `ready_soc`) går före
+  veckoschemat, och en ändring räknar om laddplanen direkt. Se README.
+- **NIBE via kurvförskjutningen** (#200): utan rumsbörvärde styr EnergyWizard pumpen med värmekurvans förskjutning
+  (t.ex. 47011 via nibegw och Nibe Heat Pump), och guiden kopplar den.
+
 ## 1.2.54 (2026-11-08)
 - **Skonar flashminnet i växelriktare och batterier** (#194): värden i Home Assistant (lägesval och effektbörvärden)
   skrivs inte om de redan stämmer, och inom samma batteriläge skrivs ingen ny effekt förrän ändringen är minst 200 W

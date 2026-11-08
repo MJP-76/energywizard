@@ -212,7 +212,7 @@ def build_heat_pump_driver(cfg: dict) -> HeatPumpDriver:
         pump.configure((hp.get("connection") or {}).get("modbus_host"))
         return ThermiaHusdataHeatPumpDriver()
     if driver_cls is HaEntitiesHeatPumpDriver:
-        return HaEntitiesHeatPumpDriver(entities=(hp.get("entities") or {}))
+        return HaEntitiesHeatPumpDriver(entities=(hp.get("entities") or {}), cfg=hp)
     if driver_cls is ThermIQHeatPumpDriver:
         return ThermIQHeatPumpDriver(prefix=hp.get("prefix"))
     return driver_cls()

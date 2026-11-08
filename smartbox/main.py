@@ -184,6 +184,8 @@ CAR_SPECS = house_config.car_specs(house_cfg)
 _EV_EXPLICIT = {ev["id"]: {"phases": "phases" in (ev.get("charger") or {}), "max_a": "max_a" in (ev.get("charger") or {})}
                 for ev in (house_cfg.get("evs") or []) if ev.get("id")}
 _ev_learn = ev_limits.LimitLearner(_ew_settings.get("learned_ev"))
+_EV_BY_ID = {ev["id"]: ev for ev in (house_cfg.get("evs") or []) if ev.get("id")}   # bilarna ur installationen per id
+_last_ready_sig = [None]
 for _c, _chg in _ev_learn.apply(CAR_SPECS, _EV_EXPLICIT).items():
     print(f"🚗 {CAR_SPECS[_c]['name']}: inlärt av laddningarna {_chg} (installationen anger inte detta)")
 _ev_learn_saved = {"at": time.time(), "sig": str(_ev_learn.data)}
@@ -1151,6 +1153,13 @@ while True:
                 _plugged = ev_connection_state[_car_id]['connected'] or ev_gps_state[_car_id]['approaching']
                 _check_morning_floor(_car_id, _soc, _plugged, now)
 
+            # #200: ändras "klar senast" i Home Assistant räknas planen om direkt (inte först vid nästa kvart)
+            _ready_sig = str([((_EV_BY_ID.get(_c) or {}).get("entities") or {}).get("ready_by") and
+                              homeassistant._get_raw_state(_EV_BY_ID[_c]["entities"]["ready_by"]) for _c in car_ids])
+            if _ready_sig != _last_ready_sig[0]:
+                if _last_ready_sig[0] is not None:
+                    force_ev_plan_recalc = True
+                _last_ready_sig[0] = _ready_sig
             # EV Plan
             if ev_charge_plan is None or now.minute % 15 == 0 or force_ev_plan_recalc:
                 last_ev_plan_time = now
@@ -1160,6 +1169,10 @@ while True:
                     car_data_for_plan[f"{_c}_soc"] = car_soc.get(_c)
                     car_data_for_plan[f"{_c}_phases"] = (car_charger_data.get(_c) or {}).get('phases')
                     car_data_for_plan[f"{_c}_plugged_in"] = ev_connection_state[_c]['connected'] or ev_gps_state[_c]['approaching']
+                    # #200: "klar senast" ur en valfri HA-entitet (evs[].entities.ready_by / ready_soc)
+                    _rents = (_EV_BY_ID.get(_c) or {}).get("entities") or {}
+                    car_data_for_plan[f"{_c}_ready_by"] = homeassistant.read_ready_by(_rents.get("ready_by"), now)
+                    car_data_for_plan[f"{_c}_ready_soc"] = homeassistant._get_numeric_state(_rents["ready_soc"]) if _rents.get("ready_soc") else None
                 car_data_for_plan.update({
                     "car_ids": list(car_ids), "car_specs": CAR_SPECS,     # bilarna ur installationen (laddplanen har inga bilnamn)
                 })

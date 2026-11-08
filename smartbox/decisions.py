@@ -178,9 +178,20 @@ DEFAULT_BATTERY_KWH = 60
 MORNING_MIN_SOC = 50
 MORNING_HOUR = 6
 
-def get_car_plan_details(now, car_id, schedule, current_soc, battery_kwh):
-    """Hjälpfunktion som beräknar nästa mål och energibehov för en bil."""
+def get_car_plan_details(now, car_id, schedule, current_soc, battery_kwh, ready_by=None, ready_soc=None):
+    """Hjälpfunktion som beräknar nästa mål och energibehov för en bil. ready_by/ready_soc (#200): "klar senast" ur en
+    HA-entitet - går före veckoschemat när den ligger framåt i tiden."""
     target_dt, target_soc, panic_mode = None, 100, False
+    if ready_by is not None and ready_by > now:
+        try:
+            soc_goal = float(ready_soc) if ready_soc is not None else 100.0
+        except (TypeError, ValueError):
+            soc_goal = 100.0
+        target_dt, target_soc = ready_by, max(min(soc_goal, 100.0), MORNING_MIN_SOC)
+        if current_soc is None or current_soc >= target_soc:
+            return None, target_soc, 0, False
+        kwh_needed = max(0, (target_soc - current_soc) / 100.0 * battery_kwh) * 1.12
+        return target_dt, target_soc, kwh_needed, False
     today_weekday = now.weekday()
     for i in range(7):
         day_offset = i
@@ -262,7 +273,8 @@ def calculate_ev_charge_plan(now, ev_schedule, car_data, cfg):
         sp = specs.get(cid) or {}
         soc = car_data.get(f'{cid}_soc')
         bkwh = float(sp.get('battery_kwh') or DEFAULT_BATTERY_KWH)
-        t_dt, t_soc, kwh, panic = get_car_plan_details(now, cid, ev_schedule, soc, bkwh)
+        t_dt, t_soc, kwh, panic = get_car_plan_details(now, cid, ev_schedule, soc, bkwh,
+                                                       car_data.get(f'{cid}_ready_by'), car_data.get(f'{cid}_ready_soc'))
         cars[cid] = {"soc": soc, "plugged": car_data.get(f'{cid}_plugged_in', False), "phases": _phases(cid),
                      "max_a": int(sp.get('max_a') or 16), "battery_kwh": bkwh,
                      "target_dt": t_dt, "target_soc": t_soc, "kwh": kwh, "panic": panic}

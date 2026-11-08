@@ -133,6 +133,22 @@ värmepumparna: [Så styrs värmepumpen](https://murre87.github.io/energywizard/
 vara en lista. Lägg till `sum_inverters: true` under `entities` så summeras de. Utan den är listan en reserv i tur och
 ordning, t.ex. samma växelriktare via Modbus först och molnet som reserv.
 
+**"Klar senast" från Home Assistant:** varje bil kan få en `ready_by`-entitet (en `input_datetime` med datum och tid,
+bara tid, eller en sensor med tidsstämpel) och valfritt `ready_soc` (laddnivå i %). När tiden ligger framåt går den
+före veckoschemat, och ändras den räknas laddplanen om direkt:
+
+```yaml
+evs:
+  - id: bil
+    entities:
+      ready_by: input_datetime.bil_klar_senast
+      ready_soc: input_number.bil_klar_procent   # valfritt, annars 100 %
+```
+
+**NIBE utan rumsbörvärde** (t.ex. via nibegw och integrationen Nibe Heat Pump): guiden kopplar värmekurvans
+förskjutning (47011) som `curve_offset`, och EnergyWizard styr pumpen med den. Standard är 2 steg per grad kring 20,5 °C
+inom −5…+5 (`offset_steps_per_c`, `offset_base_c`, `offset_min`, `offset_max` under `heat_pump:`).
+
 **Egna laster** (t.ex. smartpluggar på tvättmaskin eller bastu) syns som egna rader i "Vad drar strömmen" och räknas
 bort från det oförklarade:
 
