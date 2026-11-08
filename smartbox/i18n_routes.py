@@ -33,10 +33,19 @@ def default_language() -> str:
     return lang if lang in languages() else "sv"
 
 
+def _chosen() -> bool:
+    """Har installationen ett valt språk? Annars följer gränssnittet webbläsarens språk (#202: engelskspråkiga fick svenska)."""
+    try:
+        import ew_settings
+        return bool(ew_settings.get("language"))
+    except Exception:
+        return False
+
+
 def register(app):
     @app.get("/i18n/config")
     def i18n_config():
-        return JSONResponse({"default": default_language(), "languages": languages()},
+        return JSONResponse({"default": default_language(), "chosen": _chosen(), "languages": languages()},
                             headers={"Cache-Control": "no-cache"})
 
     @app.get("/i18n/{name}")

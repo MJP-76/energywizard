@@ -38,3 +38,27 @@ def test_ewapp_bilden_har_allt_som_plan_importerar():
     missing = sorted(n for n in _third_party(["nordpool", "plan_brief"]) - ewapp_own
                      if PIP_NAMES.get(n, n).lower().replace("-", "_") not in dockerfile)
     assert not missing, f"saknas i ewapp/Dockerfile: {missing}"
+
+
+def test_numpy_last_for_aldre_processorer():
+    """#202: NumPy 2.4 kräver x86-64-v2 och kraschar vid start på äldre x86-processorer. Alla images låser <2.4."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    assert "numpy<2.4" in (root / "smartbox/requirements.txt").read_text()
+    for f in ("ewapp/Dockerfile", "webdashboard/Dockerfile", "ha-addon/smartbox/Dockerfile"):
+        assert '"numpy<2.4"' in (root / f).read_text(), f
+
+
+def test_sprak_foljer_webblasaren_utan_val(monkeypatch):
+    """#202: utan valt språk i installationen säger /i18n/config chosen=false, och i18n.js tar webbläsarens språk."""
+    import sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "smartbox"))
+    import ew_settings
+    import i18n_routes
+    monkeypatch.setattr(ew_settings, "get", lambda k, d=None: None)
+    assert i18n_routes._chosen() is False
+    monkeypatch.setattr(ew_settings, "get", lambda k, d=None: "en" if k == "language" else None)
+    assert i18n_routes._chosen() is True
+    assert "c.chosen === false" in (root / "smartbox/i18n/i18n.js").read_text()

@@ -129,6 +129,11 @@
       if (c.languages) languages = c.languages;
       if (c.default) serverDefault = c.default;
       if (!localPref()) lang = serverDefault;
+      // Inget språk valt i installationen eller på enheten: webbläsarens språk (svenska om den är svensk, annars engelska)
+      if (!localPref() && c.chosen === false) {
+        const nav = String((navigator.languages && navigator.languages[0]) || navigator.language || "sv").toLowerCase();
+        lang = nav.startsWith("sv") ? "sv" : (languages[nav.slice(0, 2)] ? nav.slice(0, 2) : "en");
+      }
       if (!languages[lang]) lang = "sv";
       if (lang === "sv") return;
       return fetch(BASE + lang + ".json").then((r) => (r.ok ? r.json() : {})).then((d) => { dict = d || {}; }).catch(() => {});

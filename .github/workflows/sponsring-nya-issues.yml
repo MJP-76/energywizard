@@ -19,9 +19,14 @@ jobs:
         with:
           script: |
             const issue = context.payload.issue;
-            const text = `${issue.title}\n${issue.body || ""}`;
-            const sv = (text.match(/[åäöÅÄÖ]|\b(och|jag|har|med|för|inte|kör|värmepump|hej)\b/gi) || []).length;
-            const en = (text.match(/\b(the|and|with|have|my|is|for|which|hello|hi)\b/gi) || []).length;
+            // Bara personens egen text: kodblock och inklistrade loggrader (som är på svenska) räknas inte (#202:
+            // engelskt issue med svensk logg fick svar på svenska). Ord, inte å/ä/ö, avgör.
+            const prose = `${issue.title}\n${issue.body || ""}`
+              .replace(/```[\s\S]*?```/g, " ")
+              .split("\n").filter((l) => !/^\s*(>|File "|Traceback|[^\p{L}\s]|\S+:\s*\d)/u.test(l)).join("\n");
+            const words = (list) => (prose.match(new RegExp(`(?<!\\p{L})(${list})(?!\\p{L})`, "giu")) || []).length;
+            const sv = words("och|jag|har|med|inte|kör|värmepump|hej|det|är|att|som|på|till|kan|vi|min|mitt|tack");
+            const en = words("the|and|with|have|my|is|for|which|hello|hi|it|to|of|can|this|that|not|would|thanks");
             const body = sv >= en
               ? `Tack för att du hör av dig! Vi tittar på det här så snart vi kan.\n\n` +
                 `EnergyWizard är gratis och delas med alla, men utvecklingen kostar en hel del: AI-verktygen (Claude) som ` +

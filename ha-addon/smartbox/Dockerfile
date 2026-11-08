@@ -46,7 +46,7 @@ RUN cp -r /src/smartbox /smartbox \
 # (ewapp/Dockerfile, webdashboard/Dockerfile) - samma paket, en gemensam miljö.
 RUN pip install --no-cache-dir -r /smartbox/requirements.txt \
     && pip install --no-cache-dir fastapi "uvicorn[standard]" requests sqlalchemy \
-        "psycopg[binary]" psycopg_pool pandas PyYAML pymodbus pillow
+        "psycopg[binary]" psycopg_pool pandas "numpy<2.4" PyYAML pymodbus pillow
 
 # ewapp/Dockerfile genererar PWA-ikonerna vid bygge - samma steg här.
 RUN cd /ewapp && python make_icons.py

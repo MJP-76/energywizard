@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.59 (2026-11-08)
+- **Startar på äldre x86-processorer igen** (#202): NumPy 2.4 kräver x86-64-v2 och tillägget kraschade direkt vid
+  start på äldre datorer. Alla images låser nu NumPy till 2.3.
+- **Engelska som standard för den som inte har svensk webbläsare**: har installationen inget valt språk följer appen
+  och webben webbläsarens språk (svenska om den är svensk, annars engelska). Ett valt språk går som förut före.
+
 ## 1.2.58 (2026-11-08)
 - **Varför laddar bilen långsammare än planen?** Drar bilen tydligt mindre ström än EnergyWizard beställt i fem
   minuter visas en förklaring överst i appen och på webben: laddboxens lastbalansering eller kretsgräns (Easee),
