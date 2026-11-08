@@ -22,10 +22,23 @@ instead of inventing new protocol code. Open source, free, no subscription.
 - 🔋 **Home battery** - a daily plan, quarter by quarter: when to charge, save and discharge.
 - ☀️ **Solar export** - at negative prices, export is regulated down to zero (the sun still covers the house and
   charges the battery; only what would be sold is curtailed). Above 0, surplus is exported as usual.
-- 🛁 **Spa** - heats during the cheap hours.
+- 🛁 **Spa with bathing times** - set the days and times you usually bathe. Outside them the spa may cool
+  to an eco floor and is heated back up in time for the next bath, in the cheapest hours. Run against our
+  own history: 25-34 % less electricity for the spa, about 22 % in winter too
+  ([how it works](https://murre87.github.io/energywizard/en/kunskapsbank/spabad.html)).
 - ⚡ **Fuse guard** - watches the main fuse so you avoid overloads.
 - 📱 **Own app** (`ewapp`, mobile/PWA) and a **desktop/tablet view** (`webdashboard`) with full control,
   not just read-outs. Swedish and English.
+
+| App: Right now | App: the house | Today's plan |
+|---|---|---|
+| ![Right now - what gives and draws power](docs/skarmdumpar/app-just-nu.png) | ![The house in the app](docs/skarmdumpar/app-hus.png) | ![Plan clock](docs/skarmdumpar/planklocka.png) |
+
+**Right now**, at the top of the app and on the web Overview, shows the same thing the same way: sun, grid and
+battery on the left, the house in the middle and what draws power on the right (heat pump, hot water, spa, EV),
+with dots moving in the direction the power flows.
+
+![Web EV view](docs/skarmdumpar/webdashboard-elbil.png)
 
 See the [EnergyWizard site](https://murre87.github.io/energywizard/en/) for real savings figures (measured
 against what the same power would have cost at the day's average price, not a guessed percentage) and a

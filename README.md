@@ -23,10 +23,23 @@ hårdvara som redan fungerar där istället för att uppfinna ny protokollkod.
 - 🔋 **Husbatteri** - dygnsplan kvart för kvart: när det ska ladda, spara och ladda ur.
 - ☀️ **Solcellsexport** - vid minuspris regleras exporten ner till noll (solen täcker fortfarande huset och
   laddar batteriet, bara det som skulle säljas stryps). Över 0 kr exporteras överskottet som vanligt.
-- 🛁 **Spabad** - värmer under de billiga timmarna.
+- 🛁 **Spabad med badtider** - ställ in vilka dagar och tider ni brukar bada. Utanför dem får badet
+  svalna till ett eco-golv och värms upp i tid till nästa badtid, på de billigaste timmarna.
+  Kört mot vår egen historik: 25-34 % mindre el till badet, ca 22 % även vintertid
+  ([så funkar det](https://murre87.github.io/energywizard/kunskapsbank/spabad.html)).
 - ⚡ **Effektvakt** - håller koll på huvudsäkringen så du slipper överträdelser.
 - 📱 **Egen app** (`ewapp`, mobil/PWA) och **dator-/surfplattevy**
   (`webdashboard`) med full styrning, inte bara avläsning.
+
+| Appen: Just nu | Appen: huset | Dagens plan |
+|---|---|---|
+| ![Just nu - vad som ger och drar el](docs/skarmdumpar/app-just-nu.png) | ![Huset i appen](docs/skarmdumpar/app-hus.png) | ![Planklockan](docs/skarmdumpar/planklocka.png) |
+
+**Just nu** överst i appen och på webbens Översikt visar samma sak på samma sätt: sol, nät och batteri till
+vänster, huset i mitten och det som drar el till höger (värmepump, varmvatten, spabad, elbil), med prickar som
+rör sig åt det håll elen går.
+
+![Webbens elbilsvy](docs/skarmdumpar/webdashboard-elbil.png)
 
 Se [energywizard-sidan](https://murre87.github.io/energywizard/) för riktiga
 besparingssiffror (mätt mot vad samma el hade kostat till dygnets snittpris,
