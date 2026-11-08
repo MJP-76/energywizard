@@ -311,3 +311,5 @@ html[data-glass] .card.qt, html[data-glass] .card.cr { border-color:rgba(255,255
 .page.t4 .pccard .ewsk svg { max-height:16vh; } .page.t5 .pccard .ewsk svg { max-height:11vh; }
 .page.t5 .pccard .ewpc { max-width:min(190px,50vw,17dvh); }
 .page.t5 .flowcard ~ .plannow { display:none; }   /* stor text: flödet visar redan vad som händer, Plan-fliken varför */
+/* Utan planklockan på framsidan (2026-11-08) får "Just nu" mer plats */
+.flowcard svg { max-height:40dvh; }

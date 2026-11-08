@@ -1364,7 +1364,28 @@ async def api_spa():
             "ready_enabled": bool(cfg.get("spa_schedule_enabled")),
             "ready_at": cfg["spa_target_datetime"].astimezone(zoneinfo.ZoneInfo("Europe/Stockholm")).strftime("%Y-%m-%dT%H:%M") if cfg.get("spa_target_datetime") else None,
             "ready_temp": _n(cfg.get("spa_target_temp")),
+            "bath_windows": _bath_windows(),
             "history": [{"t": h.isoformat(), "temp": _n(a), "target": _n(b), "heating": _n(hr)} for h, a, b, hr in hist]}
+
+
+def _bath_windows() -> list:
+    """Badtider (smartbox/spa_bath.py, samma som mobilappen)."""
+    import spa_bath
+    return spa_bath.listing(ew_settings.get("spa_bath_windows"))
+
+
+@app.post("/api/spa-bath")
+async def spa_bath_set(request: Request):
+    role, _ = AUTH.session(request)
+    if role != "owner":
+        return JSONResponse({"error": "Bara ägaren kan ändra badtiderna"}, status_code=403)
+    import spa_bath
+    try:
+        saved = spa_bath.clean((await request.json()).get("windows"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    ew_settings.update(spa_bath_windows=saved)
+    return {"ok": True, "message": spa_bath.summary(saved)}
 
 
 @app.get("/api/temperatures")

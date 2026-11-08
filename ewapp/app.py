@@ -832,6 +832,28 @@ def net_now():
         return None
 
 
+def _spa_bath_listing():
+    try:
+        import spa_bath
+        return spa_bath.listing(ew_settings.get("spa_bath_windows") if ew_settings else None)
+    except Exception:
+        return []
+
+
+@app.post("/api/spa_bath")
+def spa_bath_set(request: Request, body: dict):
+    """Badtider för spabadet (smartbox/spa_bath.py, samma som webben). Bara ägaren."""
+    if _role(request) != "owner":
+        raise HTTPException(403, "Bara ägaren kan ändra badtiderna")
+    import spa_bath
+    try:
+        saved = spa_bath.clean(body.get("windows"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    ew_settings.update(spa_bath_windows=saved)
+    return {"ok": True, "msg": spa_bath.summary(saved)}
+
+
 @app.get("/api/home")
 def home():
     st = states()
@@ -841,7 +863,7 @@ def home():
             "heat": {"inside": num(st, "sensor.smartbox_inomhustemp"), "target": num(st, "sensor.smartbox_maltemperatur"), "outside": num(st, "sensor.smartbox_utetemperatur"), "mode": ov.get("heat", "auto"),
                      "pump_w": num(st, "sensor.smartbox_effekt_varmepump"), "price_mode": val(st, "sensor.smartbox_lage"), "cop": num(st, "sensor.smartbox_cop"), "temp_cheap": cfg.get("temp_cheap"), "temp_expensive": cfg.get("temp_expensive")},
             "water": {"temp": num(st, "sensor.smartbox_varmvatten"), "mode": ov.get("hotwater", "auto")},
-            "spa": {"temp": spa_temps(st)[0], "target": spa_temps(st)[1], "heater": spa_temps(st)[2],
+            "spa": {"bath_windows": _spa_bath_listing(), "temp": spa_temps(st)[0], "target": spa_temps(st)[1], "heater": spa_temps(st)[2],
                     "force_heat": bool(cfg.get("spa_force_heat")), "eco": ov.get("spa_force_eco") == "on",
                     "ready_at": (cfg["spa_target_datetime"].astimezone(TZ).strftime("%a %H:%M") if cfg.get("spa_schedule_enabled") and cfg.get("spa_target_datetime") else None), "ready_temp": cfg.get("spa_target_temp") if cfg.get("spa_schedule_enabled") else None, "power_w": num(st, "sensor.smartbox_effekt_spa"), "error": val(st, SPA_E["error"]) if SPA_E.get("error") else None},
             "power": {"total_w": num(st, "sensor.smartbox_effekt_total"), "ev_w": num(st, "sensor.smartbox_effekt_elbil"), "limit_kw": cfg.get("power_limit_kw"), "peak": bool(cfg.get("peak_shaving_enabled")),

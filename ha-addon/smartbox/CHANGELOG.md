@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.56 (2026-11-08)
+- **Badtider för spabadet**: välj vilka dagar och tider ni brukar bada (appens spabadsruta eller Spabad på webben).
+  Utanför badtiderna får badet svalna till eco-golvet och värms upp i tid före nästa badtid, på de billigaste
+  timmarna. Inga badtider = badet hålls varmt som förut. Kört mot 60 dygns historik i ett hus med välisolerat bad:
+  helgbad 10-18 sparar ungefär 25 % med eco-golv 30 °C och 34 % med 25 °C, utan att badet någonsin var kallt vid
+  badtidens början (`spa_bath_backtest.py` räknar på det egna huset).
+- **Appens framsida** visar inte längre planklockan; den finns under Plan.
+
 ## 1.2.55 (2026-11-08)
 - **"Klar senast" från Home Assistant** (#200): en valfri `ready_by`-entitet per bil (och `ready_soc`) går före
   veckoschemat, och en ändring räknar om laddplanen direkt. Se README.

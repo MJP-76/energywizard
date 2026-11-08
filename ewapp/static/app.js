@@ -166,7 +166,7 @@ function pageHus() {
   <section class="card tile"><h4>Värme inne <button class="link" data-a="rooms" style="padding:0 0 0 6px;font-size:.8rem">alla rum</button></h4><div class="v">${f1(h.inside)}<small> °C</small></div><div class="note">Mål ${f1(h.target)}° · ute ${f1(h.outside, 0)}° · pump ${h.pump_w != null ? Math.round(h.pump_w) : "–"} W</div>${seg("heat", h.mode, [["auto", "Auto"], ["on", "Varm"], ["off", "Sänkt"]])}</section>
   <section class="card tile"><h4>Varmvatten</h4><div class="v">${f1(w.temp, 0)}<small> °C</small></div><div class="note">COP ${f1(h.cop)}</div>${seg("hotwater", w.mode, [["auto", "Auto"], ["on", "Till"], ["off", "Från"]])}</section>
   <section class="card tile wide"><h4>Spabad</h4><div class="v">${f1(sp.temp)}<small> °C</small></div><div class="note">Mål ${f1(sp.target)}° · ${esc(sp.heater || "")}${sp.error && sp.error !== "None" ? ` · ${esc(sp.error)}` : ""}</div>
-    <div class="tilelink"><button class="link" data-a="spaready" style="padding:0;font-size:.82rem">${sp.ready_at ? `Klart ${esc(sp.ready_at)} (${f1(sp.ready_temp)}°) – ändra` : "Ställ in: klart kl…"}</button></div><div class="seg"><button data-a="spa" data-k="spa_auto" data-v="1" class="${!sp.force_heat && !sp.eco ? "on" : ""}" title="Följer sitt eget schema, som Home Assistant styr">Auto</button><button data-a="spa" data-k="spa_heat" data-v="${sp.force_heat ? 0 : 1}" class="${sp.force_heat ? "on" : ""}">Värm nu</button><button data-a="spa" data-k="spa_eco" data-v="${sp.eco ? 0 : 1}" class="${sp.eco ? "on" : ""}">Eco</button></div></section>
+    <div class="tilelink"><button class="link" data-a="spaready" style="padding:0;font-size:.82rem">${sp.ready_at ? `Klart ${esc(sp.ready_at)} (${f1(sp.ready_temp)}°) – ändra` : "Ställ in: klart kl…"}</button>${ROLE === "owner" ? ` · <button class="link" data-a="spabath" style="padding:0;font-size:.82rem">Badtider${(sp.bath_windows || []).some((w) => w.on) ? ` (${(sp.bath_windows || []).filter((w) => w.on).length})` : ""}</button>` : ""}</div><div class="seg"><button data-a="spa" data-k="spa_auto" data-v="1" class="${!sp.force_heat && !sp.eco ? "on" : ""}" title="Följer sitt eget schema, som Home Assistant styr">Auto</button><button data-a="spa" data-k="spa_heat" data-v="${sp.force_heat ? 0 : 1}" class="${sp.force_heat ? "on" : ""}">Värm nu</button><button data-a="spa" data-k="spa_eco" data-v="${sp.eco ? 0 : 1}" class="${sp.eco ? "on" : ""}">Eco</button></div></section>
   <section class="card tile wide"><div style="display:flex;justify-content:space-between;align-items:baseline"><h4>Effekt nu</h4><span class="note">${pw.peak ? `Effektvakt på · gräns ${f1(pw.limit_kw)} kW` : "Effektvakt av"}</span></div><div class="v">${pw.total_w != null ? f1(pw.total_w / 1000) : "–"}<small> kW</small></div>
     <div class="meter" ${pw.peak ? "" : 'style="opacity:.35"'}><i class="${pct > 85 ? "hi" : ""}" style="width:${pw.peak ? pct : 0}%"></i></div><div class="chips" style="justify-content:flex-start">${gridChip(pw)}${limitChip(pw)}<span class="chip">Elbil ${pw.ev_w != null ? f1(pw.ev_w / 1000) : "–"} kW</span><span class="chip ${pw.solar_w > 100 ? "ok" : ""}">Sol ${pw.solar_w != null ? f1(pw.solar_w / 1000) : "–"} kW</span><span class="chip ok">Sparat idag ${f1(pw.saving_today, 1)} kr</span></div></section>
   </div></div>`;
@@ -286,9 +286,24 @@ function flowCard() {                    // delad med webbens Översikt (smartbo
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
-  const clock = window.EWPlanView && PC && PC.slots && PC.slots.length ? `<section class="card pccard"><div id="pcslot"></div></section>` : "";
   const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
-  return `<div class="page">${alerts}${flowCard()}${clock}${planNow()}${quickGrid(s, g, net, !!(FL && FL.ok))}${carsRow()}${ljusRow()}</div>`;
+  // Planklockan/Skyline ligger bara under Plan (Emil 2026-11-08: framsidan visar vad som händer just nu)
+  return `<div class="page">${alerts}${flowCard()}${planNow()}${quickGrid(s, g, net, !!(FL && FL.ok))}${carsRow()}${ljusRow()}</div>`;
+}
+function spaBathSheet() {                                 // badtider (smartbox/spa_bath.py) - samma som webben
+  const ws = ((H && H.spa && H.spa.bath_windows) || []).map((w) => ({ ...w }));
+  const days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+  const inp = 'style="font-size:16px;padding:4px 6px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);width:7.4em;min-width:0"';
+  sheet(`<h3>Badtider</h3><div class="note">När brukar ni bada? Utanför badtiderna får badet svalna till eco-golvet och värms upp i tid före nästa badtid, på de billigaste timmarna. Inga badtider = badet hålls varmt som idag.</div>
+    ${ws.map((w, i) => `<div class="setrow"><label style="display:flex;gap:8px;align-items:center;min-width:4.5em"><input type="checkbox" class="bon" data-i="${i}"${w.on ? " checked" : ""}>${days[i]}</label>
+      <span style="display:flex;gap:6px;align-items:center"><input type="time" class="bfrom" data-i="${i}" value="${w.from}" ${inp}>–<input type="time" class="bto" data-i="${i}" value="${w.to}" ${inp}></span></div>`).join("")}
+    <button class="big" id="bathsave">Spara</button><button class="mini" data-x="no">Avbryt</button>`);
+  $("#bathsave").onclick = async () => {
+    const q = (c, i) => document.querySelector(`#sheet .${c}[data-i="${i}"]`);
+    const windows = ws.map((_, i) => ({ on: q("bon", i).checked, from: q("bfrom", i).value, to: q("bto", i).value }));
+    try { const r = await api("spa_bath", { windows }); closeSheet(); toast(r.msg); H = await api("home"); render(); } catch (er) { toast(er.message); }
+  };
+  const no = document.querySelector('#sheet [data-x="no"]'); if (no) no.onclick = () => closeSheet();
 }
 function solarSheet() {                                    // exportgränsen (förut på Energi-sidan) – nu ett blad från Hem
   const s = EN.solar, lim = s.limit_pct, limTxt = lim == null ? "offline" : lim >= 99.5 ? "ingen begränsning" : `${Math.round(lim)} %`;
@@ -623,6 +638,7 @@ document.addEventListener("click", async (e) => {
   if (a === "access") return accessSheet(c);
   if (a === "cardata") return carDataSheet(c);
   if (a === "home") { buzz(); try { const r = await api("home/" + b.dataset.k, { value: v }); toast(r.msg); H = await api("home"); render(); } catch (er) { toast(er.message); } return; }
+  if (a === "spabath") { spaBathSheet(); return; }
   if (a === "spa") { buzz(); try { const r = await api("home/" + b.dataset.k, { value: v === "1" }); toast(r.msg); H = await api("home"); render(); } catch (er) { toast(er.message); } return; }
   if (a === "energy" && b.dataset.k === "limit" && +v < 100 && !b.dataset.ok) {      // 0–75 % stryper solelen: kräver bekräftelse så att det inte sker av misstag
     sheet(`<h3>Begränsa solelen till ${v} %?</h3><div class="note">Exporten och solproduktionen begränsas tills du väljer 100 % igen. AI:n släpper begränsningen själv bara vid minuspris.</div><button class="big stop" data-x="ok">Ja, begränsa till ${v} %</button><button class="mini" data-x="no">Avbryt</button>`);

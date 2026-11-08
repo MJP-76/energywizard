@@ -736,14 +736,17 @@ class GlobalPriorityManager:
                                       f"tröskel {spa_solar_threshold:.0f}W) -> Värmer spabadet på solel.")
 
         elif state.get('spa_target_scheduled_active'):
+            _bn = state.get('spa_bath_note')
             if state.get('spa_should_heat_now'):
                 actions["spa_target"] = state.get('spa_target_scheduled', 38.0)
                 actions["spa_eco"] = False
-                actions["log"].append("🛁 Prio 4 (SPA): Schema aktivt -> Dags att värma! AI:n kör spabadet mot måltemperaturen.")
+                actions["log"].append(f"🛁 Prio 4 (SPA): {_bn} -> Värmer nu på billiga timmar så att badet är varmt i tid." if _bn else
+                                      "🛁 Prio 4 (SPA): Schema aktivt -> Dags att värma! AI:n kör spabadet mot måltemperaturen.")
             else:
                 actions["spa_target"] = state.get('spa_low_temp', 15.0)
                 actions["spa_eco"] = True
-                actions["log"].append("🛁 Prio 4 (SPA): Schema aktivt -> Avvaktar billigare/mer soliga timmar. Badet vilar i Economy Mode för att spara el.")
+                actions["log"].append(f"🛁 Prio 4 (SPA): {_bn} -> Badet vilar på eco-golvet tills det är dags att värma." if _bn else
+                                      "🛁 Prio 4 (SPA): Schema aktivt -> Avvaktar billigare/mer soliga timmar. Badet vilar i Economy Mode för att spara el.")
         else:
             # NYTT: Normaldrift och Prisspiks-skydd (Imiterar decisions.py logik)
             all_p = state.get('all_prices_tou') or state.get('all_prices')   # spot + tidstariff (#179)

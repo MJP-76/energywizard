@@ -885,9 +885,20 @@ async function renderSpabad() {
         <div style="display:flex;gap:8px;margin-top:10px"><button class="icobtn" id="spareadysave">Spara</button>${d.ready_enabled ? `<button class="icobtn" id="spareadyoff">Stäng av</button>` : ""}</div>
       </div>
     </div>
+    <div class="card" style="margin-bottom:16px"><h2>🗓️ Badtider</h2>
+      <div class="note">När brukar ni bada? Utanför badtiderna får badet svalna till eco-golvet (${fmt(d.low_temp, 0, " °C")}) och värms upp i tid före nästa badtid, på de billigaste timmarna. Inga badtider = badet hålls varmt som idag.</div>
+      <div style="display:grid;gap:6px;margin-top:10px">${(d.bath_windows || []).map((w, i) => `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;width:118px"><input type="checkbox" class="bathon" data-i="${i}"${w.on ? " checked" : ""}> ${["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"][i]}</label>
+        <input type="time" class="bathfrom" data-i="${i}" value="${w.from}" style="width:110px"> – <input type="time" class="bathto" data-i="${i}" value="${w.to}" style="width:110px"></div>`).join("")}</div>
+      <button class="icobtn" id="bathsave" style="margin-top:10px">Spara badtider</button></div>
     <div class="card" style="margin-bottom:16px"><h2>📈 Senaste dygnet</h2><div class="note">Temperatur mot mål. Skuggat = värmaren gick.</div><div id="spachart" style="height:240px;margin-top:10px"></div></div>
     <div class="card"><h2>📡 Trådlös anslutning</h2><div class="note">Signal: ${fmt(d.signal_pct, 0, "%")} · Kanal: ${d.rf_channel != null ? d.rf_channel : "–"}</div></div>`);
   if (d) {
+    document.getElementById("bathsave").onclick = async () => {
+      const q = (cls, i) => document.querySelector(`.${cls}[data-i="${i}"]`);
+      const windows = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ on: q("bathon", i).checked, from: q("bathfrom", i).value, to: q("bathto", i).value }));
+      try { const j = await postJSON("api/spa-bath", { windows }); toast(j.message || "Sparat"); } catch (e) { toast(e.message); }
+    };
     document.getElementById("spatempsave").onclick = async () => {
       for (const [id, key] of [["spanormal", "spa_normal_temp"], ["spamax", "spa_max_temp"], ["spalow", "spa_low_temp"]]) {
         const v = parseFloat(document.getElementById(id).value);

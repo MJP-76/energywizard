@@ -38,6 +38,7 @@ import ev_limits
 import battery_plan      # Batteriets dygnsplan (steg 3): ladda billigt, ladda ur dyrt
 import battery_learning  # Planen lär sig batteriets verkliga verkningsgrad, kapacitet, effekt och solprognosens fel
 import signal
+import spa_bath           # Badtider för spabadet: eco-golv utanför, uppvärmning inför nästa badtid
 import car_climate_watch # Följer upp bilens värme från appen tills den faktiskt startar (annars avisering)
 import fuse_guard        # Termisk säkringsmodell: elbilarna mot huvudsäkringen (I² med 60 s tidskonstant)
 import os
@@ -1492,6 +1493,20 @@ while True:
             
             spa_schedule_active = cfg.get("spa_schedule_enabled", False)
             target_dt = cfg.get("spa_target_datetime")
+            _spa_sched_temp = cfg.get("spa_target_temp", 38.0)
+            # Badtider (spa_bath.py): utanför dem ligger badet på eco-golvet och värms inför nästa badtid. Ett manuellt
+            # schema (spa_schedule_enabled) går före.
+            spa_bath_note = None
+            if not (spa_schedule_active and target_dt and target_dt > now):
+                _in_bath, _next_bath, _bath_end = spa_bath.status(now, _ew_settings.get("spa_bath_windows"))
+                if _in_bath:
+                    spa_bath_note = f"Badtid till {_bath_end.strftime('%H:%M')} - håller badet varmt."
+                elif _next_bath is not None:
+                    spa_schedule_active, _spa_sched_temp = True, cfg.get("spa_normal_temp", 38.0)
+                    target_dt = _next_bath if (_next_bath - now) <= timedelta(hours=spa_bath.PLAN_AHEAD_H) else None
+                    spa_bath_note = f"Nästa badtid {('mån','tis','ons','tor','fre','lör','sön')[_next_bath.weekday()]} {_next_bath.strftime('%H:%M')}"
+                    if target_dt is None:
+                        spa_should_heat_now = False
             
             if spa_schedule_active and target_dt and target_dt > now:
                 if last_spa_schedule_eval_time is None or (now - last_spa_schedule_eval_time) > timedelta(minutes=14):
@@ -1499,7 +1514,7 @@ while True:
                     cooling_k, _ = learning.get_cooling_rate_model()
                     spa_should_heat_now, _ = decisions.check_spa_schedule_plan(
                         now, target_dt, gecko_data.get("current_temp", 38.0) if gecko_data else 38.0, 
-                        cfg.get("spa_target_temp", 38.0), h_intercept, h_slope_out, h_slope_spa, cooling_k, 
+                        _spa_sched_temp, h_intercept, h_slope_out, h_slope_spa, cooling_k, 
                         cfg.get("spa_max_temp", 40.0),
                         outdoor_temp or 0.0, cfg.get("spa_low_temp", 15.0)
                     )
@@ -1714,7 +1729,8 @@ while True:
                 'last_heartbeat': last_heartbeat, 'legionella_max_days': leg_max_days,
                 'spa_force_heat': cfg.get("spa_force_heat", False), 'spa_force_eco': all_overrides.get("spa_force_eco") == "on",
                 'spa_max_temp': cfg.get("spa_max_temp", 40.0), 'spa_low_temp': cfg.get("spa_low_temp", 15.0),
-                'spa_target_scheduled': cfg.get("spa_target_temp", 38.0), 'spa_target_scheduled_active': cfg.get("spa_schedule_enabled", False),
+                'spa_target_scheduled': _spa_sched_temp, 'spa_target_scheduled_active': spa_schedule_active,
+                'spa_bath_note': spa_bath_note,
                 'spa_should_heat_now': spa_should_heat_now, 'away_mode_active': away_mode_enabled,
                 'hw_probability': max_hw_prob, 'away_recovering': away_recovering,
                 'temp_cheap': cfg.get("temp_cheap", 22.0), 'temp_expensive': cfg.get("temp_expensive", 20.0),
