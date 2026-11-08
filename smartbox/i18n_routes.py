@@ -24,20 +24,24 @@ def languages() -> dict:
 
 
 def default_language() -> str:
-    """Installationens språk (valt i startguiden eller inställningarna), annars svenska."""
+    """Installationens språk: valt i startguiden eller inställningarna, annars Home Assistants språk (i18n_py.py),
+    annars svenska."""
     try:
-        import ew_settings
-        lang = ew_settings.get("language") or "sv"
+        import i18n_py
+        lang = i18n_py.language(refresh_s=0)
     except Exception:
         lang = "sv"
     return lang if lang in languages() else "sv"
 
 
 def _chosen() -> bool:
-    """Har installationen ett valt språk? Annars följer gränssnittet webbläsarens språk (#202: engelskspråkiga fick svenska)."""
+    """Har installationen ett språk (valt, eller Home Assistants)? Annars följer gränssnittet webbläsarens språk (#202)."""
     try:
         import ew_settings
-        return bool(ew_settings.get("language"))
+        if ew_settings.get("language"):
+            return True
+        import i18n_py
+        return bool(i18n_py.ha_language())
     except Exception:
         return False
 

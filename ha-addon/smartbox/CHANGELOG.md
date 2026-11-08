@@ -1,5 +1,12 @@
 # Ändringar
 
+## 1.2.64 (2026-11-08)
+- **Språket följer Home Assistant**: har installationen inget eget valt språk används Home Assistants språk, i appen,
+  på webben och i tilläggets logg. Valt språk i EnergyWizard går som förut före. (Idé från Energy Pilot.)
+- **Tilläggets logg på installationens språk**: motorns utskrifter och startmeddelandena översätts med samma ordlista
+  som gränssnitten. De vanligaste raderna (planer, beslut, laddning, spabad, modeller) är översatta till engelska.
+  Husets egen logg (Inställningar → Logg) sparas som förut och översätts när den visas.
+
 ## 1.2.63 (2026-11-08)
 - **Engelska överallt** (#202): drygt 250 texter som fortfarande var på svenska är översatta (Inställningar,
   Elbil, Historik, Aviseringar, Installationer). Översättaren hittade inte texter som stod med emoji eller

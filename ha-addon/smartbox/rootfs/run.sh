@@ -51,8 +51,24 @@ export DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD:-}"
 export EWAPP_URL="http://127.0.0.1:8502"
 export PYTHONUNBUFFERED=1
 
+# Startmeddelandena på installationens språk (som i18n_py.py): valt i EnergyWizard, annars Home Assistants, annars svenska.
+EW_LANG="$(python3 -c 'import json,os,sys,urllib.request
+lang = None
+try:
+    lang = json.load(open(os.environ.get("EW_SETTINGS_PATH", "/data/energywizard.json"))).get("language")
+except Exception:
+    pass
+if not lang and os.environ.get("SUPERVISOR_TOKEN"):
+    try:
+        r = urllib.request.Request("http://supervisor/core/api/config", headers={"Authorization": "Bearer " + os.environ["SUPERVISOR_TOKEN"]})
+        lang = json.load(urllib.request.urlopen(r, timeout=5)).get("language")
+    except Exception:
+        pass
+print(str(lang or "sv").split("-")[0].lower())' 2>/dev/null || echo sv)"
+say() { if [ "$EW_LANG" = "sv" ]; then echo "$1"; else echo "$2"; fi; }
+
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
-    echo "🐘 Första start - initierar lokal Postgres i $PGDATA"
+    say "🐘 Första start - initierar lokal Postgres i $PGDATA" "🐘 First start - initialising the local Postgres in $PGDATA"
     mkdir -p "$PGDATA"
     chown -R postgres:postgres "$PGDATA"
     su postgres -c "/usr/lib/postgresql/*/bin/initdb -D '$PGDATA'"
@@ -73,18 +89,18 @@ su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='${POSTGRES_
 keep_running() {
     local name="$1" dir="$2" port="$3"
     ( while true; do
-        echo "🌐 Startar $name på port $port..."
+        say "🌐 Startar $name på port $port..." "🌐 Starting $name on port $port..."
         (cd "$dir" && python -m uvicorn app:app --host 0.0.0.0 --port "$port") || true
-        echo "⚠️ $name avslutades - startar om om 5 s."
+        say "⚠️ $name avslutades - startar om om 5 s." "⚠️ $name stopped - restarting in 5 s."
         sleep 5
       done ) &
 }
 
 # Utan lösenord öppnar webben startguiden, där lösenordet väljs - gränssnitten startas alltid.
-keep_running "mobilappen (ewapp)" /ewapp 8502
+keep_running "$(say "mobilappen (ewapp)" "the mobile app (ewapp)")" /ewapp 8502
 keep_running "webdashboard" /webdashboard 8503
-echo "👉 Öppna http://<den här datorns adress>:8503 för att komma igång."
+say "👉 Öppna http://<den här datorns adress>:8503 för att komma igång." "👉 Open http://<this computer's address>:8503 to get started."
 
-echo "🔆 Startar EnergyWizard (smartbox)..."
+say "🔆 Startar EnergyWizard (smartbox)..." "🔆 Starting EnergyWizard (smartbox)..."
 cd /smartbox
 exec python -u main.py

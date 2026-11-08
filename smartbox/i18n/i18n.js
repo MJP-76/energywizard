@@ -40,6 +40,15 @@
     [/^Just nu: (.+)\. Härnäst (.+?): (.+) laddar$/, (m) => "Right now: " + (tr(m[1]) || m[1]).toLowerCase() + ". Next " + m[2] + ": " + m[3] + " charging"],
     [/^förinställning (.+)$/, (m) => "preset " + m[1]],
     [/^Växelriktaren svarar inte \(FTW-drivrutinen (.+)$/, (m) => "The inverter doesn't answer (FTW driver " + m[1]],
+    [/^GPS: (.+) närmar sig hemmet! \(Avstånd: (.+?) km(\)?)$/, (m) => "GPS: " + m[1] + " is approaching home! (Distance: " + m[2] + " km" + m[3]],
+    [/^Hittade befintligt framtida schema för (.+)$/, (m) => "Found an existing future schedule for " + m[1]],
+    [/^(\S+(?: \S+){0,2}) frånkopplad$/, (m) => m[1] + " disconnected"],
+    [/^Senast kända batterinivåer inlästa: (.+)$/, (m) => "Last known battery levels loaded: " + m[1]],
+    [/^Sätter (.+)$/, (m) => "Setting " + m[1]],
+    [/^Prio (\d+) \(BATTERISKYDD\): (.+) måste ladda (\d+) min i sträck för att skydda kontaktorerna$/, (m) => "Prio " + m[1] + " (BATTERY PROTECTION): " + m[2] + " must charge " + m[3] + " min in a row to protect the contactors"],
+    [/^Tvingar fram (\d+)A$/, (m) => "Forcing " + m[1] + "A"],
+    [/^Klimat: (\S+) satt till (\S+) \((.+?)°C(\)?)$/, (m) => "Climate: " + m[1] + " set to " + m[2] + " (" + m[3] + "°C" + m[4]],
+    [/^Notis → ([^:]+): (.+)$/, (m) => "Notification → " + m[1] + ": " + m[2]],
     [/^(\S+(?: \S+){0,2}) laddar$/, (m) => m[1] + " charging"],              // bilnamn (högst tre ord)
   ];
 

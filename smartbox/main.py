@@ -199,6 +199,8 @@ print(f"✅ house_config.yaml: {len(car_drivers)} bil(ar) ({car_ids}), värmepum
       f"sol={type(solar_driver).__name__}, spa={type(spa_driver).__name__}, laddare={list(physical_charger_drivers.keys())}")
 
 telemetry.send_driver_snapshot(house_cfg)  # obligatorisk telemetri, se telemetry.py och README
+import i18n_py
+i18n_py.install_print()                  # tilläggsloggen på installationens språk (före loggens och telemetrins krokar)
 ew_journal.install("motor")              # installationens logg: allt som skrivs ut, i husets databas (ew_journal.py)
 telemetry.install_error_hook(house_cfg)    # "❌"-fel -> modul.funktion + feltyp (aldrig texten), se telemetry.py
 
