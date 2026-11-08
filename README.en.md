@@ -25,7 +25,7 @@ instead of inventing new protocol code. Open source, free, no subscription.
 - 🛁 **Spa with bathing times** - set the days and times you usually bathe. Outside them the spa may cool
   to an eco floor and is heated back up in time for the next bath, in the cheapest hours. Run against our
   own history: 25-34 % less electricity for the spa, about 22 % in winter too
-  ([how it works](https://murre87.github.io/energywizard/en/kunskapsbank/spabad.html)).
+  ([how it works](https://murre87.github.io/energywizard/en/kunskapsbank/hot-tub-by-price.html)).
 - ⚡ **Fuse guard** - watches the main fuse so you avoid overloads.
 - 📱 **Own app** (`ewapp`, mobile/PWA) and a **desktop/tablet view** (`webdashboard`) with full control,
   not just read-outs. Swedish and English.
