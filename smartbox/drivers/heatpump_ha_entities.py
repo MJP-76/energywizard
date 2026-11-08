@@ -18,6 +18,8 @@ rum), som är desamma på alla språk (discovery.py, _nibe_bt_entities). room_ta
 börvärde som är rätt skiljer mellan modeller, och myUplink kräver premiumabonnemang för att skriva. Utan den läser
 drivrutinen bara, och styrningen svarar ärligt False.
 """
+import re
+
 import homeassistant
 from drivers.heatpump import HeatPumpDriver
 
@@ -46,12 +48,8 @@ class HaEntitiesHeatPumpDriver(HeatPumpDriver):
         if not self._e:
             return {}
         out = {k: self._num(k) for k in _READ}
-        comp = self._num("compressor")
-        if comp is None and self._e.get("compressor"):           # binary_sensor/statustext: på/av
-            raw = str(homeassistant._get_raw_state(self._e["compressor"]) or "").strip().lower()
-            comp = 1.0 if raw in ("on", "true", "running", "drift", "går", "heating", "värme", "hot water", "varmvatten") \
-                else 0.0 if raw in ("off", "false", "idle", "stopped", "av", "vilar", "standby", "från") else None
-        out["compressor_running"] = None if comp is None else comp > 0
+        out["compressor_running"] = compressor_running(self._e.get("compressor"), self._num("compressor"),
+                                                       lambda: homeassistant._get_raw_state(self._e["compressor"]))
         out["compressor_power_kw"] = None
         return out
 
@@ -96,3 +94,23 @@ class HaEntitiesHeatPumpDriver(HeatPumpDriver):
 
     def set_operating_mode(self, mode) -> bool:
         return False
+
+
+_ON = ("on", "true", "running", "runs", "run", "drift", "går", "kör", "körs", "startar", "starting", "heating", "värme",
+       "hot water", "varmvatten")
+_OFF = ("off", "false", "idle", "stopped", "stoppad", "stopping", "stoppar", "av", "vilar", "standby", "från")
+_NIBE_STATUS = {20: False, 40: True, 60: True, 100: False}     # NIBE 43427 "Status kompressor": stoppad/startar/går/stoppar
+
+
+def compressor_running(entity, num, raw_fn):
+    """Går kompressorn? Frekvens > 0 = går. NIBE:s statusgivare 43427 (#184) ger koder i stället för frekvens:
+    20 stoppad, 40 startar, 60 går, 100 stoppar - och i HA ibland som text ("Running", "Stopped"). None = vet inte."""
+    if not entity:
+        return None
+    is_status = bool(re.search(r"43427|status", str(entity), re.I))
+    if num is not None:
+        if is_status and int(num) in _NIBE_STATUS and float(num) == int(num):
+            return _NIBE_STATUS[int(num)]
+        return num > 0
+    raw = str(raw_fn() or "").strip().lower()
+    return True if raw in _ON else False if raw in _OFF else None

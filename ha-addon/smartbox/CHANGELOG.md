@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.63 (2026-11-08)
+- **Engelska överallt** (#202): drygt 250 texter som fortfarande var på svenska är översatta (Inställningar,
+  Elbil, Historik, Aviseringar, Installationer). Översättaren hittade inte texter som stod med emoji eller
+  skiljetecken först i ordlistan; de matchar nu. Meningar med namn ("… har varit onåbar", "<bil> laddar") översätts
+  med regler, och datum följer valt språk.
+- **NIBE "Status kompressor" (43427)** (#184): statuskoderna 20/40/60/100 (stoppad/startar/går/stoppar) och texter som
+  "Running"/"Stopped" tolkas rätt. Förut räknades varje kod över 0 som att kompressorn gick.
+
 ## 1.2.62 (2026-11-08)
 - **Bil utan batterinivå laddas efter schemat** (#204): saknar bilen batterinivå i Home Assistant (t.ex. Zeekr) men
   har ett påslaget schema eller "klar senast" planeras laddningen som om bilen stod på 20 %. Bilen slutar själv när

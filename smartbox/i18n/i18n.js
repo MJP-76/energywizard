@@ -33,6 +33,14 @@
     [/^Fick inget svar från (.+)\. Stämmer adressen, och når servern Home Assistant\?$/, (m) => "No answer from " + m[1] + ". Is the address right, and can the server reach Home Assistant?"],
     [/^Oväntat svar från (.+) \((\d+)\)\. Är det rätt adress till Home Assistant\?$/, (m) => "Unexpected answer from " + m[1] + " (" + m[2] + "). Is it the right address for Home Assistant?"],
     [/^Kunde inte prata krypterat med (.+)\. Prova http:\/\/ i stället\.$/, (m) => "Could not talk encrypted with " + m[1] + ". Try http:// instead."],
+    [/^(.+) har varit onåbar i över (\d+) minuter$/, (m) => m[1] + " has been unreachable for over " + m[2] + " minutes"],
+    [/^Första telefonen i Home Assistant \((.+)\)?$/, (m) => "First phone in Home Assistant (" + m[1] + ")"],
+    [/^till ((?:notify\.|script\.|mobile_app_)\S+)$/, (m) => "to " + m[1]],
+    [/^Härnäst (.+?): (.+) laddar$/, (m) => "Next " + m[1] + ": " + m[2] + " charging"],
+    [/^Just nu: (.+)\. Härnäst (.+?): (.+) laddar$/, (m) => "Right now: " + (tr(m[1]) || m[1]).toLowerCase() + ". Next " + m[2] + ": " + m[3] + " charging"],
+    [/^förinställning (.+)$/, (m) => "preset " + m[1]],
+    [/^Växelriktaren svarar inte \(FTW-drivrutinen (.+)$/, (m) => "The inverter doesn't answer (FTW driver " + m[1]],
+    [/^(\S+(?: \S+){0,2}) laddar$/, (m) => m[1] + " charging"],              // bilnamn (högst tre ord)
   ];
 
   function fill(text, nums) {
