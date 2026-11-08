@@ -1,5 +1,15 @@
 # Ändringar
 
+## 1.2.62 (2026-11-08)
+- **Bil utan batterinivå laddas efter schemat** (#204): saknar bilen batterinivå i Home Assistant (t.ex. Zeekr) men
+  har ett påslaget schema eller "klar senast" planeras laddningen som om bilen stod på 20 %. Bilen slutar själv när
+  den är full. Förut planerades ingenting och laddboxen pausades efter några procent.
+- **Värmepump utan utegivare** (#204): en climate-pump som svarar räknas som levande även utan utetemperatur. Förut
+  trodde vakthunden att kontakten var bruten, tvingade 21 °C och visade "Tappat kontakt > 45 min" som status.
+- **Ser mätaren elbilen?** En gång per dygn jämförs husets förbrukning under laddtimmar med samma timmar utan laddning.
+  Sitter laddboxen bakom en egen mätare drar EnergyWizard inte längre av bilen från husets förbrukning och visar
+  varför. (Idé från Energy Pilot.)
+
 ## 1.2.61 (2026-11-08)
 - **Lampknapparna klarar reläer** (t.ex. Shelly som `switch.*`): tänd och släck går via `homeassistant.turn_on/off`,
   så lampor och reläer kan blandas. Fönstergruppen kan vara en lista med grupper och enskilda lampor, grupper i

@@ -484,7 +484,7 @@ async def control_alerts():
     import control_alerts as _ca
     with ENGINE.connect() as c:
         try:
-            rows = c.execute(text("SELECT device, mode FROM overrides WHERE device IN ('battery_follow', 'ev_hold')")).all()
+            rows = c.execute(text("SELECT device, mode FROM overrides WHERE device IN ('battery_follow', 'ev_hold', 'ev_in_meter')")).all()
         except Exception:
             rows = []
     return {"ok": True, "alerts": _ca.build({r[0]: r[1] for r in rows})}

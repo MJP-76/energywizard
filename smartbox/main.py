@@ -409,6 +409,13 @@ def _log_charger_status_if_changed(car_id, charger_data):
         _last_logged_charger_status[car_id] = status
 
 import ev_hold as _ev_hold_mod
+import ev_in_meter
+_EV_METER = {"in": None, "at": 0.0}
+try:
+    import ew_settings as _ews0
+    _EV_METER["in"] = _ews0.get("ev_in_meter")
+except Exception:
+    pass
 import control_journal
 import shadow
 _journal: list = []
@@ -1290,7 +1297,10 @@ while True:
                                      if x.get("entity") and isinstance(ha_temps.get(x["key"]), (int, float)) and ha_temps.get(x["key"]) > 0])
             except Exception:
                 pass
-            _pump_ok = bool(pump_data and pump_data.get("outdoor_temp") is not None)
+            # Pumpen lever om den svarar med något mätvärde - inte bara utetemperatur (#204: en climate-pump utan utegivare
+            # räknades som tappad kontakt i all evighet, och vakthunden tvingade 21 °C och visade det som status)
+            _pump_ok = bool(pump_data) and any(isinstance(v, (int, float)) and not isinstance(v, bool)
+                                               for k, v in pump_data.items() if k != "_ts")
             if _pump_ok:
                 last_heartbeat = now
             # Innetemperaturen ur de valda givarna även utan värmepump (issue #128: förut bara när pumpen svarade, så
@@ -1411,6 +1421,23 @@ while True:
                     last_house_neg_warn = now
                 _bat_w = 0.0
             house_consumption_w = solar_prod_w + avg_net - _bat_w
+            # Ser mätaren elbilen? (ev_in_meter.py, kollas en gång per dygn) Om inte: bilen läggs till husets förbrukning
+            # här, så att allt som drar av bilen längre ner (grundlast, prognoser, vad som drar strömmen) blir rätt.
+            if time.time() - _EV_METER["at"] > 86400:
+                _EV_METER["at"] = time.time()
+                try:
+                    _ans, _ratio, _n = ev_in_meter.from_db(logger.get_db)
+                    if _ans is not None and _ans != _EV_METER["in"]:
+                        print(f"🔌 Mätaren {'ser' if _ans else 'ser INTE'} elbilens laddning (kvot {_ratio}, {_n} laddtimmar).")
+                        _ew_settings.update(ev_in_meter=_ans)
+                        logger.set_override("ev_in_meter", "ok" if _ans else json.dumps({"text": ev_in_meter.text(_ans, _ratio)}, ensure_ascii=False))
+                    if _ans is not None:
+                        _EV_METER["in"] = _ans
+                except Exception as _me:
+                    print(f"⚠️ Kontrollen om mätaren ser elbilen: {_me}")
+            if _EV_METER["in"] is False:
+                _evk = sum(((d or {}).get("power_kw") or 0.0) for d in _charger_list)
+                house_consumption_w += 1000.0 * (_evk / 1000.0 if _evk > 100 else _evk)
             # Ett hus kan inte producera el: kraftigt negativt betyder att någon givare har fel tecken eller enhet (#139).
             # Logga delarna (högst en gång i timmen) och visa 0 i stället för t.ex. -17 kW.
             if house_consumption_w < -300:
@@ -1626,6 +1653,8 @@ while True:
             ev_l1 = sum(((d or {}).get('current_l1') or 0) for d in _charger_list)
             ev_l2 = sum(((d or {}).get('current_l2') or 0) for d in _charger_list)
             ev_l3 = sum(((d or {}).get('current_l3') or 0) for d in _charger_list)
+            if _EV_METER["in"] is False:          # laddboxen sitter inte bakom mätaren: inget att dra av från fasströmmarna
+                ev_l1 = ev_l2 = ev_l3 = 0
 
             hl1_non_ev = max(0, (avg_hl1 or 0) - ev_l1)
             hl2_non_ev = max(0, (avg_hl2 or 0) - ev_l2)

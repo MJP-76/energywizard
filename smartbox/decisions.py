@@ -178,10 +178,18 @@ DEFAULT_BATTERY_KWH = 60
 MORNING_MIN_SOC = 50
 MORNING_HOUR = 6
 
+UNKNOWN_SOC_ASSUMED = 20   # #204: bilen saknar batterinivå i HA (t.ex. Zeekr) men har ett schema - planera som om den stod på 20 %
+
+
 def get_car_plan_details(now, car_id, schedule, current_soc, battery_kwh, ready_by=None, ready_soc=None):
     """Hjälpfunktion som beräknar nästa mål och energibehov för en bil. ready_by/ready_soc (#200): "klar senast" ur en
-    HA-entitet - går före veckoschemat när den ligger framåt i tiden."""
+    HA-entitet - går före veckoschemat när den ligger framåt i tiden.
+    Okänd batterinivå (#204): med ett påslaget schema eller "klar senast" planeras laddningen som om bilen stod på
+    UNKNOWN_SOC_ASSUMED % (bilen slutar själv när den är full). Förut planerades ingenting, och bilen laddade bara tills
+    EnergyWizard pausade laddboxen. Utan schema: som förut, ingen tvingad laddning."""
     target_dt, target_soc, panic_mode = None, 100, False
+    if ready_by is not None and ready_by > now and current_soc is None:
+        current_soc = UNKNOWN_SOC_ASSUMED
     if ready_by is not None and ready_by > now:
         try:
             soc_goal = float(ready_soc) if ready_soc is not None else 100.0
@@ -212,6 +220,8 @@ def get_car_plan_details(now, car_id, schedule, current_soc, battery_kwh, ready_
                 break
     # Morgongolv: schemat får aldrig ge lägre mål än MORNING_MIN_SOC, och saknas aktivt schema
     # (avstängt/inget) gäller ändå nästa morgon kl MORNING_HOUR som deadline.
+    if target_dt is not None and current_soc is None:
+        current_soc = UNKNOWN_SOC_ASSUMED
     if target_dt is None:
         morning_dt = now.replace(hour=MORNING_HOUR, minute=0, second=0, microsecond=0)
         if morning_dt <= now:
