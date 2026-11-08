@@ -606,6 +606,10 @@ async function renderElbil() {
     const car = b.dataset.car;
     postAction("api/schedule", { car, days: [0, 1, 2, 3, 4, 5, 6], ...rowOf(car, 0) }, "Måndagens schema gäller nu alla dagar").then(renderElbil);
   });
+  if (d) api("api/ev-cost").then((ec) => {                // laddat idag/veckan/månaden och vad det kostade
+    const g = document.querySelector("#main .grid"), html = ec && ec.ok && window.EWJournal ? EWJournal.evCostHtml(ec) : "";
+    if (g && html && currentPage === "elbil" && !document.getElementById("evcost")) g.insertAdjacentHTML("afterend", `<div class="card" id="evcost" style="margin-bottom:16px">${html}</div>`);
+  }).catch(() => {});
 }
 
 // Lås/luckor - eget omverifieringssteg (samma princip som ewapp: lösenordet igen, 10 min)

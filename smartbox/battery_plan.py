@@ -105,8 +105,10 @@ def simulate(slots, soc0, actions, capacity, reserve, max_kwh, pc, pd, eff, cycl
 def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, discharge_kw,
              eff=0.9, allowed=ACTIONS, step_kwh=None, switch_cost=0.10, cycle_cost=0.0,
              terminal_pct=25, allow_export=True, charge_wear_cost_sek_per_kwh=0.0,
-             discharge_wear_cost_sek_per_kwh=0.0, reversal_cost_sek=0.0):
-    """slots: [{'t', 'buy', 'sell', 'load_kw', 'solar_kw', 'ev_kw'}] (kvartar, i tidsordning).
+             discharge_wear_cost_sek_per_kwh=0.0, reversal_cost_sek=0.0, ev_mode="block"):
+    """ev_mode: vad batteriet får göra medan elbilen laddar - "block" (ladda inte ur alls, som förut),
+    "offload" (Martins förslag 2026-11-07: täck bara husets egen förbrukning, aldrig bilen) eller "free" (även bilen).
+    slots: [{'t', 'buy', 'sell', 'load_kw', 'solar_kw', 'ev_kw'}] (kvartar, i tidsordning).
     cycle_cost: kr per urladdad kWh - batteriets slitage (cellernas pris / livslängd i kWh). Planen
     laddar då bara ur när prisskillnaden täcker förluster OCH slitage.
     switch_cost: kr per lägesbyte - håller planen sammanhängande (färre skrivningar till
@@ -157,10 +159,13 @@ def optimize(slots, soc0_kwh, capacity_kwh, reserve_kwh, max_kwh, charge_kw, dis
                 if not allow_export and b < 0:
                     b = max(b, -max(0.0, net))        # bara husets egen förbrukning, ingen försäljning
                 if ev_on and b < 0:
-                    if a == "discharge":
-                        row.append(None)
-                        continue
-                    b = 0.0
+                    if ev_mode == "offload":
+                        b = max(b, -max(0.0, s["load_kw"] - s.get("solar_kw", 0.0)))   # huset, inte bilen
+                    elif ev_mode != "free":
+                        if a == "discharge":
+                            row.append(None)
+                            continue
+                        b = 0.0
                 new, b = _step(soc, b, min(lo, soc), hi if soc <= hi else soc, eff_c, eff_d)
                 wear = cycle_cost * max(0.0, -b) * DT_H
                 if charge_wear_cost_sek_per_kwh:

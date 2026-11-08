@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.60 (2026-11-08)
+- **Laddat och vad det kostade** (Bil i appen, Elbil på webben): elbilsladdningens kWh och kronor idag, den här
+  veckan och den här månaden, med hur mycket som kom från solen. Från nätet räknas full köpkostnad, från solen vad
+  elen annars hade sålts för. Energin räknas från uppmätt effekt (inte laddboxens sessionsmätare), och har loggen
+  luckor står det "delvis" i stället för en för låg siffra. (Idé från FTW 0.162.)
+- Batteriplaneraren kan simulera att husbatteriet täcker husets egen förbrukning medan elbilen laddar
+  (`battery_ev_offload_backtest.py`); beteendet i drift är oförändrat.
+
 ## 1.2.59 (2026-11-08)
 - **Startar på äldre x86-processorer igen** (#202): NumPy 2.4 kräver x86-64-v2 och tillägget kraschade direkt vid
   start på äldre datorer. Alla images låser nu NumPy till 2.3.

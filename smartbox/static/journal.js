@@ -52,5 +52,19 @@
       <div style="font-size:.9em;margin-top:4px;overflow-wrap:anywhere">${esc(r.message)}</div>
       <div class="note" style="margin:2px 0 0">${[r.category, r.recipient ? "till " + r.recipient : "", r.src === "appen" ? "från appen" : "", r.detail].filter(Boolean).map(esc).join(" · ")}</div></details>`).join("");
   }
-  window.EWJournal = { html, notifyHtml };
+  // Elbilsladdningens energi och kostnad (api/ev-cost, smartbox/ev_cost.py)
+  function evCostHtml(d, opts) {
+    opts = opts || {};
+    const c = !!opts.compact, P = (d && d.periods) || {};
+    if (!P.today) return "";
+    const n1 = (x) => (Math.round(x * 10) / 10).toFixed(x >= 100 ? 0 : 1).replace(".", ",");
+    const cell = (k, l) => { const p = P[k]; return `<div style="flex:1;min-width:0">
+      <div class="note" style="margin:0">${l}${p.partial ? ` <span title="Loggen har luckor, siffran är för låg">· delvis</span>` : ""}</div>
+      <div style="font-weight:800;font-size:${c ? 1.05 : 1.25}rem">${p.kr} kr</div>
+      <div class="note" style="margin:0">${n1(p.kwh)} kWh${p.solar_kwh >= 0.5 ? `, ${n1(p.solar_kwh)} från solen` : ""}</div></div>`; };
+    const title = c ? `<b>Laddat</b>` : `<h2>🔌 Laddat och vad det kostade</h2>`;
+    return `${title}<div style="display:flex;gap:10px;margin-top:6px">${cell("today", "Idag")}${cell("week", "Veckan")}${cell("month", "Månaden")}</div>
+      <div class="note" style="margin-top:6px">Från nätet till full köpkostnad, från solen till vad den annars hade sålts för. Alla bilar tillsammans.</div>`;
+  }
+  window.EWJournal = { html, notifyHtml, evCostHtml };
 })();

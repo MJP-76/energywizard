@@ -453,6 +453,14 @@ async def api_journal_download(request: Request, days: float = 2):
     return Response(content=body, media_type="text/plain; charset=utf-8", headers={"Content-Disposition": f"attachment; filename={name}"})
 
 
+@app.get("/api/ev-cost")
+def api_ev_cost():
+    """Elbilsladdningens energi och kostnad idag, veckan, månaden (smartbox/ev_cost.py) - samma i appen och webben."""
+    import ev_cost
+    with ENGINE.connect() as c:
+        return {"ok": True, "periods": ev_cost.summary(c)}
+
+
 @app.get("/api/notify-log")
 def api_notify_log(days: int = 7):
     """Aviseringshistorik med leveransstatus (smartbox/notify_log.py) - samma i appen och webben."""

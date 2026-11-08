@@ -4,7 +4,7 @@ const $ = (s) => document.querySelector(s), app = $("#app");
 const LS = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 let FL = null;                     // "Just nu"-flödet på Hem (api/flow, samma som webbens Översikt)
 let PC = null, PCAt = 0, PCNEW = false, PCEL = null, PCH = null;   // planklockan (planclock.js) - samma DOM-nod mellan omritningar så att visaren inte hoppar
-let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null, JR = null, jBack = 1;
+let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null, JR = null, jBack = 1, EC = null, ecAt = 0;
 let svPeriod = LS.get("ew_sv_period", "week"), hxPeriod = LS.get("ew_hx_period", "today"), hxRange = LS.get("ew_hx_range", "24h");
 // gamla flikar (före fem-flik-layouten) pekas om så ingen hamnar på en tom sida
 page = ({ ljus: "hem", energi: "hem", schema: "plan", grafer: "historik" })[page] || page;
@@ -144,7 +144,8 @@ function pageBil() {
   if (!S) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const p = primary(), main = S.cars.find((c) => c.key === p) || S.cars[0], other = S.cars.find((c) => c !== main), simple = LS.get("ew_simple", "") === "1";
   const carseg = `<div class="seg carseg">${S.cars.map((c) => `<button data-a="swap" data-c="${c.key}" class="${c.key === main.key ? "on" : ""}">${esc(c.name.split(" ")[0])} · ${c.soc ?? "–"} %</button>`).join("")}</div>`;
-  return `<div class="page">${carseg}${hero(main)}${simple ? "" : compact(other)}${planChart(S.price, S.cars)}</div>`;
+  const ec = EC && window.EWJournal ? EWJournal.evCostHtml(EC, { compact: true }) : "";     // laddat och vad det kostade (ev_cost.py)
+  return `<div class="page">${carseg}${hero(main)}${simple ? "" : compact(other)}${planChart(S.price, S.cars)}${ec && !simple ? `<section class="card">${ec}</section>` : ""}</div>`;
 }
 // ---- Hus -------------------------------------------------------------------------------------------------------------------------
 const MODE = { auto: "Auto", on: "Till", off: "Från" };
@@ -460,6 +461,7 @@ async function load() {
     if (page === "hus") H = await api("home");
     if (page === "hem") { if (!S || Date.now() - (S._t || 0) > 30000) { S = await api("state").catch(() => S); if (S) S._t = Date.now(); }
       [EN, PL, SV, FL] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null, api("flow").catch(() => FL)]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
+    if (page === "bil" && Date.now() - ecAt > 300000) { ecAt = Date.now(); api("ev-cost").then((d) => { EC = d; if (page === "bil") render(); }).catch(() => {}); }
     if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); await loadClock(); }
     if (page === "historik") { if (histView === "energi") { HX = await api("energyhistory?range=" + hxRange); JR = await api("control-journal?back=" + jBack).catch(() => JR); } else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();

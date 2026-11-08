@@ -609,6 +609,14 @@ def prices() -> dict:
     return {"now": cur, "level": lvl, "hours": hours}
 
 
+@app.get("/api/ev-cost")
+def api_ev_cost():
+    """Elbilsladdningens energi och kostnad idag, veckan, månaden (smartbox/ev_cost.py) - samma i appen och webben."""
+    import ev_cost
+    with ENGINE.connect() as c:
+        return {"ok": True, "periods": ev_cost.summary(c)}
+
+
 @app.get("/api/notify-log")
 def api_notify_log(days: int = 7):
     """Aviseringshistorik med leveransstatus (smartbox/notify_log.py) - samma i appen och webben."""
