@@ -53,6 +53,33 @@
   <p>Price optimization must never come at the cost of basic comfort - minimum levels (for both indoor
   temperature and EV charging) are a hard limit in the control logic, not a goal the system tries to
   balance against. The system optimizes <em>within</em> that limit, never by lowering it.</p>
+  <h3>Does everything run locally, or is the cloud needed?</h3>
+  <p>EnergyWizard runs in your own Home Assistant (add-on) or in Docker. No account, no subscription and no cloud is
+  needed to control anything. Devices Home Assistant talks to locally (heat pump, inverter, battery, charger over Modbus
+  or a local API) are controlled locally. The internet is used for electricity prices, the weather forecast and devices
+  that only have a cloud API, such as some cars and chargers. If the internet drops, EnergyWizard keeps running on the
+  last plan.</p>
+
+  <h3>What is sent to the developer (telemetry)?</h3>
+  <p>Telemetry is mandatory and a condition for using EnergyWizard. Once a day it sends: a random, hashed installation
+  id, which equipment is used (driver, brand and model), approximate sizes, settings, rounded temperatures and error
+  types (never the error message). Never names, addresses, IP addresses or measurement history. Exactly what is sent is
+  in the README under "Telemetry".</p>
+
+  <h3>Does EnergyWizard wear out the inverter's flash or Home Assistant's SD card?</h3>
+  <p>No, it is built to avoid that. The export limit is written at most every five minutes, heat pump registers only
+  when they change, and mode selects and power setpoints are not written if they already have the right value. Battery
+  power is not rewritten until it changes by at least 200 W or 10%. In the add-on, the database batches its writes
+  instead of forcing every row out to the SD card.</p>
+
+  <h3>Can notifications go only to whoever is at home?</h3>
+  <p>Yes. Settings → Notifications has "Only to whoever is home". House notifications then go to the phones whose
+  person is at home according to Home Assistant (<code>person.*</code>). If nobody is home they go to every person's
+  phone.</p>
+
+  <h3>Can I see my own devices in "What is drawing power"?</h3>
+  <p>Yes. Add devices with a power sensor (e.g. smart plugs on a washing machine or sauna) under <code>loads:</code> in
+  the installation. They show as their own rows and are subtracted from the unexplained load. See the README.</p>
 </article>
 </div>
 </body>

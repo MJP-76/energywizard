@@ -112,6 +112,15 @@
   Se <a href="https://github.com/murre87/energywizard/blob/main/docs/ferroamp-energyhub.md">kontrollmappning och konfiguration</a>.</p>
 
   <p>Exempel för varje märke finns i <code>config/house_config.example.yaml</code>.</p>
+
+  <h3>Flera växelriktare eller MPPT-moduler</h3>
+  <p>Med den generiska soldrivrutinen kan solproduktionen summeras från flera givare (<code>sum_inverters: true</code>),
+  till exempel en per MPPT-modul på en Fronius GEN24. Guiden föreslår det själv när den hittar flera moduler.</p>
+
+  <h3>GoodWe</h3>
+  <p>GoodWe styrs via lägena Eco Charge/Discharge i GoodWe-integrationen. Det finns kända fel i integrationen för
+  vissa ES- och ET-modeller med ny firmware (se ärende #181 på GitHub). Har du en väg som fungerar hos dig, berätta
+  gärna där.</p>
 </article>
 </div>
 </body>

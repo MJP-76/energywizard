@@ -32,6 +32,18 @@
   <p>Precis som med värmepumpen handlar mycket av värdet om <em>solöverskott</em>:
   när solcellerna producerar mer än huset använder just då, prioriteras
   elbilsladdning med det överskottet innan det säljs billigt tillbaka till nätet.</p>
+
+  <h3>Två bilar på samma laddbox</h3>
+  <p>Ingen fast koppling mellan bil och laddbox behövs. Peka flera bilar på samma laddbox, så väljer EnergyWizard
+  varje varv den bil som rapporterar att kabeln sitter i (bilens egen "inkopplad"-givare i Home Assistant). Rapporterar
+  ingen bil det räknas det som en gästbil. Bilens faser och maxström lärs in av laddboxens fasströmmar och visas på
+  Elbil-sidan.</p>
+
+  <h3>"Klar senast" från Home Assistant</h3>
+  <p>Utöver veckoschemat kan varje bil få en <code>ready_by</code>-entitet (en <code>input_datetime</code> med datum och
+  tid, bara tid eller en sensor med tidsstämpel) och valfritt <code>ready_soc</code>. När tiden ligger framåt går den
+  före schemat, och ändras den räknas laddplanen om direkt. Egna automationer, till exempel "kopplad före 15:30 =
+  klar samma dag, annars nästa morgon", kan alltså ligga kvar i Home Assistant.</p>
 </article>
 </div>
 </body>

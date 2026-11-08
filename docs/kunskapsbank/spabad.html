@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spabadet efter elpris och badtider - EnergyWizard Open</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../"><span class="dot"></span> EnergyWizard Open</a>
+    <nav class="top"><a href="./">Kunskapsbank</a><span class="langswitch"><a class="on" href="#">SV</a><a href="../en/kunskapsbank/hot-tub-by-price.html">EN</a></span></nav>
+  </div>
+</header>
+<div class="wrap">
+<article class="post">
+  <h1>Spabadet efter elpris och badtider</h1>
+  <div class="meta">Spabad</div>
+
+  <p>Ett spabad som hålls varmt dygnet runt drar el även när ingen badar. EnergyWizard håller badet varmt när ni
+  badar och låter det vila annars. Uppvärmningen läggs på dygnets billigaste timmar, och det fungerar med
+  <strong>Gecko</strong> (in.touch 2) och <strong>Balboa</strong> (Wi-Fi-modulen) via Home Assistant, och med andra bad
+  via ett smart relä (till exempel Shelly).</p>
+
+  <h3>Badtider</h3>
+  <p>Under Spabad på webben, eller i appens spabadsruta, väljer du vilka dagar och tider ni brukar bada, till exempel
+  lördag och söndag 10–18. Då gäller:</p>
+  <ul>
+    <li><strong>Utanför badtiderna</strong> får badet svalna till <strong>eco-golvet</strong> (din inställning, t.ex. 25 °C) och värms inte.</li>
+    <li><strong>Före varje badtid</strong> räknar EnergyWizard med husets egen inlärda spamodell ut hur länge uppvärmningen tar, och värmer på de billigaste timmarna så att badet har normaltemperatur när badtiden börjar.</li>
+    <li><strong>Under badtiden</strong> hålls badet varmt som vanligt.</li>
+    <li>Inga badtider valda = badet hålls varmt som förut.</li>
+  </ul>
+
+  <h3>Vad sparar det?</h3>
+  <p>Kört mot 60 dygns historik i ett hus med ett välisolerat bad (normal 38,5 °C, helgbad 10–18):</p>
+  <table>
+    <tr><th>Eco-golv</th><th>Sparar av badets el</th></tr>
+    <tr><td>30 °C</td><td>25 %</td></tr>
+    <tr><td>25 °C</td><td>34 %</td></tr>
+    <tr><td>20 °C eller lägre</td><td>36 % (badet hann inte svalna mer än till ca 22 °C mellan helgerna)</td></tr>
+  </table>
+  <p>Badet var 38,5 °C vid varje badtidsstart. Ju längre badet står oanvänt, desto mer sparar det. Badar ni varje
+  kväll blir det bara några procent. Siffrorna gäller ett hus, så räkna på ditt eget: <code>docker exec smartbox python
+  spa_bath_backtest.py --days 60</code> räknar på din egen historik (Docker-drift).</p>
+
+  <h3>Det som sköts automatiskt</h3>
+  <ul>
+    <li><strong>Solöverskott:</strong> egen solel går till badet i stället för att säljas billigt.</li>
+    <li><strong>Minuspris:</strong> badet värms till sitt max som termiskt lager.</li>
+    <li><strong>Prisspikar:</strong> badet sänks tillfälligt när elen är som dyrast.</li>
+    <li><strong>Elbilen och säkringen:</strong> badets värme pausas medan bilen laddar från nätet, så att säkringen räcker till båda.</li>
+    <li><strong>Klart till en viss tid:</strong> "38 grader på lördag kl 15" – EnergyWizard räknar själv ut när uppvärmningen ska börja.</li>
+  </ul>
+
+</article>
+</div>
+</body>
+</html>

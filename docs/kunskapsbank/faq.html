@@ -55,6 +55,32 @@
   inomhustemperatur och elbilars laddning) är en hård gräns i styrlogiken, inte ett mål
   systemet försöker balansera mot. Systemet optimerar <em>inom</em> den gränsen, aldrig
   genom att sänka den.</p>
+  <h3>Körs allt lokalt, eller behövs molnet?</h3>
+  <p>EnergyWizard körs i din egen Home Assistant (tillägg) eller i Docker. Inget konto, ingen prenumeration och inget
+  moln behövs för att styra. Enheter som Home Assistant pratar med lokalt (värmepump, växelriktare, batteri, laddbox via
+  Modbus eller lokalt API) styrs lokalt. Internet används för elpriset, väderprognosen och enheter som bara har ett
+  moln-API, till exempel vissa bilar och laddboxar. Tappas internet fortsätter EnergyWizard på den senaste planen.</p>
+
+  <h3>Vad skickas till utvecklaren (telemetri)?</h3>
+  <p>Telemetrin är obligatorisk och ett villkor för att använda EnergyWizard. En gång per dygn skickas: ett slumpat,
+  hashat installations-ID, vilken utrustning som används (drivrutin, märke och modell), ungefärliga storlekar,
+  inställningar, avrundade temperaturer och feltyper (aldrig feltexten). Aldrig namn, adress, IP-adresser eller
+  mätvärdeshistorik. Exakt vad som skickas står i README under "Telemetri".</p>
+
+  <h3>Sliter EnergyWizard på växelriktarens flash eller Home Assistants minneskort?</h3>
+  <p>Nej, det är byggt för att undvika det. Exportgränsen skrivs högst var femte minut, värmepumpens register bara vid
+  ändring, och lägesval och effektbörvärden skrivs inte om de redan stämmer. Batteriets effekt skrivs inte om förrän
+  ändringen är minst 200 W eller 10 %. I tillägget samlar databasen sina skrivningar i stället för att tvinga ut varje
+  rad till minneskortet.</p>
+
+  <h3>Kan aviseringarna gå bara till den som är hemma?</h3>
+  <p>Ja. Under Inställningar → Aviseringar finns "Bara till den som är hemma". Då går aviseringar om huset till
+  telefonerna vars person är hemma enligt Home Assistant (<code>person.*</code>). Är ingen hemma går de till alla
+  personers telefoner.</p>
+
+  <h3>Kan jag se mina egna prylar i "Vad drar strömmen"?</h3>
+  <p>Ja. Lägg prylar med en effektsensor (t.ex. smartpluggar på tvättmaskin eller bastu) under <code>loads:</code> i
+  installationen. De syns som egna rader och räknas bort från det oförklarade. Se README.</p>
 </article>
 </div>
 </body>

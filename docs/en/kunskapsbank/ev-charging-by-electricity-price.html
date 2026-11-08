@@ -32,6 +32,18 @@
   <p>Just like with the heat pump, much of the value comes from <em>solar surplus</em>: when the solar panels
   produce more than the house is using right then, EV charging is prioritized with that surplus before it's
   sold cheaply back to the grid.</p>
+
+  <h3>Two cars on one charger</h3>
+  <p>No fixed link between car and charger is needed. Point several cars at the same charger, and each round
+  EnergyWizard picks the car that reports its cable is plugged in (the car's own "plugged in" sensor in Home
+  Assistant). If no car reports it, it counts as a guest car. Each car's phases and maximum current are learned from the
+  charger's phase currents and shown on the EV page.</p>
+
+  <h3>"Ready by" from Home Assistant</h3>
+  <p>Besides the weekly schedule, each car can have a <code>ready_by</code> entity (an <code>input_datetime</code> with
+  date and time, time only, or a timestamp sensor) and optionally <code>ready_soc</code>. When the time is ahead it
+  overrides the schedule, and a change replans charging at once. Your own automations, e.g. "plugged in before 15:30 =
+  ready the same day, otherwise next morning", can stay in Home Assistant.</p>
 </article>
 </div>
 </body>

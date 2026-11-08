@@ -65,6 +65,16 @@
   host: 192.168.1.60
   base_shift: 0            # your normal shift (-5..5)
   indoor_from_z1: false    # true if zone 1 has a room sensor</code></pre>
+
+  <h3>NIBE via nibegw or myUplink</h3>
+  <p>The setup wizard finds NIBE's sensors by their codes (BT1 outdoor, BT2 supply, BT3 return, BT7/BT6 hot water, BT50
+  room) and the compressor frequency, in any language. With the Nibe Heat Pump integration (e.g. through a nibegw
+  module) EnergyWizard controls the pump with the heating curve offset (47011) when there is no room setpoint. Through
+  myUplink the pump is read; controlling it requires myUplink's premium subscription.</p>
+
+  <h3>Time-of-use tariff</h3>
+  <p>With a time-of-use grid tariff (higher fee in the daytime), the heat pump ranks and compares quarters on spot price
+  plus tariff, so the quarter before 22:00 is not treated as cheap as the one after.</p>
 </article>
 </div>
 </body>

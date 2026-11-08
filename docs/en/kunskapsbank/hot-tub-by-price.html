@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The hot tub by price and bathing times - EnergyWizard Open</title>
+<link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../../"><span class="dot"></span> EnergyWizard Open</a>
+    <nav class="top"><a href="./">Knowledge base</a><span class="langswitch"><a href="../../kunskapsbank/spabad.html">SV</a><a class="on" href="#">EN</a></span></nav>
+  </div>
+</header>
+<div class="wrap">
+<article class="post">
+  <h1>The hot tub by price and bathing times</h1>
+  <div class="meta">Hot tub</div>
+
+  <p>A hot tub kept hot around the clock uses power even when nobody is in it. EnergyWizard keeps the tub hot when
+  you bathe and lets it rest otherwise, heating it in the cheapest hours of the day. It works with <strong>Gecko</strong>
+  (in.touch 2) and <strong>Balboa</strong> (the Wi-Fi module) through Home Assistant, and with other tubs through a smart
+  relay (e.g. Shelly).</p>
+
+  <h3>Bathing times</h3>
+  <p>Under Hot tub on the web, or in the app's hot tub card, pick the days and hours you usually bathe, e.g.
+  Saturday and Sunday 10–18. Then:</p>
+  <ul>
+    <li><strong>Outside bathing times</strong> the tub cools down to the <strong>eco floor</strong> (your setting, e.g. 25 °C) and is not heated.</li>
+    <li><strong>Before each bathing time</strong> EnergyWizard uses the house's own learned tub model to work out how long heating takes, and heats in the cheapest hours so the tub is at its normal temperature when the bathing time starts.</li>
+    <li><strong>During the bathing time</strong> the tub is kept hot as usual.</li>
+    <li>No bathing times chosen = the tub is kept hot as before.</li>
+  </ul>
+
+  <h3>What does it save?</h3>
+  <p>Run against 60 days of history in a house with a well-insulated tub (normal 38.5 °C, weekend bathing 10–18):</p>
+  <table>
+    <tr><th>Eco floor</th><th>Saves of the tub's electricity</th></tr>
+    <tr><td>30 °C</td><td>25%</td></tr>
+    <tr><td>25 °C</td><td>34%</td></tr>
+    <tr><td>20 °C or lower</td><td>36% (the tub did not cool below about 22 °C between weekends)</td></tr>
+  </table>
+  <p>The tub was at 38.5 °C at the start of every bathing time. The longer the tub sits unused, the more it saves;
+  bathing every evening saves only a few percent. These numbers are from one house, so run your own:
+  <code>docker exec smartbox python spa_bath_backtest.py --days 60</code> works on your own history (Docker install).</p>
+
+  <h3>Handled automatically</h3>
+  <ul>
+    <li><strong>Solar surplus:</strong> your own solar goes into the tub instead of being sold cheap.</li>
+    <li><strong>Negative prices:</strong> the tub is heated to its maximum as thermal storage.</li>
+    <li><strong>Price spikes:</strong> the tub is lowered a little while power is at its most expensive.</li>
+    <li><strong>Your EV and your fuse:</strong> tub heating pauses while the car charges from the grid, so the fuse can handle both.</li>
+    <li><strong>Ready at a set time:</strong> "38 degrees on Saturday at 3 pm" – EnergyWizard works out when to start.</li>
+  </ul>
+
+</article>
+</div>
+</body>
+</html>
