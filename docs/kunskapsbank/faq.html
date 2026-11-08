@@ -81,6 +81,16 @@
   <h3>Kan jag se mina egna prylar i "Vad drar strömmen"?</h3>
   <p>Ja. Lägg prylar med en effektsensor (t.ex. smartpluggar på tvättmaskin eller bastu) under <code>loads:</code> i
   installationen. De syns som egna rader och räknas bort från det oförklarade. Se README.</p>
+  <h3>Bilen laddar långsammare än planen. Varför?</h3>
+  <p>Drar bilen tydligt mindre ström än EnergyWizard beställt i fem minuter visas en förklaring överst i appen och på
+  webben. Oftast är det laddboxens lastbalansering (Easee Equalizer eller kretsens gräns) som tar ner strömmen när resten
+  av huset drar mycket, laddboxens maxgräns, eller bilen själv (egen laddare, laddgräns, kallt batteri). Easees
+  sensorer för strömgränser är avstängda som standard i Home Assistant. Slå på dem så kan EnergyWizard säga exakt vilket.</p>
+
+  <h3>Hur ser jag att EnergyWizard faktiskt gjorde det den sa?</h3>
+  <p>Under Historik finns "Höll vi planen?": per enhet hur stor del av minuterna elbilen, värmepumpen och husbatteriet
+  gjorde det som beställdes, idag eller igår, och när de avvek. Under Notiser (appen) och Aviseringar (webben) syns de
+  skickade aviseringarna med hur det gick: skickad, misslyckad med orsak, avstängd kategori eller ingen mottagare.</p>
 </article>
 </div>
 </body>

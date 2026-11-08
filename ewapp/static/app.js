@@ -4,7 +4,7 @@ const $ = (s) => document.querySelector(s), app = $("#app");
 const LS = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 let FL = null;                     // "Just nu"-flödet på Hem (api/flow, samma som webbens Översikt)
 let PC = null, PCAt = 0, PCNEW = false, PCEL = null, PCH = null;   // planklockan (planclock.js) - samma DOM-nod mellan omritningar så att visaren inte hoppar
-let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null;
+let LJ = null, VIEWAS = LS.get("ew_viewas", ""), GR = null, ME = "", ROLE = "owner", EN = null, S = null, H = null, page = LS.get("ew_page", "bil"), busy = false, timer = null, installEvt = null, SCH = null, schCar = "", HIST = null, SET = null, PL = null, SV = null, HX = null, JR = null, jBack = 1;
 let svPeriod = LS.get("ew_sv_period", "week"), hxPeriod = LS.get("ew_hx_period", "today"), hxRange = LS.get("ew_hx_range", "24h");
 // gamla flikar (före fem-flik-layouten) pekas om så ingen hamnar på en tom sida
 page = ({ ljus: "hem", energi: "hem", schema: "plan", grafer: "historik" })[page] || page;
@@ -286,7 +286,7 @@ function flowCard() {                    // delad med webbens Översikt (smartbo
 function pageHem() {
   if (!EN) return `<div class="note" style="text-align:center;margin-top:20dvh">Laddar…</div>`;
   const s = EN.solar, g = EN.grid, net = g.net_w;
-  const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid #ef4444"><b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
+  const alerts = (EN.alerts || []).map((a) => `<section class="card" style="border:1.5px solid ${a.level === "info" ? "#38bdf8" : "#ef4444"}"><b>${a.level === "info" ? "ℹ️" : "⚠️"} ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></section>`).join("");
   // Planklockan/Skyline ligger bara under Plan (Emil 2026-11-08: framsidan visar vad som händer just nu)
   return `<div class="page">${alerts}${flowCard()}${planNow()}${quickGrid(s, g, net, !!(FL && FL.ok))}${carsRow()}${ljusRow()}</div>`;
 }
@@ -339,8 +339,10 @@ function pagePlan() {
 const DAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 function schemaInner() {
   if (!SCH) return "";
-  const s = SCH[schCar];
+  // Vald bil först, sedan bilens schema (2026-11-08: schemat lästes innan schCar fått sitt värde -> JS-fel första gången)
   const _cs = (S && S.cars) || []; if (!_cs.some((c) => c.key === schCar) && _cs.length) schCar = _cs[0].key;
+  const s = SCH[schCar];
+  if (!s) return `<div class="note" style="text-align:center">Inget laddschema för den här bilen.</div>`;
   return `<div class="seg">${_cs.map((c) => `<button data-a="schcar" data-v="${esc(c.key)}" class="${schCar === c.key ? "on" : ""}">${esc(c.name)}</button>`).join("")}</div>
   <div class="note" style="text-align:center">Klar till vald tid och batterinivå. Av = laddar bara enligt pris/Auto.</div>
   <div class="sched">${DAYS.map((d, i) => { const x = s[i]; return `<div class="card srow"><b>${d}</b><button class="sw ${x.enabled ? "on" : ""}" data-a="sch" data-d="${i}" data-f="enabled" aria-label="${d} på/av"></button><button class="tm" data-a="schclock" data-d="${i}" aria-label="${d} klar kl"><span>${x.time}</span></button><div class="step"><button data-a="sch" data-d="${i}" data-f="soc-">−</button><span>${x.soc}%</span><button data-a="sch" data-d="${i}" data-f="soc+">+</button></div></div>`; }).join("")}</div>`;
@@ -390,7 +392,8 @@ function pageHistorik() {
   <section class="card hxtot"><div class="seg">${[["today", "Idag"], ["7d", "7 dagar"], ["30d", "30 dagar"]].map(([k, l]) => `<button data-a="hp" data-v="${k}" class="${hxPeriod === k ? "on" : ""}">${l}</button>`).join("")}</div><div class="kgrid">${cells}</div>${t && t.summary ? `<div class="note hxsum">${esc(t.summary)}</div>` : ""}</section>
   <section class="card chart hxchart"><div class="seg">${[["24h", "24 h"], ["7d", "7 d"], ["30d", "30 d"], ["1y", "1 år"]].map(([k, l]) => `<button data-a="hr" data-v="${k}" class="${hxRange === k ? "on" : ""}">${l}</button>`).join("")}</div>${powerSvg(HX.series)}
     <div class="latest"><span style="border-color:${HC.grid}">Nät <b>${L.grid_w == null ? "–" : w(Math.abs(L.grid_w))}</b> ${L.grid_w != null && L.grid_w < -50 ? "säljer" : "köper"}</span><span style="border-color:${HC.solar}">Sol <b>${w(L.solar_w)}</b></span>${L.battery_w != null ? `<span style="border-color:${HC.battery}">Batteri <b>${w(Math.abs(L.battery_w))}</b></span>` : ""}<span style="border-color:${HC.house}">Hus <b>${w(L.house_w)}</b></span></div>
-    <button class="link" data-a="peaks" style="padding:0;font-size:.8rem;text-align:left">Effekttoppar denna månad</button></section></div>`;
+    <button class="link" data-a="peaks" style="padding:0;font-size:.8rem;text-align:left">Effekttoppar denna månad</button></section>
+  ${window.EWJournal && JR && JR.ok ? `<section class="card" id="journalcard">${EWJournal.html(JR, { compact: true, back: jBack })}</section>` : ""}</div>`;
 }
 // ---- ram, render, laddning ----------------------------------------------------------------------------------------------------------
 function render() {
@@ -458,7 +461,7 @@ async function load() {
     if (page === "hem") { if (!S || Date.now() - (S._t || 0) > 30000) { S = await api("state").catch(() => S); if (S) S._t = Date.now(); }
       [EN, PL, SV, FL] = await Promise.all([api("energy"), api("plan").catch(() => PL), ER() === "owner" ? api("savings").catch(() => null) : null, api("flow").catch(() => FL)]); if (!LJ && can("lights")) LJ = await api("lights").catch(() => null); await loadClock(); }
     if (page === "plan") { PL = await api("plan").catch(() => PL); if (!SCH) SCH = await api("schedule"); await loadClock(); }
-    if (page === "historik") { if (histView === "energi") HX = await api("energyhistory?range=" + hxRange); else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
+    if (page === "historik") { if (histView === "energi") { HX = await api("energyhistory?range=" + hxRange); JR = await api("control-journal?back=" + jBack).catch(() => JR); } else if (!HIST) HIST = await api("history?hours=24"); if (!EN) EN = await api("energy").catch(() => null); }
     if (!(sheetOpen())) render();
     checkVersion(); loadGreeting(); openStream();
     if (!doneShortcut) { doneShortcut = true; runShortcut(); }
@@ -571,10 +574,12 @@ function cycleTheme() {
 }
 let setSec = "effekt";
 let NP = null;                                 // notiskategorierna (smartbox/notify_prefs.py)
+let NL = null;                                 // skickade aviseringar (smartbox/notify_log.py)
 let LG = null, LGL = "";                        // loggen (smartbox/ew_journal.py)
 async function settingsSheet() {
   if (!SET) { try { SET = await api("settings"); } catch (e) { return toast(e.message); } }
   if (!NP && ER() === "owner") { try { NP = (await api("notify-prefs")).categories; } catch (e) { NP = null; } }
+  if (setSec === "notiser" && NL === null && ER() === "owner") { NL = undefined; api("notify-log?days=7").then((d) => { NL = d; settingsSheet(); }).catch(() => { NL = { rows: [] }; settingsSheet(); }); }
   if (setSec === "logg" && LG === null && ER() === "owner") { LG = undefined; api("journal?hours=6&lvl=" + LGL).then((d) => { LG = d.rows || []; settingsSheet(); }).catch(() => { LG = []; settingsSheet(); }); }
   const v = SET.values, R = SET.rules, off = (k) => k === "power_limit_kw" && !v.peak_shaving_enabled, row = (k, label, unit) => { const r = R[k]; return `<div class="setrow${off(k) ? " dim" : ""}"${off(k) ? ' title="Gäller bara när effektvakten är på"' : ""}><span>${label}${off(k) ? ' <span class="note">(effektvakt av)</span>' : ""}</span>${r[0] === "bool" ? `<button class="sw ${v[k] ? "on" : ""}" data-set="${k}" data-bool="1"></button>` : `<div class="step"><button data-set="${k}" data-d="-${r[3]}" ${off(k) ? "disabled" : ""}>−</button><span>${f1(v[k], r[3] < 1 ? 1 : 0)}${unit}</span><button data-set="${k}" data-d="${r[3]}" ${off(k) ? "disabled" : ""}>+</button></div>`}</div>`; };
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
@@ -587,7 +592,8 @@ async function settingsSheet() {
       `<div class="setrow"><span>Elpriser inkl. moms${v.nordpool_vat_enabled == null ? ' <span class="note">(nuvarande läge okänt)</span>' : ""}</span><button class="sw${v.nordpool_vat_enabled ? " on" : ""}" data-set="nordpool_vat_enabled" data-bool="1">${v.nordpool_vat_enabled == null ? "?" : ""}</button></div>` +
       `<div class="note">Styr Home Assistants egen Nord Pool-integration direkt (radera+återskapa, ingen enkel "ändra ett fält"-knapp finns i HA) - priserna växlar om efter några sekunder. Kan inte visa nuvarande läge förrän du växlat minst en gång härifrån.</div>`,
     notiser: () => (NP ? NP.map((c) => `<div class="setrow"><span>${esc(c.label)}<div class="note">${esc(c.desc)}</div></span><button class="sw${c.on ? " on" : ""}" data-s="np:${esc(c.key)}" aria-label="${esc(c.label)}"></button></div>`).join("") : `<div class="note">Laddar…</div>`)
-      + `<div class="note" style="margin-top:10px">Fler val inom kategorierna:</div>${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`,
+      + `<div class="note" style="margin-top:10px">Fler val inom kategorierna:</div>${row("notify_spa_ready", "Avisera: spabadet klart")}${row("notify_ev_start", "Avisera: elbil startar")}${row("notify_washer_start", "Avisera: tvätt startar")}${row("notify_spa_open", "Avisera: spalocket öppet")}`
+      + (NL && window.EWJournal ? `<div style="margin-top:14px">${EWJournal.notifyHtml(NL, { compact: true })}</div>` : `<div class="note" style="margin-top:14px">Hämtar skickade aviseringar…</div>`),
     logg: () => `<div class="seg">${[["", "Allt"], ["fel", "Fel"], ["varning", "Varningar"], ["notis", "Notiser"]].map(([v, t]) => `<button data-s="lg:${v}" class="${LGL === v ? "on" : ""}">${t}</button>`).join("")}</div>
       <div class="note">Allt EnergyWizard läst in, bestämt, skickat och fått för fel de senaste 6 timmarna. <a href="api/journal/download?days=2">Ladda ner 2 dygn</a> (att bifoga i en issue).</div>
       ${LG ? (LG.length ? LG.map((r) => `<div class="plrow" style="display:block;font-size:.8rem"><span class="note">${esc(new Date(r.ts).toLocaleTimeString("sv-SE"))} · ${esc(r.lvl)} · ${esc(r.src)}</span><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(r.msg)}</div></div>`).join("") : `<div class="note">Inget i loggen.</div>`) : `<div class="note">Laddar…</div>`}`,
@@ -603,7 +609,7 @@ async function settingsSheet() {
     const x = e.target.closest("[data-set]");
     if (x) { const k = x.dataset.set; let val; if (x.dataset.bool) val = !SET.values[k]; else { const r = SET.rules[k]; val = Math.round((SET.values[k] + parseFloat(x.dataset.d)) / r[3]) * r[3]; val = Math.max(r[1], Math.min(r[2], val)); } try { const r = await api("settings", { key: k, value: val }); SET.values[k] = r.value; settingsSheet(); } catch (er) { toast(er.message); } return; }
     const y = e.target.closest("[data-s]"); if (!y) return; const s = y.dataset.s;
-    if (s.startsWith("sec:")) { setSec = s.slice(4); settingsSheet(); return; }
+    if (s.startsWith("sec:")) { setSec = s.slice(4); if (setSec === "notiser") NL = null; settingsSheet(); return; }
     if (s.startsWith("lg:")) { LGL = s.slice(3); LG = null; settingsSheet(); return; }
     if (s.startsWith("np:")) { const k = s.slice(3), c = (NP || []).find((x) => x.key === k); if (!c) return; try { NP = (await api("notify-prefs", { on: { [k]: !c.on } })).categories; } catch (er) { toast(er.message); } settingsSheet(); return; }
     if (s.startsWith("lang:")) { const l = s.slice(5); if (ER() === "owner") { try { await api("setup/language", { language: l }); } catch {} } I18N.set(l); return; }
@@ -628,6 +634,8 @@ function schClockSheet(d) {
 }
 async function schedSave(car, day) { const x = SCH[car][day]; try { await api("schedule", { car, day, enabled: x.enabled, time: x.time, soc: x.soc }); toast("Sparat"); } catch (e) { toast(e.message); } }
 document.addEventListener("click", async (e) => {
+  const jb = e.target.closest("[data-jback]");             // Höll vi planen? Idag/Igår (journal.js) - bara att titta, alla roller
+  if (jb) { jBack = +jb.dataset.jback; JR = await api("control-journal?back=" + jBack).catch(() => JR); return render(); }
   const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
   const a = b.dataset.a, c = b.dataset.c, v = b.dataset.v;
   if (!can(a)) { toast(ER() === "guest" ? "Gästläge – du kan bara titta" : "Det här kan bara administratören ändra"); return; }
@@ -635,7 +643,7 @@ document.addEventListener("click", async (e) => {
   if (a === "planlist") return planSheet(c);
   if (a === "power") return powerSheet(c);
   if (a === "swap") { LS.set("ew_primary", c); return render(); }
-  if (a === "settings") return settingsSheet();
+  if (a === "settings") { NL = null; return settingsSheet(); }
   if (a === "health") return healthSheet();
   if (a === "access") return accessSheet(c);
   if (a === "cardata") return carDataSheet(c);

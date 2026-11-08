@@ -63,7 +63,7 @@ def _init():
         _ha_headers = ha._HEADERS
 
 
-def _send(target: str, title: str, message: str, data: dict = None):
+def _send(target: str, title: str, message: str, data: dict = None, key: str | None = None):
     """Skickar en notis (eventuellt med action-knappar) till en specifik HA-mottagare: en notify-tjänst (t.ex.
     mobile_app_pixel_8) eller ett skript ("script.mitt_skript", #170) som får variablerna title, message (och data)."""
     _init()
@@ -77,10 +77,25 @@ def _send(target: str, title: str, message: str, data: dict = None):
         r = requests.post(f"{_ha_base}/services/{domain}/{svc}", headers=_ha_headers, json=payload, timeout=20, verify=False)
         r.raise_for_status()
         print(f"🔔 Notis → {target}: {title}")
+        _hist(title, message, "sent", target, key)
         return True
     except Exception as e:
         print(f"❌ Notis misslyckades ({target}): {e}")
+        try:
+            import notify_log
+            _hist(title, message, "failed", target, key, notify_log.short_error(e))
+        except Exception:
+            pass
         return False
+
+
+def _hist(title, message, status, target=None, key=None, detail=None):
+    """Aviseringshistoriken (notify_log.py) - får aldrig stoppa själva aviseringen."""
+    try:
+        import notify_log
+        notify_log.add(title, message, status, target, key, detail)
+    except Exception:
+        pass
 
 
 _phones_cache = {"t": 0.0, "list": []}
@@ -165,12 +180,16 @@ def send_emil(title: str, message: str, data: dict = None, key: str | None = Non
         import notify_prefs
         if not notify_prefs.enabled(key, title):
             print(f"🔕 Notis avstängd ({key or notify_prefs.category_for(title)}): {title}")
+            _hist(title, message, "muted", None, key)
             return False
     except Exception:
         pass
     ok = False
-    for t in recipients():
-        ok = _send(t, title, message, data) or ok
+    rcpt = recipients()
+    if not rcpt:
+        _hist(title, message, "none", None, key, "Ingen telefon vald eller hittad i Home Assistant")
+    for t in rcpt:
+        ok = _send(t, title, message, data, key) or ok
     return ok
 
 

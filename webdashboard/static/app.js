@@ -464,8 +464,8 @@ async function renderOversikt() {
   mountPlan("planslot");
   api("api/control-alerts").then((r) => {                // en enhet som inte gör som den blir tillsagd syns överst
     if (!r || !r.alerts || !r.alerts.length || document.getElementById("ctrlalerts")) return;
-    main.insertAdjacentHTML("afterbegin", `<div id="ctrlalerts">${r.alerts.map((a) => `<div class="card" style="margin-bottom:16px;border:1.5px solid #ef4444">
-      <b>⚠️ ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></div>`).join("")}</div>`);
+    main.insertAdjacentHTML("afterbegin", `<div id="ctrlalerts">${r.alerts.map((a) => `<div class="card" style="margin-bottom:16px;border:1.5px solid ${a.level === "info" ? "#38bdf8" : "#ef4444"}">
+      <b>${a.level === "info" ? "ℹ️" : "⚠️"} ${esc(a.device)}: ${esc(a.title)}</b><div style="margin-top:4px">${esc(a.text)}</div><div class="note">${esc(a.hint)}</div></div>`).join("")}</div>`);
   }).catch(() => {});
   api("api/shadow").then((sh) => {                       // skuggläget syns alltid överst, så ingen tror att huset styrs
     if (!sh || !sh.active || document.getElementById("shadowbanner")) return;
@@ -1032,8 +1032,15 @@ async function renderHistorik() {
         ${log.entries.length ? log.entries.map(e => `<div class="logrow"><div class="t">${new Date(e.ts).toLocaleString("sv-SE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div><div>${e.user ? `<b>${esc(e.user)}:</b> ` : ""}${esc(e.text || "")}</div></div>`).join("") : `<div class="note">Inget loggat än.</div>`}
       </div>
     </div>` : "";
+  let jBack = 1, jData = await api("api/control-journal?back=1").catch(() => null);
+  const jHtml = () => window.EWJournal && jData && jData.ok ? `<div class="card" id="journalcard">${EWJournal.html(jData, { back: jBack })}</div>` : "";
+  const jWire = () => main.querySelectorAll("#journalcard [data-jback]").forEach((b) => b.onclick = async () => {
+    jBack = +b.dataset.jback; jData = await api("api/control-journal?back=" + jBack).catch(() => jData);
+    const el = document.getElementById("journalcard"); if (el) { el.outerHTML = jHtml(); jWire(); }
+  });
   const draw = () => {
-    main.innerHTML = historyHtml(d) + logHtml;
+    main.innerHTML = historyHtml(d) + jHtml() + logHtml;
+    jWire();
     historyChart(d.series);
     main.querySelectorAll("#histperiod button").forEach((b) => b.onclick = () => { histPeriod = b.dataset.v; try { localStorage.setItem("ew_hist_period", histPeriod); } catch (e) {} draw(); });
     main.querySelectorAll("#histrange button").forEach((b) => b.onclick = async () => {
@@ -1056,6 +1063,8 @@ async function renderAviseringar() {
   if (d) document.querySelectorAll(".notify-toggle").forEach(cb => {
     cb.onchange = () => api(`api/notifications/${cb.dataset.key}`, { method: "POST", body: JSON.stringify({ value: cb.checked }) }).catch(() => { cb.checked = !cb.checked; });
   });
+  const nl = await api("api/notify-log?days=7").catch(() => null);      // skickade aviseringar med leveransstatus
+  if (nl && nl.ok && window.EWJournal && currentPage === "aviseringar") document.getElementById("main").insertAdjacentHTML("beforeend", `<div class="card" id="notifylog">${EWJournal.notifyHtml(nl)}</div>`);
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

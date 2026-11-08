@@ -80,6 +80,17 @@
   <h3>Can I see my own devices in "What is drawing power"?</h3>
   <p>Yes. Add devices with a power sensor (e.g. smart plugs on a washing machine or sauna) under <code>loads:</code> in
   the installation. They show as their own rows and are subtracted from the unexplained load. See the README.</p>
+  <h3>The car charges slower than planned. Why?</h3>
+  <p>If the car draws clearly less current than EnergyWizard ordered for five minutes, an explanation appears at the top
+  of the app and the web view. Usually it is the charger's load balancing (Easee Equalizer or the circuit limit) cutting
+  the current while the rest of the house draws a lot, the charger's max limit, or the car itself (onboard charger,
+  charge limit, cold battery). Easee's current-limit sensors are disabled by default in Home Assistant. Enable them and
+  EnergyWizard can tell you exactly which.</p>
+
+  <h3>How do I see that EnergyWizard actually did what it said?</h3>
+  <p>History has "Did we keep to the plan?": per device, the share of minutes the EV, heat pump and home battery did
+  what was ordered, today or yesterday, and when they deviated. Notifications (app) and Aviseringar (web) list the sent
+  notifications and how it went: sent, failed with a reason, category turned off or no recipient.</p>
 </article>
 </div>
 </body>

@@ -609,6 +609,23 @@ def prices() -> dict:
     return {"now": cur, "level": lvl, "hours": hours}
 
 
+@app.get("/api/notify-log")
+def api_notify_log(days: int = 7):
+    """Aviseringshistorik med leveransstatus (smartbox/notify_log.py) - samma i appen och webben."""
+    import notify_log
+    with ENGINE.connect() as c:
+        return {"ok": True, "rows": notify_log.recent(c, max(1, min(60, int(days))))}
+
+
+@app.get("/api/control-journal")
+def api_control_journal(back: int = 1):
+    """Höll vi planen? Per enhet för ett dygn (0 = idag, 1 = igår), smartbox/control_journal.py - samma i appen och webben."""
+    import control_journal
+    back = max(0, min(29, int(back)))
+    with ENGINE.connect() as c:
+        return {"ok": True, "back": back, "devices": control_journal.day_summary(c, back)}
+
+
 @app.get("/api/flow")
 def api_flow(request: Request):
     """Hemskärmens "Just nu": vad som ger och drar el, samma bild som webbens Översikt (live_flow.py). Inloggning: mellanlagret."""
@@ -1090,6 +1107,13 @@ def planclock_js():
                         media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/journal.js")
+def journal_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "journal.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/liveflow.js")
 def liveflow_js():
     import plan_clock
@@ -1322,18 +1346,9 @@ def energy():
 
 
 def control_alerts(ov: dict) -> list:
-    """Enheter som inte gör det EnergyWizard säger åt dem (motorn skriver dem, t.ex. smartbox/battery_follow.py)."""
-    out = []
-    raw = ov.get("battery_follow")
-    if raw and raw != "ok":
-        try:
-            d = json.loads(raw)
-            if d.get("status") == "not_following":
-                out.append({"device": "Husbatteriet", "title": "Följer inte", "text": d.get("text") or "",
-                            "hint": "Batteriet har inte sagt varför. Kolla dess app eller display."})
-        except ValueError:
-            pass
-    return out
+    """Enheter som inte gör det EnergyWizard säger åt dem (smartbox/control_alerts.py, samma som webben)."""
+    import control_alerts as _ca
+    return _ca.build(ov)
 
 
 @app.post("/api/energy/{what}")
@@ -1696,6 +1711,7 @@ def push(targets: list, title: str, msg: str, key: str | None = None) -> None:
     try:
         import notify_prefs
         if not notify_prefs.enabled(key, title):        # kategorin avstängd under Inställningar -> Notiser
+            _nlog(title, msg, "muted", None, key)
             return
     except Exception:
         pass
@@ -1707,14 +1723,34 @@ def push(targets: list, title: str, msg: str, key: str | None = None) -> None:
             targets = [t for t, s in _svcs.items() if s in _keep]
     except Exception:
         pass
+    sent_to = 0
     for t in targets:
+        _svc = None
         try:
             _svc = _phones().get(t)
             if not _svc:
                 continue
+            sent_to += 1
             requests.post(f"{H._BASE}/services/notify/{_svc}", headers=H._HEADERS, json={"title": title, "message": msg}, timeout=8, verify=False).raise_for_status()
+            _nlog(title, msg, "sent", _svc, key)
         except Exception as e:
             print(f"⚠️ push {t}: {e}", flush=True)
+            try:
+                import notify_log
+                _nlog(title, msg, "failed", _svc, key, notify_log.short_error(e))
+            except Exception:
+                pass
+    if not sent_to:
+        _nlog(title, msg, "none", None, key, "Ingen telefon vald, eller ingen hemma med \"bara den som är hemma\"")
+
+
+def _nlog(title, msg, status, recipient=None, key=None, detail=None):
+    """Aviseringshistoriken (smartbox/notify_log.py), samma tabell som motorns aviseringar."""
+    try:
+        import notify_log
+        notify_log.add(title, msg, status, recipient, key, detail, src="appen")
+    except Exception:
+        pass
 
 
 def watch_once():

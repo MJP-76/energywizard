@@ -453,24 +453,33 @@ async def api_journal_download(request: Request, days: float = 2):
     return Response(content=body, media_type="text/plain; charset=utf-8", headers={"Content-Disposition": f"attachment; filename={name}"})
 
 
+@app.get("/api/notify-log")
+def api_notify_log(days: int = 7):
+    """Aviseringshistorik med leveransstatus (smartbox/notify_log.py) - samma i appen och webben."""
+    import notify_log
+    with ENGINE.connect() as c:
+        return {"ok": True, "rows": notify_log.recent(c, max(1, min(60, int(days))))}
+
+
+@app.get("/api/control-journal")
+def api_control_journal(back: int = 1):
+    """Höll vi planen? Per enhet för ett dygn (0 = idag, 1 = igår), smartbox/control_journal.py - samma i appen och webben."""
+    import control_journal
+    back = max(0, min(29, int(back)))
+    with ENGINE.connect() as c:
+        return {"ok": True, "back": back, "devices": control_journal.day_summary(c, back)}
+
+
 @app.get("/api/control-alerts")
 async def control_alerts():
-    """Enheter som inte gör det EnergyWizard säger åt dem (t.ex. smartbox/battery_follow.py) - visas överst."""
+    """Enheter som inte gör det EnergyWizard säger åt dem (smartbox/control_alerts.py, samma som appen) - visas överst."""
+    import control_alerts as _ca
     with ENGINE.connect() as c:
         try:
-            raw = c.execute(text("SELECT mode FROM overrides WHERE device = 'battery_follow'")).scalar()
+            rows = c.execute(text("SELECT device, mode FROM overrides WHERE device IN ('battery_follow', 'ev_hold')")).all()
         except Exception:
-            raw = None
-    out = []
-    if raw and raw != "ok":
-        try:
-            d = json.loads(raw)
-            if d.get("status") == "not_following":
-                out.append({"device": "Husbatteriet", "title": "Följer inte", "text": d.get("text") or "",
-                            "hint": "Batteriet har inte sagt varför. Kolla dess app eller display."})
-        except ValueError:
-            pass
-    return {"ok": True, "alerts": out}
+            rows = []
+    return {"ok": True, "alerts": _ca.build({r[0]: r[1] for r in rows})}
 
 
 @app.get("/api/capacity-tariff")
@@ -1275,6 +1284,13 @@ async def api_planclock():
 async def planclock_js():
     import plan_clock
     return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "planclock.js"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/journal.js")
+async def journal_js():
+    import plan_clock
+    return FileResponse(os.path.join(os.path.dirname(plan_clock.__file__), "static", "journal.js"),
                         media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 

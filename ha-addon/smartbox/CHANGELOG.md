@@ -1,5 +1,16 @@
 # Ändringar
 
+## 1.2.58 (2026-11-08)
+- **Varför laddar bilen långsammare än planen?** Drar bilen tydligt mindre ström än EnergyWizard beställt i fem
+  minuter visas en förklaring överst i appen och på webben: laddboxens lastbalansering eller kretsgräns (Easee),
+  laddboxens maxgräns, laddboxens egen anledning eller att det är bilen som begränsar. Går laddboxens gränser inte att
+  läsa (Easee: sensorerna är avstängda som standard i Home Assistant) säger texten det och hur man slår på dem.
+- **Höll vi planen?** (Historik i appen och på webben): per enhet hur stor del av minuterna elbilen, värmepumpen och
+  husbatteriet gjorde det EnergyWizard beställde, idag eller igår, och när de avvek. Inget sparas i skuggläge.
+- **Skickade aviseringar** (Notiser i appen, Aviseringar på webben): de senaste 7 dygnens aviseringar med hur det
+  gick: skickad, misslyckad (med orsak), avstängd kategori eller ingen mottagare.
+- Appens laddschema kunde ge ett JS-fel om det ritades innan bilarna hunnit läsas in.
+
 ## 1.2.57 (2026-11-08)
 - **Felrapporter säger var felet sitter**: ett programfel i motorn skickar nu kodplatsen (fil, rad och funktion), aldrig
   feltexten, så att det går att rätta utan att fråga användaren.

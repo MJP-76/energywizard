@@ -408,6 +408,16 @@ def _log_charger_status_if_changed(car_id, charger_data):
         print(f"🔌 {car_id.capitalize()}-laddare: status = {status!r}")
         _last_logged_charger_status[car_id] = status
 
+import ev_hold as _ev_hold_mod
+import control_journal
+import shadow
+_journal: list = []
+_ev_hold = _ev_hold_mod.HoldWatch()
+_ev_hold_now: dict = {}
+_ev_hold_state = {"stored": None}
+_EV_NAMES = {ev.get("id"): ev.get("name") or str(ev.get("id")).capitalize() for ev in (house_cfg.get("evs") or []) if ev.get("id")}
+
+
 def _check_ev_stall(car_id, amps, charger_data, charger_id, phase_switch_active, now_dt):
     """Stalled-charging-vakt: om vi beordrat ström men laddaren mätbart inte drar någon,
     tvingar vi fram ett nytt turn_on oavsett status-ord (se 2026-10-30, Leaf-incidenten natt
@@ -1828,6 +1838,7 @@ while True:
                         _st, _txt, _new = _battery_follow.step(_bl.get("intent"), _bl.get("power_w"), battery_state.get("power_w"),
                                                               battery_state.get("soc_pct"), battery_cfg.get("reserve_soc"), time.time())
                         _stored = json.dumps({"status": _st, "text": _txt}, ensure_ascii=False) if _st in ("not_following",) else "ok"
+                        _journal.append(control_journal.check_battery(_st, _txt, _bl.get("intent")))
                         if _stored != _battery.get("follow_stored"):
                             logger.set_override("battery_follow", _stored)
                             _battery["follow_stored"] = _stored
@@ -1943,6 +1954,24 @@ while True:
                         _check_ev_stall(car_id, ev_amps[car_id], charger_data, charger_id, ev_phase_switch_active[car_id], now)
                 else:
                     last_sent_ev_limit[car_id] = None
+                # Laddar bilen långsammare än vi beställt? Säg varför (ev_hold.py) - visas i appen och på webben
+                try:
+                    _ht = _ev_hold.step(car_id, ev_amps[car_id] if connected and not ev_phase_switch_active[car_id] else 0,
+                                        charger_data, time.time())
+                    if _ht:
+                        _ev_hold_now[_EV_NAMES.get(car_id, car_id.capitalize())] = _ht
+                    if connected and not ev_phase_switch_active[car_id]:
+                        _journal.append(control_journal.check_ev(_EV_NAMES.get(car_id, car_id.capitalize()), ev_amps[car_id],
+                                                                 charger_data, _ht))
+                except Exception as _he:
+                    print(f"⚠️ Laddförklaringen ({car_id}): {_he}")
+            _hs = json.dumps(_ev_hold_now, ensure_ascii=False, sort_keys=True) if _ev_hold_now else "ok"
+            if _hs != _ev_hold_state["stored"]:
+                if _ev_hold_now:
+                    print(f"🚗ℹ️ Laddar långsammare än planen: {'; '.join(_ev_hold_now.values())}")
+                logger.set_override("ev_hold", _hs)
+                _ev_hold_state["stored"] = _hs
+            _ev_hold_now.clear()
 
             # Pump Setpoint
             ov_smart_mode = all_overrides.get("pump_smart_mode", "auto")
@@ -1953,6 +1982,7 @@ while True:
                 
                 actual_pump_setpoint = pump_data.get("room_temp_setpoint") if pump_data else None
                 needs_update = False
+                _journal.append(control_journal.check_pump(current_chosen_temp / 10.0, actual_pump_setpoint))
                 if actual_pump_setpoint is not None:
                     # > 5 tiondelar: pumpar som sparar hela grader (Thermia läser tillbaka 16,5 som 16) ska inte få samma
                     # värde omskrivet varje minut (sett 2026-11-06: 16,5 °C skrevs 07:41-07:51 varje minut)
@@ -1976,6 +2006,11 @@ while True:
                             pump_operating_mode_from_pump = manual_mode 
                 except (ValueError, TypeError):
                     pass
+
+            # Höll vi planen? (control_journal.py) - inget i skuggläge, där beställs ingenting
+            if not shadow.active():
+                control_journal.record(logger.get_db, _journal[-12:], time.time())
+            _journal.clear()
 
             # Solar Limit
             new_solar_limit = gpm_actions.get("solar_limit_pct")
