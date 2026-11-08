@@ -224,10 +224,22 @@ def update_states():
         _ha_fail["n"] += 1
         _ha_fail["at"] = time.time()
         net = isinstance(e, (requests.RequestException, OSError))   # timeout, nekad anslutning, SSL-handskakning ...
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        if status == 401:                                      # fel eller utgången token: kräver att användaren gör något
+            if _ha_fail["n"] in (1, 30) or _ha_fail["n"] % 360 == 0:
+                print(f"❌ HA: token godkänns inte (401) - skapa en ny långlivad token i Home Assistant och lägg in den i EnergyWizard")
+            return False
         # En enstaka timeout (HA upptagen en stund) är en varning; ett fel först när HA inte svarat tre gånger i rad,
         # och sedan bara var tionde gång (2026-11-06: en omstart av HA gav 75 felrader på en minut). Nätverksfel skrivs
         # utan förlopp - bara oväntade fel får hela tracebacken.
         n = _ha_fail["n"]
+        # 502/503/504 = Home Assistant startar om (Supervisor-proxyn svarar innan HA är uppe) - som ett nätverksavbrott,
+        # och fel först efter 30 försök i rad (~5 min). 2026-11-08: 13 hus rapporterade HTTPError vid vanliga omstarter.
+        restart = status in (502, 503, 504) or (net and not isinstance(e, requests.HTTPError))
+        if restart and n < 30:
+            if n in (1, 10, 20):
+                print(f"⚠️ HA svarar inte än ({type(e).__name__}{' ' + str(status) if status else ''}) - väntar, troligen en omstart")
+            return False
         if n < 3 and net:
             print(f"⚠️ HA svarade inte ({type(e).__name__}) - försöker igen")
         elif n == 3 or n % 10 == 0 or not net:

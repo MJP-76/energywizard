@@ -299,6 +299,22 @@ def send_driver_snapshot(cfg: dict) -> None:
 ERROR_REPEAT = timedelta(hours=1)
 
 
+def code_location(tb) -> str:
+    """Den djupaste platsen i EnergyWizards egen kod i ett traceback: "fil.py:rad funktion". Bara filnamn, radnummer
+    och funktionsnamn - inga värden, sökvägar eller feltext. Tom sträng om inget hittas."""
+    import traceback as _tb
+    best = ""
+    try:
+        for fr in _tb.extract_tb(tb):
+            f = fr.filename.replace("\\", "/")
+            if "/site-packages/" in f or "/lib/python" in f:
+                continue
+            best = f"{os.path.basename(f)}:{fr.lineno} {fr.name}"
+    except Exception:
+        return ""
+    return best[:60]
+
+
 def report_error(cfg: dict, module: str, error_type: str) -> None:
     """module/error_type ska alltid vara korta konstanter (t.ex. modulnamn och
     exceptionens klassnamn via type(e).__name__) - aldrig str(exception) rakt
@@ -354,6 +370,10 @@ def install_error_hook(cfg: dict) -> None:
                 return
             exc = sys.exc_info()[0]
             where = f"{mod}.{f.f_code.co_name}"[:60]
+            if exc is not None and exc.__name__ in ("TypeError", "KeyError", "AttributeError", "ValueError", "IndexError", "ZeroDivisionError"):
+                loc = code_location(sys.exc_info()[2])          # programfel: var i koden (inte för nätverksfel)
+                if loc:
+                    where = f"{where}@{loc}"[:120]
             kind = exc.__name__ if exc else "Error"
             threading.Thread(target=report_error, args=(_hook_cfg, where, kind), daemon=True).start()
         except Exception:

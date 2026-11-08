@@ -1,5 +1,13 @@
 # Ändringar
 
+## 1.2.57 (2026-11-08)
+- **Felrapporter säger var felet sitter**: ett programfel i motorn skickar nu kodplatsen (fil, rad och funktion), aldrig
+  feltexten, så att det går att rätta utan att fråga användaren.
+- **Omstarter av Home Assistant räknas inte som fel**: svar 502/503/504 och avbrott kortare än cirka fem minuter
+  loggas som väntan. En token som inte godkänns (401) får ett tydligt eget meddelande.
+- **Badtider och eco-golv under appens inställningar** (Effekt), utöver spabadsrutan.
+- **Installationer** (utvecklarens sida): nyckeltal, fel grupperade över alla hus, en kompakt rad per hus med filter.
+
 ## 1.2.56 (2026-11-08)
 - **Badtider för spabadet**: välj vilka dagar och tider ni brukar bada (appens spabadsruta eller Spabad på webben).
   Utanför badtiderna får badet svalna till eco-golvet och värms upp i tid före nästa badtid, på de billigaste

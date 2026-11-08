@@ -28,5 +28,10 @@ def test_paus_efter_misslyckande_och_lugnare_logg(monkeypatch, capsys):
         for _ in range(8):                                    # direkta anrop (huvudloopen)
             ha.update_states()
     out = capsys.readouterr().out
-    assert out.count("❌") == 2                               # n=3 och n=10
+    # 2026-11-08: avbrott räknas som en omstart av HA de första 30 försöken (~5 min) - väntan, inga felrader
+    assert out.count("❌") == 0 and "väntar, troligen en omstart" in out
     assert "Traceback" not in out
+    with patch.object(ha.requests, "get", side_effect=boom):
+        for _ in range(30):
+            ha.update_states()
+    assert "❌ HA: Fel vid update_states" in capsys.readouterr().out          # varar det längre blir det ett fel

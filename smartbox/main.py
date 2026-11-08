@@ -2358,5 +2358,7 @@ while True:
         print(f"🔥 KRITISKT FEL I HUVUDLOOPEN: {e}")
         import traceback
         traceback.print_exc()
-        telemetry.report_error(house_cfg, "main_loop", type(e).__name__)
+        # Kodplatsen (fil:rad i EnergyWizards egen kod), aldrig feltexten - så att felet går att hitta (2026-11-08: Hus 33
+        # rapporterade bara "main_loop: TypeError")
+        telemetry.report_error(house_cfg, "main_loop@" + telemetry.code_location(e.__traceback__), type(e).__name__)
         time.sleep(10)

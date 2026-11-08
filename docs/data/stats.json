@@ -1,26 +1,28 @@
 {
-  "generated_at": "2026-11-01T04:20:11.135346Z",
+  "generated_at": "2026-11-08T13:12:00.941199Z",
   "since": "2026-03-25",
-  "days_covered": 216,
-  "total_kwh_bought": 5333.0,
-  "price_timing_saved_kr": 301.0,
+  "days_covered": 222,
+  "total_kwh_bought": 5749.0,
+  "price_timing_saved_kr": 512.0,
+  "price_timing_pct_cheaper": 9.0,
+  "method": "household_profile_incl_vat",
   "solar": {
-    "value_kr": 1527.0,
-    "kwh": 2512.0
+    "value_kr": 3152.0,
+    "kwh": 2487.0
   },
   "solar_flexible_load": {
     "ev_kwh": 365.0,
     "spa_kwh": 46.0,
-    "value_kr": 182.0
+    "value_kr": 200.0
   },
-  "total_saved_kr": 1828.0,
-  "saved_kr_per_year_avg": 3088.0,
+  "total_saved_kr": 3664.0,
+  "saved_kr_per_year_avg": 6024.0,
   "heating": {
-    "generated_at": "2026-10-25T17:32:07.001994+00:00",
+    "generated_at": "2026-11-01T17:32:11.452424+00:00",
     "days_used": 21,
-    "saving_kr": 3.7,
-    "saving_pct": 16.2,
-    "saving_kr_year": 64.0,
+    "saving_kr": 2.9,
+    "saving_pct": 15.1,
+    "saving_kr_year": 51.0,
     "models_trained": false,
     "early_season": true
   },
@@ -28,47 +30,47 @@
     {
       "month": "2026-03",
       "timing_kr": 0.0,
-      "solar_kr": 3.0
+      "solar_kr": 8.0
     },
     {
       "month": "2026-04",
-      "timing_kr": 2.0,
-      "solar_kr": 16.0
+      "timing_kr": -5.0,
+      "solar_kr": 44.0
     },
     {
       "month": "2026-05",
-      "timing_kr": 22.0,
-      "solar_kr": 305.0
+      "timing_kr": -24.0,
+      "solar_kr": 467.0
     },
     {
       "month": "2026-06",
-      "timing_kr": 25.0,
-      "solar_kr": 234.0
+      "timing_kr": -17.0,
+      "solar_kr": 502.0
     },
     {
       "month": "2026-07",
-      "timing_kr": 5.0,
-      "solar_kr": 138.0
+      "timing_kr": -34.0,
+      "solar_kr": 389.0
     },
     {
       "month": "2026-08",
-      "timing_kr": 10.0,
-      "solar_kr": 246.0
+      "timing_kr": -2.0,
+      "solar_kr": 541.0
     },
     {
       "month": "2026-09",
-      "timing_kr": 89.0,
-      "solar_kr": 291.0
+      "timing_kr": 132.0,
+      "solar_kr": 543.0
     },
     {
       "month": "2026-10",
-      "timing_kr": 147.0,
-      "solar_kr": 227.0
+      "timing_kr": 286.0,
+      "solar_kr": 392.0
     },
     {
       "month": "2026-11",
-      "timing_kr": 0.0,
-      "solar_kr": 0.0
+      "timing_kr": 176.0,
+      "solar_kr": 266.0
     }
   ]
 }

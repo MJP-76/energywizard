@@ -336,3 +336,15 @@ def test_batteriets_tomma_falt_blir_inte_noll(monkeypatch):
                                                    "efficiency": 0, "reserve_soc": 0, "cycle_cost": 0}})
     assert s["max_soc"] == 100.0 and s["max_power_w"] == 5000.0 and s["capacity_kwh"] is None and s["efficiency"] == 0.9
     assert s["reserve_soc"] == 0 and s["cycle_cost"] == 0                       # 0 är ett giltigt val här
+
+
+def test_kodplats_i_felrapporten_utan_feltext():
+    """2026-11-08: Hus 33 rapporterade bara "main_loop: TypeError". Kodplatsen (fil:rad funktion) följer nu med."""
+    import telemetry
+    def inner():
+        return None + 1
+    try:
+        inner()
+    except TypeError as e:
+        loc = telemetry.code_location(e.__traceback__)
+    assert loc.startswith("test_telemetry.py:") and loc.endswith(" inner") and "None" not in loc

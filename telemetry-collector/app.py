@@ -241,6 +241,23 @@ async def stats(request: Request, me: str = ""):
                              drivers == PING_MARK)
             last_seen[house] = at
     merged = _merge_reinstalls(latest, first, last_seen)
+    # När varje version först sågs (hos något hus): de som dök upp inom 2 dygn från den nyaste räknas som aktuella
+    with _db() as c:
+        vfirst = {v: t for v, t in c.execute("SELECT version, min(received_at) FROM driver_snapshots WHERE version IS NOT NULL GROUP BY version")}
+        egroups = {}
+        recent48 = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        for h, ver, mod, et, rec in c.execute("SELECT house, version, module, error_type, received_at FROM errors WHERE received_at >= ?", (recent48,)):
+            if not _is_real_house(h):
+                continue
+            g = egroups.setdefault(f"{mod}: {et}", {"key": f"{mod}: {et}", "houses": set(), "versions": set(), "last": rec, "reports": 0})
+            g["houses"].add(h); g["versions"].add(ver or "okänd"); g["reports"] += 1; g["last"] = max(g["last"], rec)
+    live_versions = [vfirst.get(v[0]) for v in latest.values() if vfirst.get(v[0])]
+    newest = max(live_versions) if live_versions else None
+    def _current(ver):
+        t = vfirst.get(ver)
+        if not t or not newest:
+            return None
+        return (datetime.fromisoformat(newest) - datetime.fromisoformat(t)) <= timedelta(hours=48)
     equipment, versions = {}, {}
     for version, drivers, _ in latest.values():
         versions[version or "okänd"] = versions.get(version or "okänd", 0) + 1
@@ -259,7 +276,7 @@ async def stats(request: Request, me: str = ""):
             cat, _, rest = d.partition(":")
             devs.setdefault(cat, []).append(_norm(rest))
         houses.append({"label": f"Hus {i}", "since": since[h][:10],
-                       "reinstalls": len(merged.get(h, [])), "mine": bool(me) and h == me, "devices": devs,
+                       "reinstalls": len(merged.get(h, [])), "last_seen": last_seen.get(h), "current": _current(latest[h][0]), "mine": bool(me) and h == me, "devices": devs,
                        "ping_only": latest[h][2],     # bara anonymt livstecken (telemetrin av): ID + version
                        # Bara fel från husets nuvarande version: ett fel som rättats i en senare version försvinner
                        # när huset uppdaterats, i stället för att ligga kvar ett dygn
@@ -272,6 +289,9 @@ async def stats(request: Request, me: str = ""):
         "new_last_7d": sum(1 for h, f in first.items() if _is_real_house(h) and f >= week)
                        - sum(1 for v in merged.values() for o in v if (first.get(o) or "") >= week),
         "merged_reinstalls": sum(len(v) for v in merged.values()),
+        "current_versions": sum(1 for v in latest.values() if _current(v[0])),
+        "error_groups": sorted(({"key": g["key"], "houses": len(g["houses"]), "versions": sorted(g["versions"]), "last": g["last"],
+                                 "reports": g["reports"]} for g in egroups.values()), key=lambda x: (-x["houses"], -x["reports"])),
         "without_devices": sum(1 for _, d, p in latest.values() if not d and not p),
         "ping_only": sum(1 for _, _, p in latest.values() if p),
         "equipment": {cat: dict(sorted(v.items(), key=lambda kv: -kv[1])) for cat, v in sorted(equipment.items())},

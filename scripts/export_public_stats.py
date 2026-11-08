@@ -3,10 +3,14 @@ för den publika GitHub Pages-sidan. Körs lokalt på NUC:en (cron), aldrig i CI
 behöver nå den privata Postgres-databasen. Skriver bara aggregat, ingen rå
 sensor- eller personuppgift.
 
-Besparingsformeln är samma som smartbox/ha_publisher.py:99-108 (daglig
-"besparing idag"-sensor) - generaliserad till hela historiken: per dag,
-(dygnssnittpris - effektviktat snittpris betalat) * köpt kWh, summerat.
+Samma räknesätt som appen och webben (2026-11-08, smartbox/savings.py): per dag, vad den köpta elen hade kostat med
+ett vanligt hushålls förbrukningsprofil minus vad den faktiskt kostade, inklusive moms. Solelen som gick till huset
+värderas till vad den hade kostat att köpa (nordpool.full_buy_cost: moms, nätavgift, skatt och tidstariff), inte
+bara spotpriset. Förut: mot dygnets snittpris och solel till spotpris.
 """
+import sys
+sys.path.insert(0, "/app")
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent / "smartbox"))
 import json
 import os
 from pathlib import Path
@@ -50,6 +54,40 @@ def _total_saving(conn):
         if first_day is None:
             first_day = d
     return total_saved, total_kwh, days, first_day
+
+
+def _timing_profile(conn):
+    """Prisoptimeringen enligt savings.py för hela historiken: (total_kr, köpt_kwh, hade_kostat_kr, per_månad{})."""
+    import savings
+    first = conn.execute(text("SELECT min(timestamp) FROM sensor_log WHERE net_power IS NOT NULL")).scalar()
+    from datetime import datetime, timezone
+    days = (datetime.now(timezone.utc) - first).days + 2 if first else 30
+    rows = savings.daily_rows(conn, days=days)
+    by_month = {}
+    for r in rows:
+        by_month[r["day"][:7]] = by_month.get(r["day"][:7], 0.0) + r["saved_kr"]
+    return (sum(r["saved_kr"] for r in rows), sum(r["kwh"] for r in rows), sum(r["would_cost_kr"] for r in rows), by_month)
+
+
+def _solar_full_cost(conn):
+    """Solel som gick till huset, timme för timme, värderad till fullt köppris. -> (kr, kwh, per_månad{})."""
+    import nordpool
+    rows = conn.execute(text("""
+        SELECT date_trunc('hour', timestamp) AS h, sum(pv_power_w + LEAST(net_power, 0)) / 60000.0 AS kwh, avg(price) AS p
+        FROM sensor_log
+        WHERE pv_power_w IS NOT NULL AND net_power IS NOT NULL AND price IS NOT NULL AND pv_power_w > 0
+        GROUP BY 1 ORDER BY 1""")).fetchall()
+    kr = kwh = 0.0
+    by_month = {}
+    for h, k, p in rows:
+        if k is None or p is None or k <= 0:
+            continue
+        v = float(k) * nordpool.full_buy_cost(float(p), h)
+        kr += v
+        kwh += float(k)
+        m = h.date().isoformat()[:7]
+        by_month[m] = by_month.get(m, 0.0) + v
+    return kr, kwh, by_month
 
 
 def _monthly_breakdown(conn):
@@ -143,11 +181,15 @@ def _latest_heating_backtest(conn):
 
 def main():
     with ENGINE.connect() as conn:
-        total_saved, total_kwh, days, first_day = _total_saving(conn)
-        solar = _solar_self_consumption_value(conn)
+        _old_saved, _old_kwh, days, first_day = _total_saving(conn)
+        total_saved, total_kwh, would_cost, timing_month = _timing_profile(conn)
+        solar_kr, solar_kwh, solar_month = _solar_full_cost(conn)
+        solar = {"value_kr": round(solar_kr, 0), "kwh": round(solar_kwh, 0)} if solar_kwh else None
         flexible = _solar_timed_flexible_load(conn)
         heating = _latest_heating_backtest(conn)
-        monthly = _monthly_breakdown(conn)
+        r0 = lambda v: (round(float(v or 0), 0) + 0.0)
+        monthly = [{"month": m, "timing_kr": r0(timing_month.get(m)), "solar_kr": r0(solar_month.get(m))}
+                   for m in sorted(set(timing_month) | set(solar_month))]
 
     years_covered = max(days / 365.0, 1 / 365.0)
     combined_saved = total_saved + (solar["value_kr"] if solar else 0)
@@ -157,6 +199,8 @@ def main():
         "days_covered": days,
         "total_kwh_bought": round(total_kwh, 0),
         "price_timing_saved_kr": round(total_saved, 0),
+        "price_timing_pct_cheaper": round(100 * total_saved / would_cost, 0) if would_cost else None,
+        "method": "household_profile_incl_vat",
         "solar": solar,
         "solar_flexible_load": flexible,
         "total_saved_kr": round(combined_saved, 0),

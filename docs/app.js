@@ -7,10 +7,10 @@ const T = {
     err: "Kunde inte läsa siffrorna just nu.",
     savedSince: (since, days) => `Sparat sen ${since} (${days} dagar verklig drift)`,
     total: "totalt",
-    breakdown: (timing, solar) => `Varav ${timing} kr prisoptimering + ${solar} kr egenanvänd solel`,
+    breakdown: (timing, solar, pct) => `Varav ${timing} kr prisoptimering${pct != null ? ` (${pct} % billigare än ett vanligt hushåll)` : ""} + ${solar} kr egenanvänd solel`,
     avg: (v) => `Snitt ${v} kr/år hittills`,
     solarTitle: "☀️ Solel använd i huset",
-    solarLine: (kwh, kr) => `${kwh} kWh egenanvänd solel, värd ${kr} kr till rådande elpris`,
+    solarLine: (kwh, kr) => `${kwh} kWh egenanvänd solel, värd ${kr} kr till fullt köppris (moms, nätavgift, skatt)`,
     flexLine: (ev, spa, kr) => `Varav ${ev} kWh elbilsladdning + ${spa} kWh spabad specifikt under soleverskott (${kr} kr)`,
     heating: "♨️ Värmestyrning (preheat/coast)",
     heatingLine: (pct, days) => `${pct}% lägre kostnad i backtest, ${days} dagars fönster`,
@@ -29,10 +29,10 @@ const T = {
     err: "Couldn't load the numbers right now.",
     savedSince: (since, days) => `Saved since ${since} (${days} days of real operation)`,
     total: "total",
-    breakdown: (timing, solar) => `Of which ${timing} kr price timing + ${solar} kr self-consumed solar`,
+    breakdown: (timing, solar, pct) => `Of which ${timing} kr price timing${pct != null ? ` (${pct}% cheaper than an ordinary household)` : ""} + ${solar} kr self-consumed solar`,
     avg: (v) => `Avg. ${v} kr/year so far`,
     solarTitle: "☀️ Solar power used in the house",
-    solarLine: (kwh, kr) => `${kwh} kWh of self-consumed solar, worth ${kr} kr at the live price`,
+    solarLine: (kwh, kr) => `${kwh} kWh of self-consumed solar, worth ${kr} kr at the full purchase price (VAT, grid fee, tax)`,
     flexLine: (ev, spa, kr) => `Of which ${ev} kWh EV charging + ${spa} kWh spa heating specifically during solar surplus (${kr} kr)`,
     heating: "♨️ Heat control (preheat/coast)",
     heatingLine: (pct, days) => `${pct}% lower cost in backtest, ${days}-day window`,
@@ -91,7 +91,7 @@ function render(d) {
     <div class="card">
       <div class="note">${T.savedSince(since, d.days_covered)}</div>
       <div class="stat">${d.total_saved_kr.toFixed(0)} kr <small>${T.total}</small></div>
-      <div class="note">${T.breakdown(d.price_timing_saved_kr.toFixed(0), d.solar ? d.solar.value_kr.toFixed(0) : "0")}</div>
+      <div class="note">${T.breakdown(d.price_timing_saved_kr.toFixed(0), d.solar ? d.solar.value_kr.toFixed(0) : "0", d.price_timing_pct_cheaper != null ? d.price_timing_pct_cheaper.toFixed(0) : null)}</div>
       <span class="tag">${T.avg(d.saved_kr_per_year_avg.toFixed(0))}</span>
     </div>
     ${d.solar ? `

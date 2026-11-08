@@ -1518,7 +1518,7 @@ async function renderInstalls() {
     <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px">${big(d.active, `aktiva (hörda senaste ${d.active_days} dygnen)`)}${big(d.total_known, "totalt sedan start")}${big(d.new_last_7d, "nya senaste veckan")}</div>
     <div class="note" style="margin-top:10px">Ett kort per användare, anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var.${d.ping_only ? ` ${d.ping_only} kör en äldre version som bara skickar version (anonymt) – de visar sin utrustning när de uppdaterat till 1.2.45, där telemetrin är obligatorisk.` : ""}</div></div>`;
   const houses = [...(d.houses || [])].sort((x, y) => (y.mine ? 1 : 0) - (x.mine ? 1 : 0));
-  const cards = houses.map((h) => {
+  const cardHtml = (h) => {
     const n = Object.values(h.devices).reduce((a, l) => a + l.length, 0);
     const rows = INSTALL_CATS.map(([cat, ico, name]) => {
       const list = h.devices[cat] || [];
@@ -1541,10 +1541,53 @@ async function renderInstalls() {
         <div style="font-size:1.05rem;font-weight:800">🏠 ${esc(h.label)}${(h.devices.country || [])[0] ? ` <span class="note" style="font-weight:600">· ${FLAG[(h.devices.country || [])[0].split("@")[0].replace("country:", "")] || ""} ${labelOf((h.devices.country || [])[0])}</span>` : ""}${h.mine ? ` <span class="badge on">ditt hus</span>` : ""}</div>
         <div class="note">sedan ${esc(h.since)}</div></div>
       ${n ? rows : h.ping_only ? `<div class="note" style="padding:8px 0">Äldre version utan telemetri – utrustningen syns när installationen uppdaterat till 1.2.45.</div>` : `<div class="note" style="padding:8px 0">Har installerat men inte valt några enheter än.</div>`}${errRow}${verRow}</div>`;
-  }).join("");
-  main.innerHTML = summary
-    + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-bottom:16px">${cards}</div>`
-    + `<details class="card"><summary style="cursor:pointer;font-weight:700">Totalt per märke</summary><div style="margin-top:10px">${installsCard(d)}</div></details>`;
+  };
+  // ---- Översikt (2026-11-08, Emil: svårt att få överblick med ett stort kort per hus) ----
+  const TRANS = /(ReadTimeout|ConnectTimeout|Timeout|ConnectionError|HTTPError|RemoteDisconnected|ChunkedEncodingError|SSLError|TimeoutError|OSError)$/;
+  const realErr = (h) => (h.errors || []).filter((e) => !TRANS.test(e));
+  const isNew = (h) => h.since && (Date.now() - Date.parse(h.since)) < 2 * 864e5;   // "ny" = senaste två dygnen
+  const ago = (t) => { if (!t) return "–"; const m = Math.round((Date.now() - Date.parse(t)) / 6e4); return m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`; };
+  const short = (h) => {
+    const dv = h.devices || {}, txt = (k) => labelOf(k).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const parts = [];
+    if ((dv.heatpump || [])[0]) parts.push("🌡️ " + txt(dv.heatpump[0]));
+    if ((dv.solar || [])[0]) parts.push("☀️");
+    if ((dv.battery || [])[0]) parts.push("🔋");
+    if ((dv.car || []).length) parts.push("🚗" + ((dv.car || []).length > 1 ? "×" + dv.car.length : ""));
+    if ((dv.charger || [])[0]) parts.push("🔌 " + txt(dv.charger[0]).split(" ")[0]);
+    if ((dv.spa || [])[0]) parts.push("🛁");
+    return parts.join("  ") || (h.ping_only ? "anonym (äldre version)" : "inga enheter valda");
+  };
+  const withErr = houses.filter((h) => realErr(h).length);
+  const tile = (n, t, col) => `<div style="flex:1 1 120px"><div style="font-size:1.9rem;font-weight:800${col ? ";color:" + col : ""}">${n}</div><div class="note">${t}</div></div>`;
+  const head = `<div class="card" style="margin-bottom:16px"><div style="font-size:1.1rem;font-weight:700">👥 Installationer</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px">${tile(d.active, `aktiva (${d.active_days} dygn)`)}${tile(d.new_last_7d, "nya senaste veckan")}
+    ${tile(withErr.length, "med fel just nu", withErr.length ? "#e74c3c" : "var(--acc)")}${tile(`${d.current_versions != null ? d.current_versions : "–"}/${d.active}`, "kör en aktuell version")}</div>
+    <div class="note" style="margin-top:8px">Anonymt numrerade i den ordning de kom. Bara drivrutin och märke, aldrig vem eller var. Tillfälliga nätverksfel (Home Assistant eller ett moln svarade inte en stund) räknas inte som fel.</div></div>`;
+  const groups = (d.error_groups || []);
+  const gRow = (g) => { const t = TRANS.test(g.key); return `<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)">
+      <span style="flex:0 0 22px">${t ? "🌐" : "⚠️"}</span><span style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere${t ? ";color:var(--mut)" : ";color:#e74c3c;font-weight:600"}">${esc(g.key)}</span>
+      <span class="note" style="flex:0 0 auto;white-space:nowrap">${g.houses} hus · ${g.reports} ggr · ${ago(g.last)} sedan</span></div>`; };
+  const errCard = groups.length ? `<div class="card" style="margin-bottom:16px"><h2 style="margin:0 0 4px">Fel senaste 48 h</h2>
+    <div class="note">Grupperade över alla hus. Rött = programfel att rätta, grått = tillfälliga nätverksfel.</div>
+    ${groups.filter((g) => !TRANS.test(g.key)).map(gRow).join("")}
+    ${groups.some((g) => TRANS.test(g.key)) ? `<details style="margin-top:6px"><summary class="note" style="cursor:pointer">${groups.filter((g) => TRANS.test(g.key)).length} tillfälliga nätverksfel</summary>${groups.filter((g) => TRANS.test(g.key)).map(gRow).join("")}</details>` : ""}</div>` : "";
+  let flt = "alla";
+  const draw = () => {
+    const list = houses.filter((h) => flt === "alla" || (flt === "fel" && realErr(h).length) || (flt === "gamla" && h.current === false) || (flt === "nya" && isNew(h)));
+    const rows = list.map((h) => { const e = realErr(h); return `<details class="card" style="padding:0;margin-bottom:8px${e.length ? ";box-shadow:0 0 0 2px #e74c3c55" : h.mine ? ";border-color:var(--acc)" : ""}">
+      <summary style="cursor:pointer;list-style:none;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px">
+        <b style="flex:0 0 auto">${e.length ? "⚠️" : "✅"} ${esc(h.label)}${h.mine ? ' <span class="note">(ditt)</span>' : ""}</b>
+        <span style="flex:1 1 200px;min-width:0">${esc(short(h))}</span>
+        <span class="note" style="flex:0 0 auto;white-space:nowrap">${h.current === false ? '<span style="color:var(--warn)">äldre version</span>' : "aktuell"} · hörd ${ago(h.last_seen)} sedan${isNew(h) ? ' · <b style="color:var(--acc)">ny</b>' : ""}</span>
+        ${e.length ? `<span style="flex:1 1 100%;color:#e74c3c;font-size:.9rem;overflow-wrap:anywhere">${e.map(esc).join(" · ")}</span>` : ""}
+      </summary><div style="padding:0 14px 12px">${cardHtml(h)}</div></details>`; }).join("") || `<div class="note">Inga hus i det här urvalet.</div>`;
+    main.innerHTML = head + errCard + `<div class="seg" id="instflt" style="margin-bottom:10px;flex-wrap:wrap">${[["alla", `Alla (${houses.length})`], ["fel", `Med fel (${withErr.length})`], ["gamla", `Äldre version (${houses.filter((h) => h.current === false).length})`], ["nya", `Nya 2 dygn (${houses.filter(isNew).length})`]]
+      .map(([k, l]) => `<button data-v="${k}" class="${k === flt ? "on" : ""}">${l}</button>`).join("")}</div>` + rows
+      + `<details class="card" style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Totalt per märke</summary><div style="margin-top:10px">${installsCard(d)}</div></details>`;
+    main.querySelectorAll("#instflt button").forEach((b) => b.onclick = () => { flt = b.dataset.v; draw(); });
+  };
+  draw();
 }
 
 // Utvecklarens egen räknare: aktiva installationer och deras utrustning (telemetrin, bara märken och drivrutiner).

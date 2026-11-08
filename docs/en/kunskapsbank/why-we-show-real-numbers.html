@@ -22,10 +22,16 @@
   how the number was calculated, which house it applies to, or over what period.</p>
 
   <p>The numbers on this page are instead taken directly from a real house's own operational log, using a
-  formula simple enough to recompute by hand: for each day, the <em>power-weighted average price</em> the
-  system actually paid for purchased electricity is compared to that day's <em>unweighted average price</em>
-  - the difference, times the kWh bought, is that day's saving. Summed over every day since the system
-  started, that gives the total.</p>
+  formula simple enough to recompute by hand: for each day, what the purchased electricity actually cost is compared to what
+  the same amount would have cost with an <em>ordinary household's usage profile</em> (more in the morning and evening,
+  less at night), both including VAT. The difference is that day's saving from shifting consumption. Solar that went
+  straight into the house is valued at what it would have cost to buy: spot price plus VAT, grid fee, energy tax and any
+  time-of-use tariff. Summed over every day since the system started, that gives the total. The app and the web use the
+  same method (<code>smartbox/savings.py</code>).</p>
+
+  <p><strong>Changed 2026-11-08:</strong> before, the comparison was against the day's unweighted average price and solar
+  was valued at the spot price only. That underestimated both the price timing and the value of solar compared to a
+  real electricity bill.</p>
 
   <p>That also means the number can be small in some periods - for example early in the heating season,
   before heat control has been running long enough for its effect to show clearly in the statistics. I'd
