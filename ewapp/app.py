@@ -1524,7 +1524,9 @@ def get_log():
 
 # -- Ljus: fönsterlampor och godnatt - bara de lampor man själv valt ---------------------------------------------------------------
 # "lights" i /data/energywizard.json: {"windows_group": "light.x" (grupp eller lampa), "up": ["light.a", ...],
-# "night_skip": {"entity": "light.y", "from": 18, "to": 8}}. Utan val: inga lampknappar och ingen lampbevakning
+# "night_skip": {"entity": "light.y", "from": 18, "to": 8}, "skip": ["light.z"]}. windows_group får också vara en lista
+# (grupper och enskilda lampor/reläer, t.ex. ett Shelly-relä som switch.*). Grupper expanderas i alla nivåer; "skip" =
+# lampor i grupperna som inte längre används (ersatta, bortkopplade). Utan val: inga lampknappar och ingen lampbevakning
 # (#134: förut bevakades ägarens egna lampor i alla hus och larmade "lampa offline" hos andra).
 def _lights_cfg() -> dict:
     c = (ew_settings.get("lights") if ew_settings else None) or {}
@@ -1540,9 +1542,24 @@ def _up_lights() -> list:
 
 
 def _members(st: dict, group) -> list:
-    if not group:
-        return []
-    return (st.get(group) or {}).get("attributes", {}).get("entity_id") or [group]
+    """Lamporna bakom en grupp, en lista eller en enskild lampa - grupper i grupper expanderas (2026-11-08: Charlies
+    lampa låg i en undergrupp, så nattregeln och offline-bevakningen nådde den aldrig). Utan "skip"-lamporna."""
+    skip = set(_lights_cfg().get("skip") or [])
+    out, seen = [], set()
+
+    def walk(e, depth=0):
+        if not isinstance(e, str) or e in seen or depth > 5:
+            return
+        seen.add(e)
+        sub = (st.get(e) or {}).get("attributes", {}).get("entity_id")
+        if isinstance(sub, list) and sub:
+            for x in sub:
+                walk(x, depth + 1)
+        elif e not in skip:
+            out.append(e)
+    for g in (group if isinstance(group, list) else [group] if group else []):
+        walk(g)
+    return out
 
 
 def _light_summary(st: dict, ents: list) -> dict:
@@ -1582,7 +1599,8 @@ def _lights_work(a, who_req_log):
             break
         try:
             for batch in ([todo] if attempt < 2 else [[e] for e in todo]):
-                requests.post(f"{H._BASE}/services/light/{svc}", headers=H._HEADERS, json={"entity_id": batch}, timeout=15, verify=False).raise_for_status()
+                # homeassistant.turn_on/off: fungerar för både lampor och reläer (switch.*, t.ex. Shelly) i samma anrop
+                requests.post(f"{H._BASE}/services/homeassistant/{svc}", headers=H._HEADERS, json={"entity_id": batch}, timeout=15, verify=False).raise_for_status()
         except Exception as e:
             raise HTTPException(502, f"Home Assistant svarade inte: {str(e)[:60]}")
         for _ in range(8):
@@ -1778,9 +1796,7 @@ def watch_once():
             push(to, f"{c['name']}: kabeln lossnade", "Laddningen avbröts – laddkabeln verkar ha kopplats ur.", key="elbil")
     now = time.time()
     _wg = _windows_group()
-    for e in list(_members(st, _wg)) + _up_lights():
-        if e == _wg:
-            continue
+    for e in list(dict.fromkeys(list(_members(st, _wg)) + _up_lights())):
         key = "light:" + e
         if (st.get(e) or {}).get("state") in (None, "unavailable", "unknown"):
             first = _prev["bad"].setdefault(key, now)

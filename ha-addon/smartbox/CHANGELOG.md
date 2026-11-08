@@ -1,5 +1,11 @@
 # Ändringar
 
+## 1.2.61 (2026-11-08)
+- **Lampknapparna klarar reläer** (t.ex. Shelly som `switch.*`): tänd och släck går via `homeassistant.turn_on/off`,
+  så lampor och reläer kan blandas. Fönstergruppen kan vara en lista med grupper och enskilda lampor, grupper i
+  grupper följs hela vägen (nattregeln för en lampa i en undergrupp gällde förut inte) och `skip` utesluter
+  ersatta lampor.
+
 ## 1.2.60 (2026-11-08)
 - **Laddat och vad det kostade** (Bil i appen, Elbil på webben): elbilsladdningens kWh och kronor idag, den här
   veckan och den här månaden, med hur mycket som kom från solen. Från nätet räknas full köpkostnad, från solen vad
